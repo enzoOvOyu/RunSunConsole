@@ -73,7 +73,7 @@ test("server wizard creates a resource and preserves it after refresh", async ({
   await page.getByRole("button", { name: "下一步", exact: true }).click();
   await page.getByRole("button", { name: "下一步", exact: true }).click();
   await page
-    .getByLabel("SSH 公钥")
+    .getByRole("textbox", { name: "SSH 公钥", exact: true })
     .fill("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFOO");
   await page.getByRole("button", { name: "下一步", exact: true }).click();
   await page.getByLabel("我已阅读并确认配置与计费方式").check();
@@ -153,7 +153,7 @@ test("bare metal, vGPU and inference wizards create distinct resource types", as
       await page.getByRole("button", { name: "下一步", exact: true }).click();
     if (wizard === "baremetal")
       await page
-        .getByLabel("SSH 公钥")
+        .getByRole("textbox", { name: "SSH 公钥", exact: true })
         .fill("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFOO");
     await page.getByLabel("我已阅读并确认配置与计费方式").check();
     await page.getByRole("button", { name: "新建", exact: true }).click();
@@ -229,4 +229,86 @@ test("resource deletion requires typed confirmation and keeps read-only history"
   await expect(
     page.getByRole("dialog").getByRole("button", { name: "删除", exact: true }),
   ).toHaveCount(0);
+});
+test("runtime diagnostics and replica restart persist across refresh", async ({
+  page,
+}) => {
+  await page.goto("/overview");
+  await expect(page.getByText("1,040", { exact: true })).toBeVisible();
+  const resources = await page.evaluate(
+    async () =>
+      (await (await fetch("/api/resources?size=1000")).json()).items as {
+        kind: string;
+        resourceUuid: string;
+        region: string;
+        status: string;
+      }[],
+  );
+  for (const [kind, route, tab, heading] of [
+    ["gpu_baremetal", "baremetal", "硬件监控", "GPU 硬件健康"],
+    ["vgpu", "vgpu", "控制面", "控制面组件"],
+  ]) {
+    const r = resources.find((r) => r.kind === kind && r.status === "running")!;
+    await page.goto(
+      `/resources/${route}?drawer=${r.resourceUuid}&region=${r.region}`,
+    );
+    await page.getByRole("tab", { name: tab, exact: true }).click();
+    await expect(
+      page.getByRole("heading", { name: heading, exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole("dialog")).not.toContainText(
+      "hardware.gpuHealth",
+    );
+  }
+  const r = resources.find(
+    (r) => r.kind === "inference" && r.status === "running",
+  )!;
+  await page.goto(
+    `/resources/inference?drawer=${r.resourceUuid}&region=${r.region}`,
+  );
+  const readRestarts = () =>
+    page.evaluate(
+      async (uuid) =>
+        (await (await fetch(`/api/metrics/inference/${uuid}/replicas`)).json())
+          .replicas[0].restarts as number,
+      r.resourceUuid,
+    );
+  await expect(
+    page.getByRole("heading", { name: "实例管理", exact: true }),
+  ).toBeVisible();
+  const before = await readRestarts();
+  await page
+    .getByRole("dialog")
+    .locator("tbody tr")
+    .first()
+    .getByRole("button", { name: "重启", exact: true })
+    .click();
+  await expect.poll(readRestarts).toBe(before + 1);
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: "实例管理", exact: true }),
+  ).toBeVisible();
+  expect(await readRestarts()).toBe(before + 1);
+});
+test("password login never stores the secret in a wizard draft", async ({
+  page,
+}) => {
+  await page.goto("/deployment/server");
+  for (let i = 0; i < 3; i++)
+    await page.getByRole("button", { name: "下一步", exact: true }).click();
+  await page.getByLabel("登录认证方式").selectOption("password");
+  const secret = "Browser-Temporary-Secret-42";
+  await page.locator('input[type="password"]').fill(secret);
+  await page.getByRole("button", { name: "下一步", exact: true }).click();
+  const draft = await page.evaluate(() =>
+    sessionStorage.getItem("wizard:gpu_vm"),
+  );
+  expect(draft).not.toContain(secret);
+  await page.getByLabel("我已阅读并确认配置与计费方式").check();
+  await page.getByRole("button", { name: "新建", exact: true }).click();
+  await expect(page).toHaveURL(/resources\/servers\?drawer=/);
+  const stored = await page.evaluate(() =>
+    localStorage.getItem("rs.mock.database.v2"),
+  );
+  expect(stored).not.toContain(secret);
 });

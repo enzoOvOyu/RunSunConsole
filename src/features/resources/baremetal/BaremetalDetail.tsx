@@ -1,3 +1,4 @@
+import { HardwareHealthPanel } from "../shared/RuntimePanels";
 import { useState } from "react";
 import type { ResourceOf } from "../../../types/domain";
 import { t } from "../../../i18n";
@@ -5,9 +6,7 @@ import { Panel, Tabs, KeyValues } from "../../../components/ui";
 import { size } from "../../../lib/money";
 import {
   MetricsOverview,
-  MonitorPanel,
   AccessPanel,
-  SpecPanel,
   EventsPanel,
   BillingPanel,
   ScalingReadonly,
@@ -45,6 +44,7 @@ export function BaremetalDetail({
             <KeyValues
               items={[
                 [t("resource.machineType"), r.spec.machineType],
+                [t("resource.rack"), r.placement?.rackId || "—"],
                 [
                   t("resource.machineCount"),
                   `${r.spec.machineCount} ${t("common.machines")}`,
@@ -68,13 +68,13 @@ export function BaremetalDetail({
           <MetricsOverview resource={r} />
         </div>
       ) : tab === "hardware" ? (
-        <MonitorPanel resource={r} />
+        <HardwareHealthPanel resource={r} />
       ) : tab === "oob" ? (
         <AccessPanel resource={r} mode="bmc" />
       ) : tab === "firmware" ? (
         <AccessPanel resource={r} mode="firmware" />
       ) : tab === "network" ? (
-        <SpecPanel resource={r} />
+        <HardwareHealthPanel resource={r} networkOnly />
       ) : tab === "events" ? (
         <EventsPanel resource={r} />
       ) : tab === "billing" ? (

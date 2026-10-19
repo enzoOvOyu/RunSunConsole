@@ -41,12 +41,16 @@ function validate(v: WizardValues, step: number) {
       })
       .safeParse(s).success;
   if (step === 3)
-    return z
-      .object({
-        sshPubkey: z.string().regex(/^ssh-(ed25519|rsa)\s+[A-Za-z0-9+/=]+/),
-        bandwidthMbps: z.number().min(1).max(1000),
-      })
-      .safeParse(s).success;
+    return (
+      (s.authMethod === "password"
+        ? z.string().min(8).max(128).safeParse(v.password).success
+        : z
+            .string()
+            .regex(/^ssh-(ed25519|rsa)\s+[A-Za-z0-9+/=]+/)
+            .safeParse(s.sshPubkey).success) &&
+      s.bandwidthMbps >= 1 &&
+      s.bandwidthMbps <= 1000
+    );
   return serverSchema.safeParse(s).success;
 }
 function ServerForm({ step, pools, images }: FormContext) {
@@ -130,7 +134,26 @@ function ServerForm({ step, pools, images }: FormContext) {
   ) : step === 3 ? (
     <div className="stack">
       <NetworkFields />
-      <SpecText name="sshPubkey" label={t("wizard.sshKey")} area />
+      <SpecSelect
+        name="authMethod"
+        label={t("field.authMethod")}
+        options={[
+          { value: "ssh_key", label: t("wizard.sshKey") },
+          { value: "password", label: t("wizard.password") },
+        ]}
+      />
+      {spec.authMethod === "password" ? (
+        <Field label={t("wizard.password")} hint="8–128">
+          <input
+            className="input"
+            type="password"
+            autoComplete="new-password"
+            {...form.register("password")}
+          />
+        </Field>
+      ) : (
+        <SpecText name="sshPubkey" label={t("wizard.sshKey")} area />
+      )}
       <SpecNumber
         name="bandwidthMbps"
         label={t("wizard.bandwidth")}

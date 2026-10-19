@@ -343,7 +343,9 @@ export const VOUCHERS: Voucher[] = [
     expiresAt: iso(-30),
     regions: ["jp", "th", "sg", "us"],
     kinds: ["gpu_vm", "inference", "vgpu", "gpu_baremetal"],
-    redemptions: [{ at: iso(1), amount: 150, referenceId: "usage-welcome" }],
+    redemptions: [
+      { at: iso(1), amount: 150, referenceId: `invoice-${iso(1).slice(0, 7)}` },
+    ],
   },
   {
     id: "TRAIN-200",
@@ -353,6 +355,8 @@ export const VOUCHERS: Voucher[] = [
     expiresAt: iso(3),
     regions: ["jp", "us"],
     kinds: ["vgpu", "gpu_baremetal"],
-    redemptions: [{ at: iso(5), amount: 200, referenceId: "usage-train" }],
+    redemptions: [
+      { at: iso(5), amount: 200, referenceId: `invoice-${iso(5).slice(0, 7)}` },
+    ],
   },
 ];

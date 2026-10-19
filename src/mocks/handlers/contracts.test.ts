@@ -1,4 +1,4 @@
-import { beforeAll, afterAll, beforeEach, it, expect } from "vitest";
+import { beforeAll, afterAll, beforeEach, it, expect, vi } from "vitest";
 import { setupServer } from "msw/node";
 import { handlers } from "./index";
 import { db, makeDatabase } from "../lib/database";
@@ -15,10 +15,11 @@ async function request(
   method = "GET",
   body?: unknown,
   role = "owner",
+  headers: Record<string, string> = {},
 ) {
   const r = await fetch("http://localhost/api" + path, {
     method,
-    headers: { "Content-Type": "application/json", "X-Role": role },
+    headers: { "Content-Type": "application/json", "X-Role": role, ...headers },
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
   return { status: r.status, data: r.status === 204 ? null : await r.json() };
@@ -412,4 +413,117 @@ it("creates pipeline runs and rejects cyclic DAG changes", async () => {
     (await request("/pipelines/cleaning", "PATCH", { nodes: cyclic })).status,
   ).toBe(422);
   expect(db.pipelines[0].nodes[0].id).toBe("source");
+});
+
+it("replays password orders without storing credentials or allocating twice", async () => {
+  const spec = defaultSpec("gpu_vm", poolsFor("th")[0]);
+  if (!("authMethod" in spec)) throw new Error("Expected server spec");
+  spec.authMethod = "password";
+  spec.sshPubkey = "";
+  spec.subnet = "th-default";
+  const secret = "Temporary-Secret-42";
+  const body = {
+    kind: "gpu_vm",
+    name: "password-order",
+    projectId: "default",
+    region: "th",
+    nodePool: "H100_SXM",
+    mode: "on_demand",
+    labels: [],
+    spec,
+    authPassword: secret,
+  };
+  const count = db.resources.length;
+  const first = await request("/deployment-orders", "POST", body, "owner", {
+    "Idempotency-Key": "password-contract",
+  });
+  expect(first.status).toBe(201);
+  const second = await request("/deployment-orders", "POST", body, "owner", {
+    "Idempotency-Key": "password-contract",
+  });
+  expect(second.status).toBeLessThan(300);
+  expect(second.data.resource.resourceUuid).toBe(
+    first.data.resource.resourceUuid,
+  );
+  expect(db.resources).toHaveLength(count + 1);
+  expect(JSON.stringify(db)).not.toContain(secret);
+});
+it("returns kind-specific hardware, cluster and replica diagnostics", async () => {
+  const bm = db.resources.find(
+    (r) => r.kind === "gpu_baremetal" && r.status === "running",
+  )!;
+  const vg = db.resources.find(
+    (r) => r.kind === "vgpu" && r.status === "running",
+  )!;
+  const inf = db.resources.find(
+    (r) => r.kind === "inference" && r.status === "running",
+  )!;
+  const hardware = await request(
+    `/metrics/${bm.kind}/${bm.resourceUuid}/hardware`,
+  );
+  expect(hardware.status).toBe(200);
+  expect(hardware.data.disks).toHaveLength(8);
+  expect(hardware.data.bmc).toHaveProperty("firmware");
+  const cluster = await request(
+    `/metrics/${vg.kind}/${vg.resourceUuid}/cluster`,
+  );
+  expect(cluster.status).toBe(200);
+  expect(
+    cluster.data.nodes.every((n: { name: string }) =>
+      n.name.startsWith(vg.displayId),
+    ),
+  ).toBe(true);
+  const replicas = await request(
+    `/metrics/${inf.kind}/${inf.resourceUuid}/replicas`,
+  );
+  expect(replicas.status).toBe(200);
+  expect(replicas.data.requestCount).toBe(
+    replicas.data.successCount + replicas.data.failedCount,
+  );
+  expect(
+    (await request(`/metrics/${vg.kind}/${vg.resourceUuid}/hardware`)).status,
+  ).toBe(404);
+});
+it("archives projects while retaining historical references", async () => {
+  const p = (
+    await request("/projects", "POST", {
+      name: "Historical project",
+      slug: "historical",
+    })
+  ).data;
+  expect((await request(`/projects/${p.id}`, "DELETE")).status).toBe(204);
+  expect(db.projects.find((x) => x.id === p.id)?.deletedAt).toBeTruthy();
+  expect(
+    (await request("/projects")).data.some(
+      (x: { id: string }) => x.id === p.id,
+    ),
+  ).toBe(false);
+  expect(
+    (await request(`/projects/${p.id}`, "PATCH", { name: "changed" })).status,
+  ).toBe(410);
+});
+
+it("applies the overdue grace period and preserves metering uniqueness", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  try {
+    const now = Date.now();
+    const target = db.resources.find(
+      (r) => r.kind === "gpu_vm" && r.status === "running",
+    )!;
+    db.account.creditBalance = -100;
+    db.account.depletedAt = new Date(now - 25 * 3600000).toISOString();
+    await request("/overview");
+    expect(target.status).toBe("stopped");
+    expect(target.deletedAt).toBeNull();
+    vi.setSystemTime(new Date(now + 8 * 86400000));
+    await request("/overview");
+    expect(target.deletedAt).toBeTruthy();
+    expect(target.status).toBe("terminating");
+    const keys = db.usage.map(
+      (u) => `${u.resourceUuid}:${u.usageHour}:${u.unit}`,
+    );
+    expect(new Set(keys).size).toBe(keys.length);
+  } finally {
+    vi.useRealTimers();
+  }
 });

@@ -4,6 +4,7 @@ import { RATES } from "../fixtures/pricing";
 import { MODELS } from "../fixtures/content";
 import {
   costPerHour,
+  meteringLines,
   estimate,
   deriveTokensPerSecond,
   decodeUpperBound,
@@ -59,4 +60,22 @@ describe("derived business contracts", () => {
   it("rejects infeasible 70B BF16 on a single H100", () => {
     expect(modelMemory(MODELS[1], "bf16", 8192).requiredGb).toBeGreaterThan(80);
   });
+});
+
+it("consolidates different node pools into one weighted meter per billing unit", () => {
+  const r = seedResources().find((r) => r.kind === "vgpu")!;
+  r.spec.nodePools.push({
+    ...r.spec.nodePools[0],
+    poolCode: "H200_NVL",
+    nodeCount: 2,
+  });
+  const e = estimate(r, RATES);
+  const lines = meteringLines(e);
+  expect(new Set(lines.map((l) => l.unit)).size).toBe(lines.length);
+  expect(
+    lines.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0),
+  ).toBeCloseTo(
+    e.lines.reduce((sum, l) => sum + l.hourly, 0),
+    8,
+  );
 });

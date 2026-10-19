@@ -23,6 +23,7 @@ export default function BillsPage() {
   );
   const summary = useData<{
     month: number;
+    payable: number;
     voucherUsed: number;
     balance: number;
   }>(
@@ -63,7 +64,7 @@ export default function BillsPage() {
       ) : (
         <div className="grid grid-3">
           {[
-            [t("billing.payable"), summary.data.month],
+            [t("billing.payable"), summary.data.payable],
             [t("billing.voucherUsed"), summary.data.voucherUsed],
             [t("common.balance"), summary.data.balance],
           ].map(([label, value]) => (
@@ -89,7 +90,12 @@ export default function BillsPage() {
               {
                 accessorKey: "status",
                 header: t("common.status"),
-                cell: ({ row }) => <Badge status={row.original.status} />,
+                cell: ({ row }) => (
+                  <Badge
+                    status={row.original.status}
+                    label={t("billing." + row.original.status)}
+                  />
+                ),
               },
               {
                 accessorKey: "amount",
@@ -101,7 +107,7 @@ export default function BillsPage() {
                 header: t("common.actions"),
                 cell: ({ row }) => (
                   <Button
-                    disabled={row.original.status === "pending"}
+                    disabled={row.original.status === "open"}
                     onClick={() =>
                       download(
                         `${row.original.id}.txt`,

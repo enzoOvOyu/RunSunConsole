@@ -14,3 +14,9 @@ export function rng(key: string) {
 }
 export const seededUuid = (n: number) =>
   `8a9d0026-1017-4000-8000-${n.toString(16).padStart(12, "0")}`;
+export function pointNoise(seed: number, slot: number) {
+  let n = (seed ^ slot) >>> 0;
+  n = Math.imul(n ^ (n >>> 16), 0x21f0aaad);
+  n = Math.imul(n ^ (n >>> 15), 0x735a2d97);
+  return ((n ^ (n >>> 15)) >>> 0) / 4294967296;
+}

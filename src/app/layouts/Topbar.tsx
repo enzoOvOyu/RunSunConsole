@@ -36,11 +36,9 @@ export function Topbar({
   const navigate = useNavigate();
   const location = useLocation();
   const account = useData<Account>(["account"], EP.account);
-  const notifications = useData<{ id: string; resource: Resource }[]>(
-    ["notifications"],
-    EP.notifications,
-    { poll: true },
-  );
+  const notifications = useData<
+    { id: string; resource?: Resource; messageKey?: string; href?: string }[]
+  >(["notifications"], EP.notifications, { poll: true });
   const item = buildGroups(role)
     .flatMap((g) => g.items)
     .find((i) => location.pathname.startsWith(i.path));
@@ -167,7 +165,8 @@ export function Topbar({
         <div className="stack">
           <strong>{account.data?.user}</strong>
           <span>
-            {account.data?.org} · {account.data?.plan}
+            {account.data?.org} ·{" "}
+            {account.data?.plan ? t("plan." + account.data.plan) : "—"}
           </span>
           <label className="field">
             {t("header.role")}
@@ -218,11 +217,17 @@ export function Topbar({
               <Button
                 key={n.id}
                 onClick={() => {
-                  navigate(resourceLink(n.resource));
+                  navigate(
+                    n.resource
+                      ? resourceLink(n.resource)
+                      : n.href || "/overview",
+                  );
                   setMenu("");
                 }}
               >
-                {n.resource.displayId} · {t("common.error")}
+                {n.resource
+                  ? `${n.resource.displayId} · ${t("common.error")}`
+                  : t(n.messageKey || "header.noNotifications")}
               </Button>
             ))
           ) : (

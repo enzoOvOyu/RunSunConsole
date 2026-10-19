@@ -2,13 +2,14 @@ import { z } from "zod";
 import type { VgpuSpec } from "../../types/domain";
 import { t } from "../../i18n";
 import { Button, Field, Panel } from "../../components/ui";
-import { vgpuSchema, nodePoolSchema } from "../../lib/schema";
+import { vgpuSchema, nodePoolSchema, isCidr } from "../../lib/schema";
 import { WizardLayout, PoolCards } from "./shared/WizardLayout";
 import {
   useSpec,
   SpecNumber,
   SpecCheck,
   SpecSelect,
+  DeploymentOptionSelect,
   SpecText,
   NetworkFields,
   Review,
@@ -21,8 +22,7 @@ function validate(v: WizardValues, step: number) {
   if (step === 1)
     return (
       ["1.28", "1.29", "1.30", "1.31"].includes(s.k8sVersion) &&
-      (!s.apiServerPublic ||
-        /^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/.test(s.authorizedCidr))
+      (!s.apiServerPublic || isCidr(s.authorizedCidr))
     );
   if (step === 2)
     return z.array(nodePoolSchema).min(1).max(5).safeParse(s.nodePools).success;
@@ -45,11 +45,7 @@ function VgpuForm({ step, pools }: FormContext) {
   };
   return step === 1 ? (
     <div className="stack">
-      <SpecSelect
-        name="k8sVersion"
-        label={t("resource.k8s")}
-        options={["1.28", "1.29", "1.30", "1.31"]}
-      />
+      <DeploymentOptionSelect name="k8sVersion" label={t("resource.k8s")} />
       <SpecSelect
         name="controlPlaneTier"
         label={t("wizard.controlPlane")}

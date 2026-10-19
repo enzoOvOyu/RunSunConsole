@@ -1,17 +1,14 @@
+import {
+  ControlPlanePanel,
+  NodePoolsPanel,
+  WorkloadsPanel,
+  ClusterNetworkPanel,
+} from "../shared/RuntimePanels";
 import { useState, lazy, Suspense } from "react";
 import type { ResourceOf } from "../../../types/domain";
 import { t } from "../../../i18n";
+import { Panel, Tabs, KeyValues, Loading } from "../../../components/ui";
 import {
-  Panel,
-  Tabs,
-  KeyValues,
-  Progress,
-  Loading,
-  DataTable,
-} from "../../../components/ui";
-import {
-  MonitorPanel,
-  SpecPanel,
   EventsPanel,
   BillingPanel,
   ScalingReadonly,
@@ -59,49 +56,13 @@ export function VgpuDetail({ resource: r }: { resource: ResourceOf<"vgpu"> }) {
           />
         </Panel>
       ) : tab === "controlPlane" ? (
-        <MonitorPanel
-          resource={r}
-          only={["apiserver_latency_p99", "etcd_fsync_p99"]}
-        />
+        <ControlPlanePanel resource={r} />
       ) : tab === "nodePools" ? (
-        <div className="stack">
-          {r.spec.nodePools.map((p, i) => (
-            <Panel key={i} title={p.poolCode}>
-              <KeyValues
-                items={[
-                  [t("resource.nodeCount"), p.nodeCount],
-                  [t("resource.gpu"), p.nodeCount * p.gpuPerNode],
-                  [t("resource.slicing"), p.slicingPolicy + " " + p.migProfile],
-                ]}
-              />
-              <div style={{ marginTop: 20 }}>
-                <Progress value={r.status === "running" ? 75 : 0} />
-              </div>
-            </Panel>
-          ))}
-        </div>
+        <NodePoolsPanel resource={r} />
       ) : tab === "workloads" ? (
-        <Panel title={t("tab.workloads")}>
-          <DataTable
-            data={r.spec.nodePools.map((p, i) => ({
-              namespace: "default",
-              deployment: r.displayId + "-" + i,
-              pods: p.nodeCount,
-              status: r.status === "running" ? "Running" : "Pending",
-              reason:
-                r.status === "running" ? "—" : "Insufficient nvidia.com/gpu",
-            }))}
-            columns={[
-              { accessorKey: "namespace", header: "Namespace" },
-              { accessorKey: "deployment", header: "Deployment" },
-              { accessorKey: "pods", header: "Pods" },
-              { accessorKey: "status", header: t("common.status") },
-              { accessorKey: "reason", header: t("common.reason") },
-            ]}
-          />
-        </Panel>
+        <WorkloadsPanel resource={r} />
       ) : tab === "network" ? (
-        <SpecPanel resource={r} />
+        <ClusterNetworkPanel resource={r} />
       ) : tab === "topology" ? (
         <Panel title={t("tab.topology")}>
           <Suspense fallback={<Loading />}>

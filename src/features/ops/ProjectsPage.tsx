@@ -365,7 +365,9 @@ export function ProjectDetail() {
               />
             </Field>
             <Button
-              disabled={!canManageOrg(role) || busy || name.length < 2}
+              disabled={
+                !canManageOrg(role) || !!p.deletedAt || busy || name.length < 2
+              }
               onClick={() =>
                 void run(() => patch(`${EP.projects}/${p.id}`, { name }))
               }
@@ -393,7 +395,7 @@ export function ProjectDetail() {
             </Field>
             <Button
               variant="danger"
-              disabled={!canManageOrg(role) || p.isDefault}
+              disabled={!canManageOrg(role) || !!p.deletedAt || p.isDefault}
               onClick={async () => {
                 if (
                   !(await confirmAction(t("common.delete") + " " + dt(p.name)))

@@ -1,6 +1,8 @@
+import { useSearchParams } from "react-router-dom";
 import {
   useState,
   useEffect,
+  useId,
   type ReactNode,
   type RefObject,
   type ButtonHTMLAttributes,
@@ -80,8 +82,46 @@ export function Panel({
     </section>
   );
 }
-export function Badge({ status }: { status: string }) {
-  return <span className={`badge ${status}`}>{t(`common.${status}`)}</span>;
+export function Badge({ status, label }: { status: string; label?: string }) {
+  return (
+    <span className={`badge ${status}`}>{label || t(`common.${status}`)}</span>
+  );
+}
+export function FilterReset() {
+  const [params, setParams] = useSearchParams();
+  const keys = [
+    "q",
+    "status",
+    "project_id",
+    "format",
+    "min_gb",
+    "modality",
+    "license",
+    "params",
+    "kind",
+    "direction",
+    "from",
+    "to",
+    "includeDeleted",
+    "billing_period",
+  ];
+  if (!keys.some((key) => params.has(key))) return null;
+  return (
+    <Button
+      onClick={() =>
+        setParams(
+          (current) => {
+            const next = new URLSearchParams(current);
+            for (const key of keys) next.delete(key);
+            return next;
+          },
+          { replace: true },
+        )
+      }
+    >
+      {t("common.reset")}
+    </Button>
+  );
 }
 export function Empty({ text, action }: { text?: string; action?: ReactNode }) {
   const client = useQueryClient();
@@ -90,9 +130,12 @@ export function Empty({ text, action }: { text?: string; action?: ReactNode }) {
       <Inbox size={28} />
       <p>{text || t("common.empty")}</p>
       {action || (
-        <Button onClick={() => void client.invalidateQueries()}>
-          {t("common.refresh")}
-        </Button>
+        <div className="row">
+          <FilterReset />
+          <Button onClick={() => void client.invalidateQueries()}>
+            {t("common.refresh")}
+          </Button>
+        </div>
       )}
     </div>
   );
@@ -248,6 +291,7 @@ export function Modal({
   small?: boolean;
   initialFocusRef?: RefObject<HTMLButtonElement | null>;
 }) {
+  const descriptionId = useId();
   return (
     <Dialog.Root
       open={open}
@@ -267,7 +311,7 @@ export function Modal({
               : undefined
           }
           className={drawer ? `drawer ${small ? "small" : ""}` : "dialog"}
-          aria-describedby={description ? "modal-description" : undefined}
+          aria-describedby={description ? descriptionId : undefined}
         >
           <div className={drawer ? "drawer-header" : ""}>
             <div className="between">
@@ -284,7 +328,7 @@ export function Modal({
             </div>
             {description && (
               <Dialog.Description
-                id="modal-description"
+                id={descriptionId}
                 className="dialog-description"
               >
                 {description}

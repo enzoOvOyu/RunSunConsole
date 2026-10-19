@@ -51,6 +51,7 @@ interface Overview {
   events: ResourceEvent[];
   alerts: { id: string; resource: Resource }[];
   account: Account;
+  projects: { id: string; name: string }[];
 }
 const modules = ["matrix", "quotas", "regions", "trend", "alerts", "activity"];
 function initialHidden(): string[] {
@@ -64,7 +65,7 @@ export default function OverviewPage() {
   const q = useData<Overview>(["overview"], EP.overview, { poll: true });
   const [hidden, setHidden] = useState<string[]>(initialHidden);
   const [custom, setCustom] = useState(false);
-  const [stacked, setStacked] = useState(false);
+  const [grouping, setGrouping] = useState("total");
   const role = useAuth((s) => s.role);
   const navigate = useNavigate();
   if (q.isPending) return <Loading />;
@@ -274,15 +275,30 @@ export default function OverviewPage() {
             title={t("overview.trend")}
             hint={t("overview.trendScope")}
             action={
-              <Button onClick={() => setStacked(!stacked)}>
-                {t(stacked ? "common.total" : "common.type")}
-              </Button>
+              <select
+                aria-label={t("billing.dimensions")}
+                value={grouping}
+                onChange={(e) => setGrouping(e.target.value)}
+              >
+                <option value="total">{t("common.total")}</option>
+                <option value="kind">{t("overview.byType")}</option>
+                <option value="project">{t("overview.byProject")}</option>
+              </select>
             }
           >
             <Suspense fallback={<Loading />}>
               <TrendChart
                 data={data.trend}
-                keys={stacked ? [...KINDS] : ["amount"]}
+                keys={
+                  grouping === "kind"
+                    ? [...KINDS]
+                    : grouping === "project"
+                      ? (data.projects || []).map((p) => p.id)
+                      : ["amount"]
+                }
+                labels={Object.fromEntries(
+                  (data.projects || []).map((p) => [p.id, dt(p.name)]),
+                )}
               />
             </Suspense>
           </Panel>
@@ -291,8 +307,20 @@ export default function OverviewPage() {
           {show("alerts") && (
             <Panel title={t("overview.alerts")}>
               {data.alerts.length ||
+              data.balance < data.account.lowBalanceThresholdUsd ||
+              data.month > data.account.budget ||
               data.quotas.some((q) => q.usedValue / q.limitValue >= 0.8) ? (
                 <div className="stack">
+                  {data.balance < data.account.lowBalanceThresholdUsd && (
+                    <Link className="notice warning" to="/billing/bills">
+                      {t("billing.lowBalance")}
+                    </Link>
+                  )}
+                  {data.month > data.account.budget && (
+                    <Link className="notice warning" to="/ops/cost">
+                      {t("billing.overBudget")}
+                    </Link>
+                  )}
                   {data.alerts.map((alert) => (
                     <div className="notice warning" key={alert.id}>
                       <div className="between">

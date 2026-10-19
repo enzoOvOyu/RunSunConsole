@@ -1,21 +1,31 @@
 import { Group } from "@visx/group";
 import type { ResourceOf } from "../../types/domain";
+import type { ClusterView } from "../../types/monitoring";
+import { useData } from "../../features/shared/hooks";
+import { EP } from "../../lib/api-client";
 import { t } from "../../i18n";
+import { Loading, ErrorState, Empty } from "../ui";
 export default function TopologyView({
   resource: r,
 }: {
   resource: ResourceOf<"vgpu">;
 }) {
-  const count = Math.min(
-    12,
-    r.spec.nodePools.reduce((a, p) => a + p.nodeCount, 0),
+  const q = useData<ClusterView>(
+    ["cluster-runtime", r.resourceUuid],
+    `${EP.metrics}/${r.kind}/${r.resourceUuid}/cluster`,
+    { poll: true },
   );
+  if (q.isPending) return <Loading />;
+  if (q.error) return <ErrorState error={q.error} />;
+  const nodes = q.data.nodes;
+  if (!nodes.length) return <Empty />;
+  const height = Math.max(300, 140 + Math.ceil(nodes.length / 6) * 80);
   return (
     <svg
-      viewBox="0 0 800 300"
+      viewBox={`0 0 800 ${height}`}
       role="img"
       aria-label={t("tab.topology")}
-      style={{ width: "100%", height: 300 }}
+      style={{ width: "100%", height }}
     >
       <Group top={20} left={10}>
         <rect
@@ -36,11 +46,11 @@ export default function TopologyView({
         >
           {r.displayId} · NVLink / IB
         </text>
-        {Array.from({ length: count }, (_, i) => {
+        {nodes.map((node, i) => {
           const x = 25 + (i % 6) * 125;
           const y = 100 + Math.floor(i / 6) * 80;
           return (
-            <Group key={i}>
+            <Group key={node.nodeUuid}>
               <path
                 d={`M380,40 L380,70 L${x + 50},70 L${x + 50},${y}`}
                 stroke="var(--rs-border)"
@@ -53,29 +63,32 @@ export default function TopologyView({
                 height={50}
                 fill="var(--rs-surface)"
                 stroke={
-                  r.status === "running"
-                    ? "var(--rs-success)"
-                    : "var(--rs-border)"
+                  node.straggler
+                    ? "var(--rs-warning)"
+                    : node.state === "ready"
+                      ? "var(--rs-success)"
+                      : "var(--rs-border)"
                 }
+                strokeWidth={node.straggler ? 3 : 1}
                 rx={6}
               />
               <text
                 x={x + 50}
                 y={y + 21}
                 textAnchor="middle"
-                fontSize={11}
+                fontSize={10}
                 fill="var(--rs-text)"
               >
-                {r.displayId.slice(0, 9)}-{i + 1}
+                {node.name.split("-").slice(-2).join("-")}
               </text>
               <text
                 x={x + 50}
                 y={y + 38}
                 textAnchor="middle"
-                fontSize={10}
+                fontSize={9}
                 fill="var(--rs-text-secondary)"
               >
-                {r.nodePool}
+                {node.poolCode}
               </text>
             </Group>
           );

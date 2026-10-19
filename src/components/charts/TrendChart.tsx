@@ -21,10 +21,12 @@ export default function TrendChart({
   data,
   keys = ["amount"],
   currency = true,
+  labels,
 }: {
   data: Record<string, unknown>[];
   keys?: string[];
   currency?: boolean;
+  labels?: Record<string, string>;
 }) {
   const locale = useLocale((s) => s.locale);
   return (
@@ -73,11 +75,13 @@ export default function TrendChart({
             }}
             formatter={(v, name) => [
               currency ? money(Number(v)) : number(Number(v), 1),
-              t(`common.${name}`),
+              labels?.[String(name)] || t(`common.${name}`),
             ]}
           />
           {keys.length > 1 && (
-            <Legend formatter={(key) => t(`common.${key}`)} />
+            <Legend
+              formatter={(key) => labels?.[String(key)] || t(`common.${key}`)}
+            />
           )}
           {keys.map((key, i) => (
             <Area

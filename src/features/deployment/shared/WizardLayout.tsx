@@ -205,6 +205,12 @@ function WizardForm({
   const [created, setCreated] = useState<Resource | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const submittedRef = useRef(false);
+  const idempotency = useRef(
+    sessionStorage.getItem(`wizard:key:${kind}`) || crypto.randomUUID(),
+  );
+  useEffect(() => {
+    sessionStorage.setItem(`wizard:key:${kind}`, idempotency.current);
+  }, [kind]);
   const { run, busy } = useAction();
   const navigate = useNavigate();
   const pool = context.pools.find((p) => p.available)!;
@@ -218,6 +224,7 @@ function WizardForm({
       labels: [],
       spec: defaultSpec(kind, pool),
       agree: false,
+      password: "",
     };
     try {
       const stored = sessionStorage.getItem(`wizard:${kind}`);
@@ -254,7 +261,10 @@ function WizardForm({
   );
   useEffect(() => {
     const sub = form.watch((value) =>
-      sessionStorage.setItem(`wizard:${kind}`, JSON.stringify(value)),
+      sessionStorage.setItem(
+        `wizard:${kind}`,
+        JSON.stringify({ ...value, password: "" }),
+      ),
     );
     return () => sub.unsubscribe();
   }, [form, kind]);
@@ -333,24 +343,36 @@ function WizardForm({
     setError(null);
     const response = await run(
       () =>
-        post<{ resource: Resource; apiKey: string | null }>(EP.orders, {
-          ...result.data,
-          sourceType: source.model
-            ? "model"
-            : source.image
-              ? "image"
-              : clone
-                ? "clone"
-                : "direct",
-          sourceRefId:
-            source.model || source.image || clone?.resourceUuid || "",
-        }),
+        post<{ resource: Resource; apiKey: string | null }>(
+          EP.orders,
+          {
+            ...result.data,
+            authPassword: values.password,
+            sourceType: source.template
+              ? "app"
+              : source.model
+                ? "model"
+                : source.image
+                  ? "image"
+                  : clone
+                    ? "clone"
+                    : "direct",
+            sourceRefId:
+              source.template ||
+              source.model ||
+              source.image ||
+              clone?.resourceUuid ||
+              "",
+          },
+          { "Idempotency-Key": idempotency.current },
+        ),
       "wizard.created",
     );
     if (response) {
       submittedRef.current = true;
       setSubmitted(true);
       sessionStorage.removeItem(`wizard:${kind}`);
+      sessionStorage.removeItem(`wizard:key:${kind}`);
       setProject(values.projectId);
       setCreated(response.resource);
       if (response.apiKey) setApiKey(response.apiKey);

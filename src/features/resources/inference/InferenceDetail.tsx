@@ -1,9 +1,10 @@
+import { ReplicaManagement } from "../shared/RuntimePanels";
 import { useState } from "react";
 import type { ResourceOf } from "../../../types/domain";
 import { t } from "../../../i18n";
 import { EP } from "../../../lib/api-client";
 import { useData } from "../../shared/hooks";
-import { Panel, Tabs, DataTable, Badge, Empty } from "../../../components/ui";
+import { Panel, Tabs, Empty } from "../../../components/ui";
 import {
   MonitorPanel,
   AccessPanel,
@@ -56,29 +57,7 @@ export function InferenceDetail({
         onChange={setTab}
       />
       {tab === "instances" ? (
-        <div className="stack">
-          <Panel title={t("tab.instances")}>
-            <DataTable
-              data={Array.from({ length: r.spec.replicas }, (_, i) => ({
-                name: `${r.displayId}-${i + 1}`,
-                phase: r.status === "running" ? "running" : "pending",
-                gpu: r.spec.gpuPerReplica,
-                engine: r.spec.engine,
-              }))}
-              columns={[
-                { accessorKey: "name", header: t("common.name") },
-                {
-                  accessorKey: "phase",
-                  header: t("common.status"),
-                  cell: ({ row }) => <Badge status={row.original.phase} />,
-                },
-                { accessorKey: "gpu", header: "GPU" },
-                { accessorKey: "engine", header: t("resource.engine") },
-              ]}
-            />
-          </Panel>
-          <div className="notice">{t("price.inferenceNote")}</div>
-        </div>
+        <ReplicaManagement resource={r} />
       ) : tab === "monitoring" ? (
         <MonitorPanel resource={r} />
       ) : tab === "governance" ? (

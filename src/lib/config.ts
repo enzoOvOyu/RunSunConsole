@@ -32,6 +32,7 @@ export function defaultSpec(kind: Kind, pool: Pool): Resource["spec"] {
   if (kind === "gpu_vm")
     return {
       ...common,
+      authMethod: "ssh_key",
       gpuModel: pool.gpuModel,
       vcpu: 16,
       memoryGb: 128,

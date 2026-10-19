@@ -15,7 +15,7 @@ import { t, dt } from "../../../i18n";
 import { EP, query } from "../../../lib/api-client";
 import { useData } from "../../shared/hooks";
 import { money, number, unitMoney } from "../../../lib/money";
-import { date } from "../../../lib/date";
+import { date, duration } from "../../../lib/date";
 import {
   Button,
   Panel,
@@ -41,10 +41,25 @@ export function MonitorPanel({
   only?: string[];
 }) {
   const [window, setWindow] = useState("1h");
+  const names = only?.join(",") || "";
   const data = useData<MetricSeries[]>(
-    ["metrics", r.resourceUuid, window],
-    `${EP.metrics}/${r.kind}/${r.resourceUuid}${query({ window })}`,
+    ["metrics", r.resourceUuid, window, names],
+    `${EP.metrics}/${r.kind}/${r.resourceUuid}${query({ window, metrics: names })}`,
     { poll: true },
+  );
+  const processes = useData<
+    {
+      pid: number;
+      command: string;
+      gpu: number;
+      memoryMiB: number;
+      user: string;
+      startedAt: string;
+    }[]
+  >(
+    ["processes", r.resourceUuid],
+    `${EP.metrics}/${r.kind}/${r.resourceUuid}/processes`,
+    { enabled: r.kind === "gpu_vm", poll: true },
   );
   return (
     <div className="stack">
@@ -65,50 +80,88 @@ export function MonitorPanel({
         <ErrorState error={data.error} />
       ) : (
         <div className="grid grid-2">
-          {data.data
-            ?.filter((s) => !only || only.includes(s.key))
-            .map((series) => {
-              const last = series.points.at(-1)?.value;
-              const warning =
-                last != null &&
-                series.threshold != null &&
-                last >= series.threshold;
-              return (
-                <Panel key={series.key} title={t(`metric.${series.key}`)}>
-                  <div className="between">
-                    <strong style={{ fontSize: 26, fontWeight: 600 }}>
-                      {last != null
-                        ? `${number(last, 1)} ${series.unit}`
-                        : t("common.noData")}
-                    </strong>
-                    <span className={warning ? "danger-text" : "muted"}>
-                      {series.threshold != null
-                        ? `${warning ? "⚠" : "✓"} ${t("metric.threshold")} ${series.threshold} ${series.unit}`
-                        : "—"}
-                    </span>
-                  </div>
-                  <Suspense fallback={<Loading />}>
-                    <TrendChart
-                      data={series.points.map((p) => ({
-                        date: p.at,
-                        value: p.value,
-                      }))}
-                      currency={false}
-                      keys={["value"]}
-                    />
-                  </Suspense>
-                </Panel>
+          {data.data?.map((series) => {
+            const last = series.points.at(-1)?.value;
+            const recent = series.points.filter(
+              (p) =>
+                new Date(p.at).getTime() >=
+                new Date(series.points.at(-1)!.at).getTime() - 1800000,
+            );
+            const sustained =
+              recent.length > 1 &&
+              new Date(recent[0].at).getTime() <=
+                new Date(series.points.at(-1)!.at).getTime() - 1740000 &&
+              recent.every(
+                (p) => p.value !== null && p.value < series.threshold!,
               );
-            })}
+            const warning =
+              last != null &&
+              series.threshold != null &&
+              (series.comparison === "below"
+                ? sustained
+                : last >= series.threshold);
+            const [key, card] = series.key.split(":");
+            return (
+              <Panel
+                key={series.key}
+                title={t("metric." + key) + (card ? ` · GPU ${card}` : "")}
+              >
+                <div className="between">
+                  <strong style={{ fontSize: 24, fontWeight: 600 }}>
+                    {last == null
+                      ? t("common.noData")
+                      : `${number(last, key.startsWith("http_error") || key === "api_error_rate" ? 3 : 1)}${series.capacity ? " / " + series.capacity : ""} ${series.unit}`}
+                  </strong>
+                  <span className={warning ? "danger-text" : "muted"}>
+                    {series.threshold == null
+                      ? "—"
+                      : `${last == null ? "—" : warning ? "⚠" : "✓"} ${t("metric.threshold")} ${series.comparison === "below" ? "<" : "≥"} ${number(series.threshold, 1)} ${series.unit}`}
+                  </span>
+                </div>
+                {series.comparison === "below" && (
+                  <small>{t("metric.lowDuration")}</small>
+                )}
+                <Suspense fallback={<Loading />}>
+                  <TrendChart
+                    data={series.points.map((point) => ({
+                      date: point.at,
+                      value: point.value,
+                    }))}
+                    keys={["value"]}
+                    currency={false}
+                  />
+                </Suspense>
+              </Panel>
+            );
+          })}
         </div>
+      )}
+      {r.kind === "gpu_vm" && (
+        <Panel title={t("metric.processes")}>
+          <DataTable
+            data={processes.data || []}
+            columns={[
+              { accessorKey: "pid", header: "PID" },
+              { accessorKey: "command", header: t("metric.command") },
+              { accessorKey: "gpu", header: "GPU" },
+              { accessorKey: "memoryMiB", header: "VRAM · MiB" },
+              { accessorKey: "user", header: t("common.actor") },
+              {
+                accessorKey: "startedAt",
+                header: t("common.time"),
+                cell: ({ row }) => date(row.original.startedAt),
+              },
+            ]}
+          />
+        </Panel>
       )}
     </div>
   );
 }
 export function MetricsOverview({ resource: r }: { resource: Resource }) {
   const data = useData<MetricSeries[]>(
-    ["metrics", r.resourceUuid, "1h"],
-    `${EP.metrics}/${r.kind}/${r.resourceUuid}?window=1h`,
+    ["metrics-overview", r.resourceUuid],
+    `${EP.metrics}/${r.kind}/${r.resourceUuid}?window=1h&metrics=gpu_utilization,gpu_memory_used,gpu_power_draw,gpu_temperature`,
     { poll: true },
   );
   return (
@@ -118,7 +171,7 @@ export function MetricsOverview({ resource: r }: { resource: Resource }) {
           <small>{t(`metric.${s.key}`)}</small>
           <div className="stat-value" style={{ fontSize: 22 }}>
             {s.points.at(-1)?.value != null
-              ? `${number(s.points.at(-1)!.value!, 1)} ${s.unit}`
+              ? `${number(s.points.at(-1)!.value!, 1)}${s.capacity ? " / " + s.capacity : ""} ${s.unit}`
               : "—"}
           </div>
           <small>
@@ -541,19 +594,30 @@ export function SpecPanel({ resource: r }: { resource: Resource }) {
       <KeyValues
         items={Object.entries(r.spec)
           .filter(([, v]) => typeof v !== "object")
-          .map(([key, value]) => [key, String(value)])}
+          .map(([key, value]) => [
+            t("field." + key),
+            typeof value === "boolean"
+              ? t(value ? "common.enabled" : "common.disabled")
+              : String(value),
+          ])}
       />
     </Panel>
   );
 }
 export function Provisioning({ resource: r }: { resource: Resource }) {
-  const steps = useData<{ name: string; status: string }[]>(
-    ["steps", r.resourceUuid],
-    `${EP.resources}/${r.resourceUuid}/steps`,
-    { poll: r.status === "provisioning" },
-  );
+  const steps = useData<
+    { name: string; status: string; durationS?: number; etaS?: number }[]
+  >(["steps", r.resourceUuid], `${EP.resources}/${r.resourceUuid}/steps`, {
+    poll: r.status === "provisioning",
+  });
   return r.status === "provisioning" ? (
     <Panel title={t("resource.provisionSteps")}>
+      <p className="muted">
+        {t("provisioning.eta")} ·{" "}
+        {steps.data?.at(-1)?.etaS != null
+          ? duration(steps.data.at(-1)!.etaS!)
+          : "—"}
+      </p>
       <Progress
         value={
           ((steps.data?.filter((s) => s.status === "success").length || 0) /
@@ -564,7 +628,7 @@ export function Provisioning({ resource: r }: { resource: Resource }) {
       <div className="row" style={{ marginTop: 12 }}>
         {steps.data?.map((s) => (
           <span className="chip" key={s.name}>
-            {s.status === "success" ? "✓" : "○"} {s.name}
+            {s.status === "success" ? "✓" : "○"} {t("provisioning." + s.name)}
           </span>
         ))}
       </div>

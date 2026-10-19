@@ -183,7 +183,7 @@ pnpm typecheck     # 注意：CI 用 tsc -b --force --noEmit
 | --- | --- |
 | `lib/{money,ids,date}.test.ts` | USD 格式化、`display_id` 口径、日期/时长 |
 | `mocks/lib/derive.test.ts` | 训练吞吐 6N/8N、decode 带宽上界、**stopped 态不计费** |
-| `mocks/fixtures/scaling.test.ts` | 11 策略/118 事件：方向自洽、快照带度量、末值=实际规格 |
+| `mocks/fixtures/scaling.test.ts` | 种子策略与事件：方向自洽、快照带度量、末值=实际规格 |
 | `i18n/i18n.test.ts` | 中英键集合相等 + 占位符一致 |
 | `test/architecture.test.ts` | UI 层零 fixture 引用 / 无 TODO / 无 `@ts-ignore` / 无 disable |
 

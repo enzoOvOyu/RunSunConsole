@@ -48,6 +48,7 @@ export interface CommonSpec {
   ports?: number[];
 }
 export interface ServerSpec extends CommonSpec {
+  authMethod?: "ssh_key" | "password";
   gpuDisabled?: boolean;
   gpuModel: string;
   vcpu: number;
@@ -128,6 +129,8 @@ export interface InferenceSpec extends CommonSpec {
   warmupPrompt: string;
 }
 interface ResourceBase {
+  project?: Pick<Project, "id" | "name" | "slug">;
+  owner?: { id: string; name: string };
   provisioningSince?: string;
   allocationSource?: "order";
   privateIp?: string;
@@ -171,6 +174,7 @@ export type Resource = ResourceBase &
   );
 export type ResourceOf<K extends Kind> = Extract<Resource, { kind: K }>;
 export interface Project {
+  deletedAt?: string | null;
   id: string;
   name: string;
   slug: string;
@@ -193,6 +197,7 @@ export interface Pool {
   localNvmeGb: number;
   network: string;
   migProfile: string;
+  migProfiles?: string[];
   availableGpu: number;
   available: boolean;
   licenseAvailable: number;
@@ -397,6 +402,7 @@ export interface Voucher {
   redemptions: { at: string; amount: number; referenceId: string }[];
 }
 export interface Order {
+  idempotencyKey?: string;
   orderUuid: string;
   projectId: string;
   resourceUuid: ResourceUuid;
@@ -412,16 +418,28 @@ export interface MetricPoint {
   value: number | null;
 }
 export interface MetricSeries {
+  capacity?: number;
+  comparison?: "above" | "below";
   key: string;
   unit: string;
   threshold: number | null;
   points: MetricPoint[];
 }
 export interface Account {
+  depletedAt?: string | null;
   org: string;
   user: string;
   plan: string;
   creditBalance: number;
   lowBalanceThresholdUsd: number;
   budget: number;
+}
+export interface DeploymentOptions {
+  vpcs: {
+    id: string;
+    name: string;
+    subnets: { id: string; name: string; region: Region }[];
+  }[];
+  securityGroups: { id: string; name: string }[];
+  k8sVersions: string[];
 }

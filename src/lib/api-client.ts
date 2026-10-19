@@ -1,5 +1,6 @@
 import { useAuth } from "../stores/auth";
 export const EP = {
+  options: "/api/deployment-options",
   overview: "/api/overview",
   resources: "/api/resources",
   projects: "/api/projects",
@@ -68,8 +69,11 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (!res.ok) throw new ApiError(res.status, body.code || "INTERNAL", body);
   return body as T;
 }
-export const post = <T>(path: string, body: unknown) =>
-  api<T>(path, { method: "POST", body: JSON.stringify(body) });
+export const post = <T>(
+  path: string,
+  body: unknown,
+  headers?: Record<string, string>,
+) => api<T>(path, { method: "POST", headers, body: JSON.stringify(body) });
 export const patch = <T>(path: string, body: unknown) =>
   api<T>(path, { method: "PATCH", body: JSON.stringify(body) });
 export const remove = <T>(path: string) => api<T>(path, { method: "DELETE" });

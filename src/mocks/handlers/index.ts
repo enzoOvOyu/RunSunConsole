@@ -1,3 +1,5 @@
+import { hardwareSnapshot, clusterView, replicaView } from "../lib/runtime";
+import { seedResources } from "../fixtures/resources";
 import { http, HttpResponse, delay } from "msw";
 import {
   KINDS,
@@ -19,8 +21,15 @@ import { db, persist, addEvent } from "../lib/database";
 import { RATES } from "../fixtures/pricing";
 import { IMAGES, PIPELINES } from "../fixtures/content";
 import { poolsFor, GPU_SPECS } from "../fixtures/gpu-specs";
-import { estimate, quotaUse, costPerHour, modelMemory } from "../lib/derive";
-import { orderSchema, scalingSchema } from "../../lib/schema";
+import {
+  provisioningSeconds,
+  meteringLines,
+  estimate,
+  quotaUse,
+  costPerHour,
+  modelMemory,
+} from "../lib/derive";
+import { orderSchema, scalingSchema, isCidr } from "../../lib/schema";
 import { canWrite, canManageOrg } from "../../lib/rbac";
 import { displayId } from "../../lib/ids";
 import { round } from "../../lib/money";
@@ -68,33 +77,30 @@ export const quotas = (): Quota[] =>
     })),
   );
 const period = (u: Usage, p: string) => u.usageHour.startsWith(p);
+const initialAllocations = seedResources();
+function assigned(r: Resource, pool: string) {
+  if (r.deletedAt || !["running", "provisioning"].includes(r.status)) return 0;
+  return r.kind === "vgpu"
+    ? r.spec.nodePools
+        .filter((p) => p.poolCode === pool)
+        .reduce((n, p) => n + p.nodeCount * p.gpuPerNode, 0)
+    : r.nodePool === pool
+      ? r.spec.gpuCount
+      : 0;
+}
 function catalogFor(region: Region, exclude?: string) {
   return poolsFor(region).map((pool) => {
+    const baseline = initialAllocations
+      .filter((r) => r.region === region)
+      .reduce((n, r) => n + assigned(r, pool.code), 0);
     const allocated = live()
-      .filter(
-        (r) =>
-          r.allocationSource === "order" &&
-          r.resourceUuid !== exclude &&
-          r.region === region &&
-          r.status !== "stopped" &&
-          r.status !== "error",
-      )
-      .reduce(
-        (n, r) =>
-          n +
-          (r.kind === "vgpu"
-            ? r.spec.nodePools
-                .filter((p) => p.poolCode === pool.code)
-                .reduce((sum, p) => sum + p.nodeCount * p.gpuPerNode, 0)
-            : r.nodePool === pool.code
-              ? r.spec.gpuCount
-              : 0),
-        0,
-      );
+      .filter((r) => r.region === region && r.resourceUuid !== exclude)
+      .reduce((n, r) => n + assigned(r, pool.code), 0);
+    const available = Math.max(0, pool.availableGpu + baseline - allocated);
     return {
       ...pool,
-      availableGpu: Math.max(0, pool.availableGpu - allocated),
-      licenseAvailable: Math.max(0, pool.licenseAvailable - allocated * 7),
+      availableGpu: available,
+      licenseAvailable: available * 7,
     };
   });
 }
@@ -203,12 +209,30 @@ function precheck(r: Resource, exclude?: string) {
   if (
     r.kind === "vgpu" &&
     r.spec.apiServerPublic &&
-    !/^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/.test(r.spec.authorizedCidr)
+    !isCidr(r.spec.authorizedCidr)
   )
     fail(422, "VALIDATION_ERROR");
 }
+let indexedUsage: Usage[] | null = null;
+const usageIndex = new Map<string, Usage>();
+function usageKey(resourceUuid: string, hour: string, unit: string) {
+  return `${resourceUuid}:${hour}:${unit}`;
+}
+function findUsage(resourceUuid: string, hour: string, unit: string) {
+  if (indexedUsage !== db.usage) {
+    usageIndex.clear();
+    for (const u of db.usage)
+      usageIndex.set(usageKey(u.resourceUuid, u.usageHour, u.unit), u);
+    indexedUsage = db.usage;
+  }
+  return usageIndex.get(usageKey(resourceUuid, hour, unit));
+}
 function settle(r: Resource) {
-  const now = Date.now();
+  const deadline = db.account.depletedAt
+    ? new Date(db.account.depletedAt).getTime() +
+      (r.status === "running" ? 24 : 192) * 3600000
+    : Infinity;
+  const now = Math.min(Date.now(), deadline);
   const initial = Math.max(
     new Date(r.createdAt).getTime(),
     Math.floor(now / 3600000) * 3600000,
@@ -224,13 +248,17 @@ function settle(r: Resource) {
     const hour = Math.floor(cursor / 3600000) * 3600000;
     const end = Math.min(now, hour + 3600000);
     const hours = (end - cursor) / 3600000;
-    for (const line of e.lines) {
+    for (const line of meteringLines(e)) {
       const quantity =
         line.quantity *
         hours *
         (r.status === "running" || line.key === "storage" ? 1 : 0);
-      const id = `${r.resourceUuid}-${hour}-${line.key}`;
-      let u = db.usage.find((u) => u.id === id);
+      const id = `${r.resourceUuid}-${hour}-${line.unit}`;
+      let u = findUsage(
+        r.resourceUuid,
+        new Date(hour).toISOString(),
+        line.unit,
+      );
       if (!u) {
         u = {
           id,
@@ -247,15 +275,66 @@ function settle(r: Resource) {
           status: r.status,
         };
         db.usage.push(u);
+        usageIndex.set(usageKey(u.resourceUuid, u.usageHour, u.unit), u);
       }
       const old = u.amount;
-      u.quantity = round(u.quantity + quantity, 4);
+      const meter = db.usageMeters[u.id] ?? {
+        quantity: u.quantity,
+        amount: u.quantity * u.unitPrice,
+      };
+      meter.quantity += quantity;
+      meter.amount += quantity * line.unitPrice;
+      db.usageMeters[u.id] = meter;
+      u.quantity = round(meter.quantity, 4);
+      u.unitPrice = meter.quantity
+        ? meter.amount / meter.quantity
+        : line.unitPrice;
       u.amount = round(u.quantity * u.unitPrice, 4);
       delta += u.amount - old;
     }
     cursor = end;
   }
   if (delta > 0) {
+    const eligible = db.vouchers
+      .filter(
+        (v) =>
+          v.remaining > 0 &&
+          new Date(v.expiresAt).getTime() > now &&
+          v.kinds.includes(r.kind) &&
+          v.regions.includes(r.region),
+      )
+      .sort((a, b) => a.expiresAt.localeCompare(b.expiresAt));
+    db.voucherPending[r.resourceUuid] = eligible.length
+      ? (db.voucherPending[r.resourceUuid] || 0) + delta
+      : 0;
+    let eligibleCredit =
+      Math.floor((db.voucherPending[r.resourceUuid] + Number.EPSILON) * 100) /
+      100;
+    for (const voucher of eligible) {
+      const credit = round(Math.min(eligibleCredit, voucher.remaining));
+      if (credit <= 0) continue;
+      voucher.remaining = round(voucher.remaining - credit);
+      voucher.redemptions.push({
+        at: new Date(now).toISOString(),
+        amount: credit,
+        referenceId: `invoice-${new Date(now).toISOString().slice(0, 7)}`,
+      });
+      db.voucherPending[r.resourceUuid] = Math.max(
+        0,
+        db.voucherPending[r.resourceUuid] - credit,
+      );
+      eligibleCredit = round(eligibleCredit - credit);
+      db.account.creditBalance = round(db.account.creditBalance + credit, 4);
+      db.transactions.push({
+        id: `voucher-${voucher.id}-${crypto.randomUUID()}`,
+        resourceUuid: r.resourceUuid,
+        at: new Date(now).toISOString(),
+        type: "voucher",
+        amount: credit,
+        balanceAfter: db.account.creditBalance,
+        referenceId: `invoice-${new Date(now).toISOString().slice(0, 7)}`,
+      });
+    }
     db.account.creditBalance = round(db.account.creditBalance - delta, 4);
     db.transactions.push({
       id: crypto.randomUUID(),
@@ -266,36 +345,53 @@ function settle(r: Resource) {
       balanceAfter: db.account.creditBalance,
       referenceId: `usage-${r.resourceUuid}-${Math.floor(now / 3600000)}`,
     });
+    if (db.transactions.length > 5000)
+      db.transactions.splice(0, db.transactions.length - 5000);
+    if (db.account.creditBalance < 0 && !db.account.depletedAt)
+      db.account.depletedAt = new Date(now).toISOString();
   }
 }
 function tick() {
+  if (db.account.creditBalance >= 0) db.account.depletedAt = null;
+  else db.account.depletedAt ??= new Date().toISOString();
+
   for (const r of live()) {
     settle(r);
+    if (db.account.depletedAt) {
+      const start = new Date(db.account.depletedAt).getTime();
+      const age = Date.now() - start;
+      if (age >= 86400000 && r.status === "running") {
+        r.status = "stopped";
+        r.runningSince = null;
+        r.stoppedAt = new Date(start + 86400000).toISOString();
+        addEvent(r, "stopped", "running", "stopped");
+        settle(r);
+      }
+      if (age >= 8 * 86400000) {
+        r.deletedAt = new Date(start + 8 * 86400000).toISOString();
+        r.status = "terminating";
+        r.runningSince = null;
+        addEvent(r, "deleted", "stopped", "terminating");
+        continue;
+      }
+    }
     if (r.status === "provisioning") {
       const age =
         (Date.now() - new Date(r.provisioningSince || r.createdAt).getTime()) /
         1000;
-      const duration =
-        r.kind === "gpu_baremetal"
-          ? 900
-          : r.kind === "vgpu"
-            ? 300
-            : r.kind === "inference" && "modelRef" in r.spec
-              ? Math.max(
-                  60,
-                  modelMemory(
-                    db.models.find((m) => m.id === r.spec.modelRef)!,
-                    r.spec.quantization,
-                    r.spec.maxModelLen,
-                  ).loadS,
-                )
-              : 180;
+      const duration = provisioningSeconds(r, db.models);
       if (age > duration) {
         r.status = "running";
-        r.runningSince = new Date().toISOString();
+        r.runningSince = new Date(
+          new Date(r.provisioningSince || r.createdAt).getTime() +
+            duration * 1000,
+        ).toISOString();
+        db.billingCursors[r.resourceUuid] = new Date(r.runningSince).getTime();
+        settle(r);
         const order = db.orders.find((o) => o.resourceUuid === r.resourceUuid);
         if (order) order.status = "completed";
         addEvent(r, "ready", "provisioning", "running");
+        db.events[0].at = r.runningSince;
       }
     }
   }
@@ -348,9 +444,31 @@ function summary(
         ),
       ]),
     ),
+    ...Object.fromEntries(
+      db.projects.map((project) => [
+        project.id,
+        round(
+          usage
+            .filter(
+              (u) => u.usageHour.startsWith(day) && u.projectId === project.id,
+            )
+            .reduce((n, u) => n + u.amount, 0),
+        ),
+      ]),
+    ),
   }));
   return {
     month,
+    payable: Math.max(
+      0,
+      round(
+        month -
+          db.vouchers
+            .flatMap((v) => v.redemptions)
+            .filter((v) => v.at.startsWith(billingPeriod))
+            .reduce((n, v) => n + v.amount, 0),
+      ),
+    ),
     today,
     hourly,
     total: round(
@@ -427,6 +545,28 @@ async function dispatch(request: Request) {
   if (region && !REGIONS.includes(region as Region))
     fail(422, "VALIDATION_ERROR");
   tick();
+  if (path === "/api/deployment-options") {
+    const code = (region || "jp") as Region;
+    return json({
+      vpcs: [
+        {
+          id: "default-vpc",
+          name: "默认私有网络",
+          subnets: [
+            { id: `${code}-default`, name: "默认子网", region: code },
+            { id: `${code}-private`, name: "私有子网", region: code },
+          ],
+        },
+      ],
+      securityGroups: [
+        { id: "default", name: "默认安全组" },
+        { id: "ssh-only", name: "仅 SSH" },
+        { id: "web", name: "Web 访问" },
+        { id: "restricted", name: "受限访问" },
+      ],
+      k8sVersions: ["1.28", "1.29", "1.30", "1.31"],
+    });
+  }
   if (path === "/api/account") {
     if (method === "PATCH") {
       if (!canManageOrg(role)) fail(403, "FORBIDDEN");
@@ -462,6 +602,7 @@ async function dispatch(request: Request) {
       alerts: rs
         .filter((r) => r.status === "error")
         .map((r) => ({ id: r.resourceUuid, type: "error", resource: r })),
+      projects: db.projects.map((p) => ({ id: p.id, name: p.name })),
       account: db.account,
     });
   }
@@ -482,12 +623,42 @@ async function dispatch(request: Request) {
         )
         .sort((a, b) => b.at.localeCompare(a.at)),
     );
-  if (path === "/api/notifications")
-    return json(
-      live()
-        .filter((r) => r.status === "error")
-        .map((r) => ({ id: r.resourceUuid, resource: r, read: false })),
-    );
+  if (path === "/api/notifications") {
+    const items: {
+      id: string;
+      resource?: Resource;
+      messageKey?: string;
+      href?: string;
+      read: boolean;
+    }[] = live()
+      .filter((r) => r.status === "error")
+      .map((r) => ({ id: r.resourceUuid, resource: r, read: false }));
+    if (db.account.creditBalance < db.account.lowBalanceThresholdUsd)
+      items.push({
+        id: "balance",
+        messageKey: "billing.lowBalance",
+        href: role === "member" ? "/ops/tickets?new=balance" : "/billing/bills",
+        read: false,
+      });
+    if (db.account.depletedAt)
+      items.push({
+        id: "grace",
+        messageKey: "billing.grace",
+        href: role === "member" ? "/ops/tickets?new=balance" : "/billing/bills",
+        read: false,
+      });
+    if (
+      summary(null, new Date().toISOString().slice(0, 7)).month >
+      db.account.budget
+    )
+      items.push({
+        id: "budget",
+        messageKey: "billing.overBudget",
+        href: role === "member" ? "/ops/tickets?new=budget" : "/ops/cost",
+        read: false,
+      });
+    return json(items);
+  }
   if (path === "/api/resources" && method === "GET") {
     let rows = db.resources.filter(
       (r) =>
@@ -516,6 +687,7 @@ async function dispatch(request: Request) {
         total: rows.length,
         page,
         size,
+        regionScope: region || "all",
       },
       { headers: { "X-Total-Count": String(rows.length) } },
     );
@@ -528,6 +700,7 @@ async function dispatch(request: Request) {
       if (!action) {
         const data = {
           ...enrich(r),
+          owner: { id: db.account.user, name: db.account.user },
           project: db.projects.find((p) => p.id === r.projectId),
           order: db.orders.find((o) => o.resourceUuid === r.resourceUuid),
         };
@@ -568,19 +741,19 @@ async function dispatch(request: Request) {
           ssh: `ssh ubuntu@10.${REGIONS.indexOf(r.region) + 10}.0.${(parseInt(r.resourceUuid.slice(-4), 16) % 250) + 2}`,
           endpoint: `https://${r.displayId}.${r.region}.runsun.cloud`,
           bmc: { ip: "10.255.0.10", firmware: "2.14.0", reachable: true },
-          driver: "550.127.05",
-          cuda: "12.4",
-          vbios: "96.00.68.00.01",
-          compliance: true,
+          ...hardwareSnapshot(r).firmware,
         });
       }
       if (action === "steps") {
         const names =
           r.kind === "gpu_baremetal"
             ? ["allocation", "network", "bmc", "os", "driver", "ready"]
-            : ["allocation", "network", "image", "driver", "ready"];
-        const duration =
-          r.kind === "gpu_baremetal" ? 900 : r.kind === "vgpu" ? 300 : 180;
+            : r.kind === "vgpu"
+              ? ["allocation", "controlplane", "network", "plugins", "ready"]
+              : r.kind === "inference"
+                ? ["allocation", "network", "image", "weights", "ready"]
+                : ["allocation", "network", "image", "driver", "ready"];
+        const duration = provisioningSeconds(r, db.models);
         const progress =
           r.status === "running"
             ? 1
@@ -593,6 +766,16 @@ async function dispatch(request: Request) {
         return json(
           names.map((name, i) => ({
             name,
+            durationS: duration / names.length,
+            etaS: Math.max(
+              0,
+              Math.ceil(
+                duration -
+                  (Date.now() -
+                    new Date(r.provisioningSince || r.createdAt).getTime()) /
+                    1000,
+              ),
+            ),
             status: r.deletedAt
               ? "skipped"
               : i / names.length < progress
@@ -680,6 +863,21 @@ async function dispatch(request: Request) {
           ...r.labels.filter((l) => !l.startsWith("node:")),
           `node:${action}`,
         ];
+      } else if (action === "traffic") {
+        if (r.kind !== "inference") fail(422, "VALIDATION_ERROR");
+        r.spec.canaryPercent = z.number().min(0).max(99).parse(body.percent);
+      } else if (action === "restart-replica") {
+        if (r.kind !== "inference" || r.status !== "running")
+          fail(409, "INVALID_STATE");
+        const index = z
+          .number()
+          .int()
+          .min(0)
+          .max(r.spec.replicas - 1)
+          .parse(body.index);
+        db.replicaRestarts[r.resourceUuid] ??= {};
+        db.replicaRestarts[r.resourceUuid][String(index)] =
+          (db.replicaRestarts[r.resourceUuid][String(index)] || 0) + 1;
       } else if (action === "resize") {
         const count = z.number().int().min(1).max(32).parse(body.count);
         if (r.kind === "inference") {
@@ -711,13 +909,29 @@ async function dispatch(request: Request) {
   }
   if (path === "/api/deployment-orders" && method === "POST") {
     if (faultFor(url) === "insufficient") fail(409, "INSUFFICIENT_CAPACITY");
-    if (faultFor(url) === "billing" || db.account.creditBalance < 0)
-      fail(409, "INSUFFICIENT_BALANCE");
+    if (faultFor(url) === "billing") fail(503, "BILLING_UNAVAILABLE");
+    if (db.account.creditBalance < 0) fail(409, "INSUFFICIENT_BALANCE");
+    const idempotencyKey = request.headers.get("Idempotency-Key") || "";
+    const previous = idempotencyKey
+      ? db.orders.find((o) => o.idempotencyKey === idempotencyKey)
+      : undefined;
+    if (previous)
+      return json({
+        resource: resource(previous.resourceUuid),
+        order: previous,
+        apiKey: null,
+      });
     const parsed = orderSchema.parse(body);
-    if (!db.projects.some((p) => p.id === parsed.projectId))
+    if (!db.projects.some((p) => p.id === parsed.projectId && !p.deletedAt))
       fail(422, "VALIDATION_ERROR");
     const spec = normalizeSpec(parsed.spec);
     const pool = GPU_SPECS[parsed.nodePool];
+    if (
+      parsed.kind === "gpu_vm" &&
+      "authMethod" in spec &&
+      spec.authMethod === "password"
+    )
+      z.string().min(8).max(128).parse(body.authPassword);
     if (parsed.kind === "gpu_vm" && "gpuPerInstance" in spec)
       spec.gpuCount = spec.gpuDisabled
         ? 0
@@ -725,13 +939,25 @@ async function dispatch(request: Request) {
     if (parsed.kind === "gpu_baremetal" && "machineCount" in spec)
       spec.gpuCount = spec.machineCount * pool.gpusPerNode;
     if (parsed.kind === "vgpu" && "nodePools" in spec)
+      spec.nodePools = spec.nodePools.map((pool) => ({
+        ...pool,
+        gpuPerNode: GPU_SPECS[pool.poolCode].gpusPerNode,
+      }));
+    if (parsed.kind === "vgpu" && "nodePools" in spec)
       spec.gpuCount = spec.nodePools.reduce(
         (a, p) => a + p.nodeCount * GPU_SPECS[p.poolCode].gpusPerNode,
         0,
       );
     if (parsed.kind === "inference" && "replicas" in spec)
       spec.gpuCount = spec.replicas * spec.gpuPerReplica;
-    const resourceUuid = crypto.randomUUID() as ResourceUuid;
+    let resourceUuid: ResourceUuid;
+    do {
+      resourceUuid = crypto.randomUUID() as ResourceUuid;
+    } while (
+      db.resources.some(
+        (r) => r.displayId === displayId(parsed.kind, resourceUuid),
+      )
+    );
     const r = {
       ...parsed,
       spec,
@@ -749,6 +975,7 @@ async function dispatch(request: Request) {
     precheck(r);
     db.resources.push(r);
     const order = {
+      idempotencyKey,
       orderUuid: r.orderUuid,
       projectId: r.projectId,
       resourceUuid,
@@ -785,21 +1012,92 @@ async function dispatch(request: Request) {
   }
   if (path === "/api/deployment-orders/estimate" && method === "POST") {
     const input = body as unknown as Parameters<typeof estimate>[0];
-    return json(estimate({ ...input, spec: normalizeSpec(input.spec) }, RATES));
+    const spec = normalizeSpec(input.spec);
+    if ("nodePools" in spec) {
+      spec.nodePools = spec.nodePools.map((pool) => ({
+        ...pool,
+        gpuPerNode: GPU_SPECS[pool.poolCode].gpusPerNode,
+      }));
+      spec.gpuCount = spec.nodePools.reduce(
+        (n, p) => n + p.nodeCount * p.gpuPerNode,
+        0,
+      );
+    }
+    return json(estimate({ ...input, spec }, RATES));
   }
   if (path.startsWith("/api/metrics/")) {
-    const id = path.split("/")[4];
+    const parts = path.split("/");
+    const r = resource(parts[4]);
+    const fault = faultFor(url);
+    if (parts[5] === "hardware") {
+      if (r.kind !== "gpu_baremetal") fail(404, "NOT_FOUND");
+      const node = z.coerce
+        .number()
+        .int()
+        .min(0)
+        .max(r.spec.machineCount - 1)
+        .parse(qs.get("node") || 0);
+      if (
+        fault === "xid48" &&
+        !db.events.some(
+          (e) => e.resourceUuid === r.resourceUuid && e.type === "XID_48",
+        )
+      )
+        db.events.unshift({
+          id: crypto.randomUUID(),
+          resourceUuid: r.resourceUuid,
+          type: "XID_48",
+          at: new Date().toISOString(),
+          actor: "hardware-controller",
+          component: "GPU",
+          reason: "检测到 Xid 48，不可纠正 ECC 双比特错误",
+          before: "ecc_dbe=0",
+          after: "ecc_dbe=2",
+          action: "隔离故障 GPU 并提交硬件工单",
+          metric: "ecc_dbe",
+          value: 2,
+          threshold: 1,
+        });
+      return json(hardwareSnapshot(r, node, fault));
+    }
+    if (parts[5] === "cluster") {
+      if (r.kind !== "vgpu") fail(404, "NOT_FOUND");
+      return json(clusterView(r, fault));
+    }
+    if (parts[5] === "replicas") {
+      if (r.kind !== "inference") fail(404, "NOT_FOUND");
+      return json(replicaView(r, fault));
+    }
+    if (parts[5] === "processes") {
+      if (r.kind !== "gpu_vm") fail(404, "NOT_FOUND");
+      if (!["running", "error"].includes(r.status) || r.spec.gpuCount === 0)
+        return json([]);
+      return json(
+        Array.from({ length: r.spec.gpuPerInstance }, (_, i) => ({
+          pid: 1240 + i * 13,
+          command: "python -m ipykernel_launcher",
+          gpu: i,
+          memoryMiB: Math.round(GPU_SPECS[r.nodePool].memoryGb * 0.72 * 1024),
+          user: "ubuntu",
+          startedAt: r.runningSince || r.createdAt,
+        })),
+      );
+    }
+    const wanted = (qs.get("metrics") || "").split(",").filter(Boolean);
+    const series = metricsFor(r, qs.get("window") || "1h", fault);
     return json(
-      metricsFor(resource(id), qs.get("window") || "1h", faultFor(url)),
+      wanted.length ? series.filter((s) => wanted.includes(s.key)) : series,
     );
   }
   if (path === "/api/projects") {
     if (method === "GET")
       return json(
-        db.projects.map((p) => ({
-          ...p,
-          resourceCount: live().filter((r) => r.projectId === p.id).length,
-        })),
+        db.projects
+          .filter((p) => !p.deletedAt || qs.get("includeDeleted") === "true")
+          .map((p) => ({
+            ...p,
+            resourceCount: live().filter((r) => r.projectId === p.id).length,
+          })),
       );
     if (method === "POST") {
       const name = z.string().min(2).max(63).parse(body.name);
@@ -830,6 +1128,7 @@ async function dispatch(request: Request) {
   const pm = path.match(/^\/api\/projects\/([^/]+)(?:\/(summary|members))?$/);
   if (pm) {
     const p = db.projects.find((p) => p.id === pm[1]) || fail(404, "NOT_FOUND");
+    if (p.deletedAt && method !== "GET") fail(410, "GONE");
     if (method === "GET") {
       const rs = live().filter((r) => r.projectId === p.id);
       return json({
@@ -872,7 +1171,7 @@ async function dispatch(request: Request) {
       if (p.isDefault) fail(409, "DEFAULT_PROJECT");
       const count = live().filter((r) => r.projectId === p.id).length;
       if (count) fail(409, "PROJECT_HAS_RESOURCES", { resourceCount: count });
-      db.projects = db.projects.filter((x) => x.id !== p.id);
+      p.deletedAt = new Date().toISOString();
       return done();
     }
     if (method === "PATCH") {
@@ -1104,8 +1403,7 @@ async function dispatch(request: Request) {
       periods.map((p) => ({
         id: `invoice-${p}`,
         period: p,
-        status:
-          p === new Date().toISOString().slice(0, 7) ? "pending" : "success",
+        status: p === new Date().toISOString().slice(0, 7) ? "open" : "paid",
         amount: round(
           db.usage
             .filter((u) => period(u, p))
@@ -1539,6 +1837,8 @@ export const handlers = [
           { code: "VALIDATION_ERROR", issues: error.issues },
           { status: 422 },
         );
+      if (import.meta.env.DEV || import.meta.env.MODE === "test")
+        console.error(error);
       return HttpResponse.json({ code: "INTERNAL" }, { status: 500 });
     }
   }),

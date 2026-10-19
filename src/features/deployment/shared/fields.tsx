@@ -1,7 +1,10 @@
+import { EP, query } from "../../../lib/api-client";
+import { useData } from "../../shared/hooks";
 import { confirmAction } from "../../../components/ui/ConfirmAction";
 import { useFormContext } from "react-hook-form";
 import type {
   Resource,
+  DeploymentOptions,
   Pool,
   Kind,
   Region,
@@ -11,7 +14,7 @@ import type {
   BillingMode,
   ScalingConfig,
 } from "../../../types/domain";
-import { Field, Check, Button } from "../../../components/ui";
+import { Field, Check, Button, KeyValues } from "../../../components/ui";
 import { t, dt } from "../../../i18n";
 import { defaultScaling, normalizeSpec } from "../../../lib/config";
 export interface WizardValues {
@@ -23,6 +26,7 @@ export interface WizardValues {
   labels: string[];
   spec: Resource["spec"];
   agree: boolean;
+  password: string;
 }
 export interface FormContext {
   kind: Kind;
@@ -441,40 +445,133 @@ export function ImageCards({
   );
 }
 export function NetworkFields() {
-  const { form } = useSpec();
+  const { form, spec, update } = useSpec();
   const region = form.watch("region");
+  const options = useData<DeploymentOptions>(
+    ["deployment-options", region],
+    EP.options + query({ region }),
+  );
+  const vpc = "vpc" in spec ? spec.vpc : "";
+  const subnets =
+    options.data?.vpcs.find((item) => item.id === vpc)?.subnets || [];
   return (
     <div className="form-grid">
-      <SpecSelect name="vpc" label="VPC" options={["default-vpc"]} />
+      <SpecSelect
+        name="vpc"
+        label="VPC"
+        options={(options.data?.vpcs || []).map((v) => ({
+          value: v.id,
+          label: dt(v.name),
+        }))}
+      />
       <SpecSelect
         name="subnet"
-        label={t("common.region") + " · Subnet"}
-        options={[`${region}-default`, `${region}-private`]}
+        label={t("field.subnet")}
+        options={subnets.map((subnet) => ({
+          value: subnet.id,
+          label: dt(subnet.name),
+        }))}
       />
       <SpecCheck name="publicIp" label={t("wizard.publicIp")} />
+      {"securityGroups" in spec && (
+        <Field label={t("field.securityGroups")}>
+          <select
+            multiple
+            value={spec.securityGroups}
+            onChange={(e) =>
+              update({
+                securityGroups: Array.from(
+                  e.target.selectedOptions,
+                  (o) => o.value,
+                ),
+              })
+            }
+          >
+            {options.data?.securityGroups.map((group) => (
+              <option key={group.id} value={group.id}>
+                {dt(group.name)}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
     </div>
+  );
+}
+export function DeploymentOptionSelect({
+  name,
+  label,
+}: {
+  name: string;
+  label: string;
+}) {
+  const { form } = useSpec();
+  const region = form.watch("region");
+  const options = useData<DeploymentOptions>(
+    ["deployment-options", region],
+    EP.options + query({ region }),
+  );
+  return (
+    <SpecSelect
+      name={name}
+      label={label}
+      options={options.data?.k8sVersions || []}
+    />
   );
 }
 export function Review() {
   const { form } = useSpec();
+  const projects = useData<Project[]>(["projects"], EP.projects);
+  const values = form.watch();
+  const spec = values.spec;
+  const renderValue = (key: string, value: unknown) => {
+    if (typeof value === "boolean")
+      return t(value ? "common.enabled" : "common.disabled");
+    if (value === null || value === undefined || value === "") return "—";
+    if (Array.isArray(value)) {
+      if (key === "nodePools")
+        return value
+          .map(
+            (pool) =>
+              `${pool.poolCode} · ${pool.nodeCount} ${t("common.nodes")} · ${pool.slicingPolicy} ${pool.migProfile}`,
+          )
+          .join(" / ");
+      return value.join(", ");
+    }
+    if (typeof value === "object") {
+      if (key === "scaling") {
+        const config = value as ScalingConfig;
+        return `${t("scaling." + config.strategy_model)} · ${config.min_size}–${config.max_size} · ${t("scaling." + config.trigger_metric)} ${config.target_value}`;
+      }
+      return Object.entries(value)
+        .map(([key, value]) => `${key}=${value}`)
+        .join(", ");
+    }
+    return String(value);
+  };
   return (
     <div className="stack">
       <p>{t("wizard.review")}</p>
-      <pre>
-        {JSON.stringify(
-          {
-            project: form.watch("projectId"),
-            region: form.watch("region"),
-            name: form.watch("name"),
-            spec: form.watch("spec"),
-          },
-          null,
-          2,
-        )}
-      </pre>
+      <KeyValues
+        items={[
+          [
+            t("common.project"),
+            dt(
+              projects.data?.find((p) => p.id === values.projectId)?.name ||
+                values.projectId,
+            ),
+          ],
+          [t("common.region"), t("common." + values.region)],
+          [t("common.name"), values.name],
+          ...Object.entries(spec).map(([key, value]): [string, string] => [
+            t("field." + key),
+            renderValue(key, value),
+          ]),
+        ]}
+      />
       <Check
         label={t("wizard.agreement")}
-        checked={form.watch("agree")}
+        checked={values.agree}
         onChange={(v) => form.setValue("agree", v)}
       />
     </div>

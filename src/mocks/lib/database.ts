@@ -28,11 +28,13 @@ import {
   seedNotebooks,
 } from "../fixtures/content";
 import { RATES } from "../fixtures/pricing";
-import { estimate } from "./derive";
-import { rng } from "./rng";
+import { estimate, meteringLines, provisioningSeconds } from "./derive";
 import { round } from "../../lib/money";
 import { defaultScaling } from "../../lib/config";
 export interface Database {
+  usageMeters: Record<string, { quantity: number; amount: number }>;
+  voucherPending: Record<string, number>;
+  replicaRestarts: Record<string, Record<string, number>>;
   billingCursors: Record<string, number>;
   resources: Resource[];
   projects: Project[];
@@ -53,6 +55,18 @@ export interface Database {
 }
 export function makeDatabase(): Database {
   const resources = seedResources();
+  for (const r of resources) {
+    if (r.status === "running") {
+      const since =
+        r.mode === "spot"
+          ? new Date(new Date(seedTime).setUTCHours(6, 0, 0, 0)).getTime() -
+            86400000
+          : new Date(r.createdAt).getTime() +
+            provisioningSeconds(r, MODELS) * 1000;
+      r.runningSince = new Date(since).toISOString();
+    }
+  }
+
   const events: ResourceEvent[] = resources.map((r, i) => ({
     id: `event-${i}`,
     resourceUuid: r.resourceUuid,
@@ -65,9 +79,14 @@ export function makeDatabase(): Database {
             ? "provisioning"
             : "ready",
     at:
-      r.status === "running" || r.status === "provisioning"
-        ? r.createdAt
-        : r.stoppedAt || new Date(seedTime - (i + 1) * 3600000).toISOString(),
+      r.status === "running"
+        ? new Date(
+            new Date(r.createdAt).getTime() +
+              provisioningSeconds(r, MODELS) * 1000,
+          ).toISOString()
+        : r.status === "provisioning"
+          ? r.createdAt
+          : r.stoppedAt || new Date(seedTime - (i + 1) * 3600000).toISOString(),
     actor: "enzoOvOyu",
     component: r.kind === "inference" ? "model-loader" : "provisioner",
     reason:
@@ -85,35 +104,84 @@ export function makeDatabase(): Database {
     value: r.status === "running" ? 1 : 0,
     threshold: 1,
   }));
+  for (const r of resources.filter((r) => r.mode === "spot")) {
+    const earliest =
+      new Date(r.createdAt).getTime() + provisioningSeconds(r, MODELS) * 1000;
+    for (let day = 1; day <= 20; day++) {
+      const base = new Date(seedTime);
+      base.setUTCDate(base.getUTCDate() - day);
+      base.setUTCHours(5, 0, 0, 0);
+      const stop = base.getTime();
+      if (
+        stop < earliest ||
+        (r.stoppedAt && stop > new Date(r.stoppedAt).getTime())
+      )
+        continue;
+      for (const [type, at, before, after, reason] of [
+        ["stopped", stop, "running", "stopped", "抢占式资源回收，算力暂停计费"],
+        [
+          "ready",
+          stop + 3600000,
+          "stopped",
+          "running",
+          "抢占式资源重新就绪，算力恢复计费",
+        ],
+      ] as const)
+        events.push({
+          id: `spot-${r.displayId}-${day}-${type}`,
+          resourceUuid: r.resourceUuid,
+          type,
+          at: new Date(at).toISOString(),
+          actor: "spot-controller",
+          component: r.kind,
+          reason,
+          before,
+          after,
+          action: "检查点已保存，可继续工作负载",
+          metric: "gpu_count",
+          value: type === "stopped" ? 0 : r.spec.gpuCount,
+          threshold: r.spec.gpuCount,
+        });
+    }
+  }
   const usage: Usage[] = [];
   for (const r of resources) {
+    if (r.status === "provisioning") continue;
     const e = estimate(r, RATES);
-    const random = rng(r.resourceUuid);
-    const begin =
-      Math.ceil(new Date(r.createdAt).getTime() / 3600000) * 3600000;
+    const ready =
+      new Date(r.createdAt).getTime() + provisioningSeconds(r, MODELS) * 1000;
+    const begin = Math.floor(ready / 3600000) * 3600000;
     const end = Math.floor(seedTime / 3600000) * 3600000;
+    const stopAt = r.stoppedAt ? new Date(r.stoppedAt).getTime() : Infinity;
     for (let h = begin; h < end; h += 3600000) {
+      const intervalStart = Math.max(h, ready);
+      const intervalEnd = h + 3600000;
+      const storageHours = Math.max(0, (intervalEnd - intervalStart) / 3600000);
+      const priorDay =
+        new Date(h).toISOString().slice(0, 10) <
+        new Date(seedTime).toISOString().slice(0, 10);
+      const preempted =
+        r.mode === "spot" && priorDay && new Date(h).getUTCHours() === 5;
+      const runningHours = preempted
+        ? 0
+        : Math.max(
+            0,
+            (Math.min(intervalEnd, stopAt) - intervalStart) / 3600000,
+          );
       const status =
-        r.status === "provisioning"
-          ? "provisioning"
-          : r.status === "stopped" && h > seedTime - 8 * 3600000
-            ? "stopped"
-            : r.status === "error" && h > seedTime - 4 * 3600000
-              ? "error"
-              : "running";
-      if (status === "provisioning") continue;
-      const factor = 0.72 + random() * 0.28;
-      for (const line of e.lines) {
+        runningHours > 0
+          ? "running"
+          : r.status === "error"
+            ? "error"
+            : "stopped";
+      for (const line of meteringLines(e)) {
         const quantity = round(
-          line.key === "storage"
-            ? line.quantity
-            : status === "running"
-              ? line.quantity * factor
-              : 0,
+          line.quantity *
+            (line.key === "storage" ? storageHours : runningHours),
           4,
         );
         usage.push({
-          id: `${r.resourceUuid}-${h}-${line.key}`,
+          id: `${r.resourceUuid}-${h}-${line.unit}`,
           resourceUuid: r.resourceUuid,
           displayId: r.displayId,
           projectId: r.projectId,
@@ -121,7 +189,7 @@ export function makeDatabase(): Database {
           kind: r.kind,
           usageHour: new Date(h).toISOString(),
           unit: line.unit,
-          quantity: round(quantity, 4),
+          quantity,
           unitPrice: line.unitPrice,
           amount: round(quantity * line.unitPrice, 4),
           status,
@@ -129,24 +197,50 @@ export function makeDatabase(): Database {
       }
     }
   }
-  const transactions: Transaction[] = [];
-  let balance = 3_000_000;
+  const transactions: Transaction[] = [
+    {
+      id: "credit-initial",
+      resourceUuid: null,
+      at: new Date(seedTime - 25 * 86400000).toISOString(),
+      type: "credit",
+      amount: 3_000_000,
+      balanceAfter: 3_000_000,
+      referenceId: "enterprise-prepayment",
+    },
+  ];
   for (const r of resources) {
     const amount = round(
       usage
         .filter((u) => u.resourceUuid === r.resourceUuid)
-        .reduce((s, u) => s + u.amount, 0),
+        .reduce((n, u) => n + u.amount, 0),
+      4,
     );
-    balance = round(balance - amount);
     transactions.push({
       id: `tx-${r.displayId}`,
       resourceUuid: r.resourceUuid,
       at: new Date(seedTime - 3600000).toISOString(),
       type: "charge",
       amount: -amount,
-      balanceAfter: balance,
+      balanceAfter: 0,
       referenceId: `invoice-${new Date().toISOString().slice(0, 7)}`,
     });
+  }
+  for (const v of VOUCHERS)
+    for (const redemption of v.redemptions)
+      transactions.push({
+        id: `voucher-${v.id}`,
+        resourceUuid: null,
+        at: redemption.at,
+        type: "voucher",
+        amount: redemption.amount,
+        balanceAfter: 0,
+        referenceId: redemption.referenceId,
+      });
+  transactions.sort((a, b) => a.at.localeCompare(b.at));
+  let balance = 0;
+  for (const tx of transactions) {
+    balance = round(balance + tx.amount, 4);
+    tx.balanceAfter = balance;
   }
   const policies: ScalingPolicy[] = resources
     .filter((r) => r.kind === "vgpu" || r.kind === "inference")
@@ -202,6 +296,9 @@ export function makeDatabase(): Database {
     createdAt: r.createdAt,
   }));
   return {
+    usageMeters: {},
+    voucherPending: {},
+    replicaRestarts: {},
     billingCursors: {},
     resources,
     projects: structuredClone(PROJECTS),
@@ -221,7 +318,8 @@ export function makeDatabase(): Database {
     account: {
       org: "RunSun Research",
       user: "enzoOvOyu",
-      plan: "Pro",
+      plan: "enterprise",
+      depletedAt: null,
       creditBalance: balance,
       lowBalanceThresholdUsd: Number(
         import.meta.env.VITE_LOW_BALANCE_THRESHOLD_USD || 50,
@@ -254,6 +352,10 @@ function restore() {
       typeof localStorage !== "undefined" ? localStorage.getItem(KEY) : null;
     if (stored) {
       const data = JSON.parse(stored) as StoredDatabase;
+      data.usageMeters ??= {};
+      data.replicaRestarts ??= {};
+      data.voucherPending ??= {};
+      if (data.account.plan === "Pro") data.account.plan = "enterprise";
       const usage: Usage[] = data.usage.map(
         ([
           id,
@@ -281,7 +383,13 @@ function restore() {
           };
         },
       );
-      return { ...data, billingCursors: data.billingCursors || {}, usage };
+      return {
+        ...data,
+        billingCursors: data.billingCursors || {},
+        replicaRestarts: data.replicaRestarts || {},
+        voucherPending: data.voucherPending || {},
+        usage,
+      };
     }
   } catch {
     /* Seed data remains available when stored content cannot be restored. */

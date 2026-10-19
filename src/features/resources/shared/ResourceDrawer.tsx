@@ -100,7 +100,9 @@ export function ResourceDrawer() {
           )
         }
         description={
-          r ? `${r.displayId} · ${t("common." + r.region)}` : undefined
+          r
+            ? `${r.displayId} · ${t("common." + r.region)} · ${r.project ? dt(r.project.name) : r.projectId}`
+            : undefined
         }
       >
         {q.isPending ? (

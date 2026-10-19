@@ -30,8 +30,12 @@ export const KIND_META = {
     color: "var(--rs-type-inference)",
   },
 } as const;
-export const resourceLink = (r: { kind: Kind; resourceUuid: ResourceUuid }) =>
-  `/resources/${KIND_META[r.kind].routeKey}?drawer=${r.resourceUuid}`;
+export const resourceLink = (r: {
+  kind: Kind;
+  resourceUuid: ResourceUuid;
+  region?: string;
+}) =>
+  `/resources/${KIND_META[r.kind].routeKey}?drawer=${r.resourceUuid}${r.region ? "&region=" + r.region : ""}`;
 export function displayId(kind: Kind, uuid: string): DisplayId {
   return `${KIND_META[kind].prefix}${uuid.replaceAll("-", "").slice(-6)}` as DisplayId;
 }

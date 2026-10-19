@@ -32,33 +32,46 @@ const common = {
   env: z.record(z.string()).optional(),
   ports: z.array(z.number().int().min(1).max(65535)).optional(),
 };
-export const serverSchema = z.object({
-  ...common,
-  gpuCount: z.number().int().min(0),
-  gpuDisabled: z.boolean().optional(),
-  gpuModel: z.string(),
-  vcpu: z.number().int().positive(),
-  memoryGb: z.number().positive(),
-  imageRef: z.string().min(1),
-  quantity: z.number().int().min(1).max(50),
-  gpuPerInstance: z.union([
-    z.literal(1),
-    z.literal(2),
-    z.literal(4),
-    z.literal(8),
-  ]),
-  systemDiskGb: z.number().min(40).max(2048),
-  dataDiskGb: z.number().min(0).max(32768),
-  systemDiskType: z.enum(["nvme_ssd", "ssd"]),
-  dataDiskType: z.enum(["nvme_ssd", "ssd"]),
-  vpc: z.string().min(1),
-  subnet: z.string().min(1),
-  securityGroups: z.array(z.string()).min(1),
-  sshPubkey: z.string().regex(/^ssh-(ed25519|rsa)\s+[A-Za-z0-9+/=]+/),
-  bandwidthMbps: z.number().int().min(1).max(1000),
-  autoShutdownIdleMin: z.number(),
-  entrypoint: z.string(),
-});
+export const serverSchema = z
+  .object({
+    authMethod: z.enum(["ssh_key", "password"]).optional(),
+    ...common,
+    gpuCount: z.number().int().min(0),
+    gpuDisabled: z.boolean().optional(),
+    gpuModel: z.string(),
+    vcpu: z.number().int().positive(),
+    memoryGb: z.number().positive(),
+    imageRef: z.string().min(1),
+    quantity: z.number().int().min(1).max(50),
+    gpuPerInstance: z.union([
+      z.literal(1),
+      z.literal(2),
+      z.literal(4),
+      z.literal(8),
+    ]),
+    systemDiskGb: z.number().min(40).max(2048),
+    dataDiskGb: z.number().min(0).max(32768),
+    systemDiskType: z.enum(["nvme_ssd", "ssd"]),
+    dataDiskType: z.enum(["nvme_ssd", "ssd"]),
+    vpc: z.string().min(1),
+    subnet: z.string().min(1),
+    securityGroups: z.array(z.string()).min(1),
+    sshPubkey: z.string(),
+    bandwidthMbps: z.number().int().min(1).max(1000),
+    autoShutdownIdleMin: z.number(),
+    entrypoint: z.string(),
+  })
+  .superRefine((value, ctx) => {
+    if (
+      value.authMethod !== "password" &&
+      !/^ssh-(ed25519|rsa)\s+[A-Za-z0-9+/=]+/.test(value.sshPubkey)
+    )
+      ctx.addIssue({
+        code: "custom",
+        path: ["sshPubkey"],
+        message: "INVALID_SSH_KEY",
+      });
+  });
 export const baremetalSchema = z.object({
   ...common,
   machineType: z.string(),
@@ -144,3 +157,21 @@ export const orderSchema = z
       z.object({ kind: z.literal("inference"), spec: inferenceSchema }),
     ]),
   );
+export function isCidr(value: string) {
+  const [address, mask, ...extra] = value.split("/");
+  if (
+    extra.length ||
+    mask === undefined ||
+    !/^\d+$/.test(mask) ||
+    Number(mask) < 0 ||
+    Number(mask) > 32
+  )
+    return false;
+  const octets = address.split(".");
+  return (
+    octets.length === 4 &&
+    octets.every(
+      (o) => /^\d{1,3}$/.test(o) && Number(o) >= 0 && Number(o) <= 255,
+    )
+  );
+}

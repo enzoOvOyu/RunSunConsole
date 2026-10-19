@@ -1,3 +1,4 @@
+import { useUrlState } from "../../shared/useUrlState";
 import { useResourceTransition } from "../../../stores/resourceTransition";
 import { useEffect, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
@@ -53,7 +54,7 @@ export function ResourceListShell<K extends Kind>({
   const navigate = useNavigate();
   const { region, setRegion } = useRegion();
   const { project, setProject, role } = useAuth();
-  const [search, setSearch] = useState(params.get("q") || "");
+  const [search, setSearch] = useUrlState("q");
   const q = useDebounced(search);
   const urlRegion = params.get("region");
   const urlProject = params.get("project_id");
@@ -62,20 +63,8 @@ export function ResourceListShell<K extends Kind>({
       setRegion(urlRegion as typeof region);
   }, [urlRegion, setRegion]);
   useEffect(() => {
-    if (urlProject !== null) setProject(urlProject);
+    setProject(urlProject || "");
   }, [urlProject, setProject]);
-  useEffect(() => {
-    setParams(
-      (current) => {
-        if ((current.get("q") || "") === q) return current;
-        const next = new URLSearchParams(current);
-        if (q) next.set("q", q);
-        else next.delete("q");
-        return next;
-      },
-      { replace: true },
-    );
-  }, [q, setParams]);
   const [released, setReleased] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [deleteMany, setDeleteMany] = useState(false);

@@ -192,3 +192,45 @@ export const quotaUse = (r: Resource, metric: string) =>
             : "vcpu" in r.spec
               ? r.spec.vcpu * ("quantity" in r.spec ? r.spec.quantity : 1)
               : r.spec.gpuCount * 16;
+
+export function meteringLines(estimate: PriceEstimate): PriceLine[] {
+  const units = new Map<PriceLine["unit"], PriceLine>();
+  for (const line of estimate.lines) {
+    const found = units.get(line.unit);
+    if (found) {
+      found.quantity += line.quantity;
+      found.hourly += line.hourly;
+      found.unitPrice = found.quantity ? found.hourly / found.quantity : 0;
+    } else
+      units.set(line.unit, {
+        ...line,
+        key:
+          line.unit === "per_gb_hour"
+            ? "storage"
+            : line.unit === "per_ip_hour"
+              ? "ip"
+              : line.unit === "per_cluster_hour"
+                ? "control"
+                : "compute",
+      });
+  }
+  return [...units.values()];
+}
+export function provisioningSeconds(
+  r: Pick<Resource, "kind" | "spec">,
+  models: Model[],
+) {
+  const spec = r.spec;
+  if (r.kind === "gpu_baremetal") return 900;
+  if (r.kind === "vgpu") return 300;
+  if (r.kind === "inference" && "modelRef" in spec) {
+    const model = models.find((m) => m.id === spec.modelRef);
+    return model
+      ? Math.max(
+          60,
+          modelMemory(model, spec.quantization, spec.maxModelLen).loadS + 30,
+        )
+      : 60;
+  }
+  return 180;
+}
