@@ -23,3 +23,5 @@ The development endpoint is bound to `127.0.0.1:5173`. PostgreSQL and Adminer st
 - M3: Operations, workbench, datasets, object storage, pipelines and billing workflows.
 
 M1 validated with `pnpm typecheck`, `pnpm test` (7 files, 13 assertions), and `pnpm build`.
+
+M2 validated with type checking, 19 regression assertions, production build, and remote Chromium checks of all resource Drawers plus a complete server deployment. Routes load on demand to retain an entry chunk under 250 KB.
