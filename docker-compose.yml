@@ -1,0 +1,53 @@
+services:
+  dev:
+    image: node:22-alpine
+    container_name: runsun-dev
+    working_dir: /workspace
+    command: ["sh", "-c", "corepack enable && sleep infinity"]
+    ports:
+      - "127.0.0.1:5173:5173"
+    volumes:
+      - .:/workspace
+      - runsun_node_modules:/workspace/node_modules
+      - runsun_pnpm_store:/pnpm-store
+    environment:
+      npm_config_store_dir: /pnpm-store
+    depends_on:
+      - db
+    networks:
+      - runsun
+
+  db:
+    image: postgres:15
+    container_name: runsun-db
+    environment:
+      POSTGRES_DB: runsun
+      POSTGRES_USER: runsun
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-runsun-local-dev}
+    volumes:
+      - ./docker/postgres/data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U runsun -d runsun"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - runsun
+
+  adminer:
+    image: adminer:4
+    container_name: runsun-adminer
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - runsun
+
+volumes:
+  runsun_node_modules:
+  runsun_pnpm_store:
+
+networks:
+  runsun:
+    name: runsun-network
+    driver: bridge

@@ -1,0 +1,11 @@
+import type { Pool,PoolCode,Region } from '../../types/domain';
+export const GPU_SPECS:Record<PoolCode,Omit<Pool,'availableGpu'|'available'|'licenseAvailable'>>={
+H100_SXM:{code:'H100_SXM',gpuModel:'H100 SXM5',memoryGb:80,bandwidthGbs:3350,bf16Tflops:989,tdp:700,gpusPerNode:8,cpu:'2 × Xeon Platinum 8480',memorySystemGb:2048,localNvmeGb:30720,network:'8 × 400 Gb/s NDR IB',migProfile:'1g.10gb'},
+H200_NVL:{code:'H200_NVL',gpuModel:'H200 SXM',memoryGb:141,bandwidthGbs:4800,bf16Tflops:989,tdp:700,gpusPerNode:8,cpu:'2 × Xeon Platinum 8568Y+',memorySystemGb:2048,localNvmeGb:30720,network:'8 × 400 Gb/s NDR IB',migProfile:'1g.20gb'},
+B200_NVL72:{code:'B200_NVL72',gpuModel:'B200 NVL72 (GB200)',memoryGb:192,bandwidthGbs:8000,bf16Tflops:2250,tdp:1000,gpusPerNode:8,cpu:'2 × Xeon Platinum 8570 + Grace',memorySystemGb:2252,localNvmeGb:30720,network:'8 × 400 Gb/s NDR IB + Spectrum-X',migProfile:'1g.24gb'},
+B300:{code:'B300',gpuModel:'B300 SXM',memoryGb:288,bandwidthGbs:8000,bf16Tflops:2250,tdp:1400,gpusPerNode:8,cpu:'2 × Xeon Platinum 8580',memorySystemGb:2252,localNvmeGb:30720,network:'8 × 800 Gb/s ConnectX-8',migProfile:'1g.34gb'},
+GB300_NVL72:{code:'GB300_NVL72',gpuModel:'GB300 NVL72',memoryGb:288,bandwidthGbs:8000,bf16Tflops:2250,tdp:1400,gpusPerNode:72,cpu:'36 × Grace CPU (72C)',memorySystemGb:17000,localNvmeGb:61440,network:'NVLink 130 TB/s + 800 Gb/s',migProfile:'1g.34gb'},
+};
+// Public catalog exposes available allocation only; platform totals stay internal.
+const supply:Record<Region,Partial<Record<PoolCode,number>>>={jp:{H100_SXM:208,H200_NVL:96,B200_NVL72:72},th:{H100_SXM:128},sg:{H100_SXM:192,H200_NVL:64,B300:48},us:{H100_SXM:512,H200_NVL:256,B200_NVL72:144,B300:128,GB300_NVL72:144}};
+export const poolsFor=(region:Region):Pool[]=>Object.values(GPU_SPECS).map(spec=>({...spec,availableGpu:supply[region][spec.code]||0,available:!!supply[region][spec.code],licenseAvailable:(supply[region][spec.code]||0)*7}));

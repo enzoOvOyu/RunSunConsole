@@ -1,0 +1,23 @@
+import type { Resource,Rate,PriceEstimate,PriceLine,Kind,Region,PoolCode,BillingMode,Model } from '../../types/domain';
+import { round } from '../../lib/money';
+export const discount=(mode:BillingMode)=>mode==='spot'?.55:mode==='reserved'?.7:1;
+export function estimate(input:{kind:Kind;region:Region;nodePool:PoolCode;spec:Resource['spec'];mode:BillingMode},rates:Rate[]):PriceEstimate{
+ const {kind,region,nodePool,spec,mode}=input;
+ const find=(unit:Rate['unit'],pool:PoolCode|null=nodePool)=>{const rate=rates.find(r=>r.region===region&&r.unit===unit&&r.pool===pool&&(pool===null||r.kind===kind));if(!rate)throw new Error('RATE_NOT_FOUND');return rate.unitPrice;};
+ const lines:PriceLine[]=[];
+ const add=(key:string,unit:Rate['unit'],unitPrice:number,quantity:number,scales:boolean)=>lines.push({key,unit,unitPrice,quantity,hourly:unitPrice*quantity,scales});
+ if(kind==='gpu_baremetal'&&'machineCount'in spec)add('compute','per_machine_hour',find('per_machine_hour')*discount(mode),spec.machineCount,true);
+ else if(kind==='vgpu'&&'nodePools'in spec){for(const pool of spec.nodePools)add(`compute:${pool.poolCode}`,'per_gpu_hour',find('per_gpu_hour',pool.poolCode)*discount(mode),pool.nodeCount*pool.gpuPerNode,true);add('control','per_cluster_hour',find('per_cluster_hour',null),spec.controlPlaneTier==='ha'?3:1,false);}
+ else add('compute','per_gpu_hour',find('per_gpu_hour')*discount(mode),spec.gpuCount,true);
+ if(spec.storageGb>0)add('storage','per_gb_hour',find('per_gb_hour',null),spec.storageGb,false);
+ if(spec.publicIp)add('ip','per_ip_hour',find('per_ip_hour',null),1,false);
+ const hourly=round(lines.reduce((a,l)=>a+l.hourly,0),6);const scaling=spec.scaling;
+ const actual=kind==='gpu_baremetal'&&'machineCount'in spec?spec.machineCount:kind==='inference'&&'replicas'in spec?spec.replicas:kind==='vgpu'&&'nodePools'in spec?spec.nodePools.reduce((a,p)=>a+p.nodeCount,0):'quantity'in spec?spec.quantity:1;
+ const monthlyAt=(n:number)=>round(lines.reduce((sum,l)=>sum+l.hourly*(l.scales?n/actual:1),0)*730);
+ return {lines,hourly,monthly:round(hourly*730),floorMonthly:monthlyAt(scaling?.min_size??actual),peakMonthly:monthlyAt(scaling?.max_size??actual)};
+}
+export function costPerHour(resource:Resource,rates:Rate[]){if(resource.deletedAt||resource.status==='provisioning'||resource.status==='terminating')return 0;const e=estimate(resource,rates);return round(e.lines.filter(l=>resource.status==='running'||l.key==='storage').reduce((a,l)=>a+l.hourly,0),6);}
+export const deriveTokensPerSecond=(input:{mfu:number;gpuCount:number;peakDenseFlops:number;params:number;recompute:boolean})=>input.mfu*input.gpuCount*input.peakDenseFlops/((input.recompute?8:6)*input.params);
+export const decodeUpperBound=(bandwidthGbs:number,paramsB:number,bytesPerParam:number,efficiency:number)=>bandwidthGbs/(paramsB*bytesPerParam)*efficiency;
+export function modelMemory(model:Model,quantization:string,context:number,concurrency=1){const bytes=quantization==='bf16'?2:quantization==='fp8'?1:.5;const weights=model.paramsB*bytes;const kv=concurrency*context*2*model.layers*model.kvHeads*model.headDim*2/1e9;return {weightsGb:weights,kvGb:kv,requiredGb:weights+kv+2,loadS:weights*1024/1800+5};}
+export const quotaUse=(r:Resource,metric:string)=>r.deletedAt?0:metric==='storage'?r.spec.storageGb:metric==='ip'?Number(r.spec.publicIp&&r.status==='running'):r.status==='stopped'||r.status==='error'?0:metric==='gpu'?r.spec.gpuCount:'vcpu'in r.spec?r.spec.vcpu*('quantity'in r.spec?r.spec.quantity:1):r.spec.gpuCount*16;

@@ -1,0 +1,3 @@
+import { create } from 'zustand';
+function read():string[]{try{const value=JSON.parse(localStorage.getItem('rs.nav.collapsed')||'[]');return Array.isArray(value)?value.filter((x:unknown):x is string=>typeof x==='string'):[];}catch{return [];}}
+export const useNav=create<{collapsedGroups:string[];toggle:(id:string)=>void}>((set,get)=>({collapsedGroups:read(),toggle:id=>{const collapsedGroups=get().collapsedGroups.includes(id)?get().collapsedGroups.filter(x=>x!==id):[...get().collapsedGroups,id];localStorage.setItem('rs.nav.collapsed',JSON.stringify(collapsedGroups));set({collapsedGroups});}}));

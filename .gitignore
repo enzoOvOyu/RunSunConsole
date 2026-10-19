@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.pnpm-store/
+.env.local
+*.tsbuildinfo
+*.swp
+archive/
+docker/postgres/data/
+playwright-report/
+test-results/
