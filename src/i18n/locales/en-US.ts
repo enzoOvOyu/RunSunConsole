@@ -1,4 +1,9 @@
 export default {
+  "common.websocket": "Live channel connected",
+  "data.event.requested":
+    "Order accepted; allocating GPU and network resources in the selected region",
+  "error.INSUFFICIENT_BALANCE":
+    "Insufficient balance. Add credit before creating resources.",
   "language.shortZh": "中",
   "language.zh": "Chinese",
   "brand.product": "GPU Cloud Console",
@@ -196,7 +201,8 @@ export default {
   "overview.matrix": "Resource distribution",
   "overview.matrixScope": "Resources by type and lifecycle · current",
   "overview.quotas": "Quota usage",
-  "overview.quotaScope": "Stopped compute releases quota; storage persists · by region",
+  "overview.quotaScope":
+    "Stopped compute releases quota; storage persists · by region",
   "overview.regions": "Regional distribution",
   "overview.regionScope": "Allocated GPUs in your unreleased resources",
   "overview.trend": "Spend trend",
@@ -210,7 +216,8 @@ export default {
   "quota.storage": "Storage GB",
   "quota.ip": "Public IPs",
   "quota.allocated": "Allocated physical resources",
-  "quota.note": "Only your allocated resources in this region are shown. Platform capacity is not displayed.",
+  "quota.note":
+    "Only your allocated resources in this region are shown. Platform capacity is not displayed.",
   "quota.limit": "Quota limit",
   "quota.used": "Used",
   "quota.request": "Request quota",
@@ -245,7 +252,8 @@ export default {
   "resource.scaling": "Scaling",
   "resource.related": "Related",
   "resource.deleteTitle": "Delete resource",
-  "resource.deleteImpact": "Billing stops immediately · data cannot be recovered · quota is released",
+  "resource.deleteImpact":
+    "Billing stops immediately · data cannot be recovered · quota is released",
   "resource.deleteInput": "Type {id} to confirm deletion",
   "resource.stopFirst": "Resource is running. Consider stopping it first.",
   "resource.batchLimit": "Select at most 20 resources per batch",
@@ -253,8 +261,10 @@ export default {
   "resource.provisionSteps": "Provisioning progress",
   "resource.startToUse": "Start the resource to connect",
   "resource.history": "Released resource · read-only history",
-  "resource.connectionNote": "Connection details supplied by the access endpoint",
-  "resource.passwordOnce": "New credentials are shown once. Store them securely.",
+  "resource.connectionNote":
+    "Connection details supplied by the access endpoint",
+  "resource.passwordOnce":
+    "New credentials are shown once. Store them securely.",
   "resource.expand": "Resize",
   "resource.cordon": "Cordon",
   "resource.drain": "Drain",
@@ -320,8 +330,10 @@ export default {
   "wizard.projectNew": "New project",
   "wizard.nameHint": "3–63 characters",
   "wizard.available": "Available GPUs: {count}",
-  "wizard.unavailable": "Unavailable in this region. Change region or request quota.",
-  "wizard.capacity": "Requested capacity exceeds availability. Reduce quantity or change pool.",
+  "wizard.unavailable":
+    "Unavailable in this region. Change region or request quota.",
+  "wizard.capacity":
+    "Requested capacity exceeds availability. Reduce quantity or change pool.",
   "wizard.systemDisk": "System disk GB · 40–2048",
   "wizard.dataDisk": "Data disk GB · 0–32768",
   "wizard.sshKey": "SSH public key",
@@ -341,8 +353,10 @@ export default {
   "wizard.license": "Available NVIDIA licenses: {count}",
   "wizard.quantization": "Quantization",
   "wizard.context": "Context length · 4096–1048576",
-  "wizard.memoryRequired": "Required memory per replica {required} GB / selected capacity {capacity} GB",
-  "wizard.memoryError": "Insufficient VRAM. Increase tensor parallel GPUs or use a smaller precision.",
+  "wizard.memoryRequired":
+    "Required memory per replica {required} GB / selected capacity {capacity} GB",
+  "wizard.memoryError":
+    "Insufficient VRAM. Increase tensor parallel GPUs or use a smaller precision.",
   "wizard.review": "Review configuration and cost before creating",
   "wizard.leave": "Your draft will be saved. Leave this wizard?",
   "wizard.created": "Order accepted. Provisioning resource.",
@@ -360,10 +374,14 @@ export default {
   "scaling.enable": "Enable elastic scaling",
   "scaling.node_pool": "Node pool scaling policy",
   "scaling.replica": "Service replica scaling policy",
-  "scaling.gpu_vm": "Scale whole VMs. Scale-out takes 1–5 minutes; scale-in removes load balancing and drains requests.",
-  "scaling.gpu_baremetal": "Scale whole machines. Provisioning takes 5–30 minutes. Retain at least one homogeneous machine with a 10–30 minute stabilization window.",
-  "scaling.vgpu": "Use a fixed slice profile and fill existing GPUs first. Available NVIDIA licenses are checked before scaling.",
-  "scaling.inference": "Scale service replicas. Keep a warm minimum; scaling to zero adds 30 seconds to several minutes of cold start.",
+  "scaling.gpu_vm":
+    "Scale whole VMs. Scale-out takes 1–5 minutes; scale-in removes load balancing and drains requests.",
+  "scaling.gpu_baremetal":
+    "Scale whole machines. Provisioning takes 5–30 minutes. Retain at least one homogeneous machine with a 10–30 minute stabilization window.",
+  "scaling.vgpu":
+    "Use a fixed slice profile and fill existing GPUs first. Available NVIDIA licenses are checked before scaling.",
+  "scaling.inference":
+    "Scale service replicas. Keep a warm minimum; scaling to zero adds 30 seconds to several minutes of cold start.",
   "scaling.queue_depth": "Queue depth",
   "scaling.pending_pods": "Pending pods",
   "scaling.qpm": "Queries per minute",
@@ -376,7 +394,8 @@ export default {
   "scaling.protection": "Scale-in stabilization · seconds",
   "scaling.drain": "Drain timeout · seconds",
   "scaling.zero": "Allow scale to zero",
-  "scaling.zeroConfirm": "Scaling to zero adds cold start and TTFT latency. I accept this impact.",
+  "scaling.zeroConfirm":
+    "Scaling to zero adds cold start and TTFT latency. I accept this impact.",
   "scaling.warmPool": "Warm pool size",
   "scaling.cache": "Weight cache strategy",
   "scaling.readiness": "Enable readiness gate",
@@ -389,7 +408,8 @@ export default {
   "scaling.scale_in": "Scale in",
   "scaling.empty": "No policies yet · select a resource to create one",
   "scaling.unique": "A resource can have one scaling policy",
-  "scaling.fieldHelp": "Valid range {min}–{max}; controls capacity and maximum cost",
+  "scaling.fieldHelp":
+    "Valid range {min}–{max}; controls capacity and maximum cost",
   "project.default": "Default project",
   "project.members": "Members",
   "project.description": "Organize resources, members and spend by project",
@@ -406,9 +426,12 @@ export default {
   "data.resource.development": "Development environment",
   "data.resource.physical": "Dedicated compute",
   "data.event.ready": "Provisioning complete; readiness checks passed",
-  "data.event.stopped": "User stopped the resource; GPU and vCPU quotas released",
-  "data.event.failed": "Model loading exceeded the VRAM budget; increase GPU parallelism",
-  "data.event.deleted": "Resource released; final hour settled by actual seconds",
+  "data.event.stopped":
+    "User stopped the resource; GPU and vCPU quotas released",
+  "data.event.failed":
+    "Model loading exceeded the VRAM budget; increase GPU parallelism",
+  "data.event.deleted":
+    "Resource released; final hour settled by actual seconds",
   "data.event.scaled": "Queue exceeded threshold; resource size changed",
   "data.dataset.text": "Multilingual instructions",
   "data.dataset.vision": "Vision evaluation",
@@ -421,10 +444,12 @@ export default {
   "data.action.retry": "Check configuration and retry provisioning",
   "notebook.new": "New development environment",
   "notebook.host": "Host resource",
-  "notebook.noHost": "No eligible hosts in this region. Create a server, bare metal or vGPU resource.",
+  "notebook.noHost":
+    "No eligible hosts in this region. Create a server, bare metal or vGPU resource.",
   "notebook.idle": "Idle auto-stop · minutes",
   "notebook.open": "Open environment",
-  "notebook.hostHint": "GPUs are inherited from the host. Deleting this environment keeps the host.",
+  "notebook.hostHint":
+    "GPUs are inherited from the host. Deleting this environment keeps the host.",
   "images.models": "Model catalog",
   "images.images": "Image marketplace",
   "images.favorite": "Favorite",
@@ -451,7 +476,8 @@ export default {
   "storage.list": "List view",
   "storage.empty": "No objects in this prefix · drop or upload files",
   "storage.requests": "Requests over 7 days",
-  "storage.uploadNote": "Uploaded files are saved in project data in this browser",
+  "storage.uploadNote":
+    "Uploaded files are saved in project data in this browser",
   "pipelines.new": "Create from template",
   "pipelines.run": "Run pipeline",
   "pipelines.history": "Run history",
@@ -498,24 +524,31 @@ export default {
   "error.INVALID_STATE": "This action is not allowed in the current state",
   "error.GONE": "Resource released. History is read-only.",
   "error.CONFIRM_MISMATCH": "Confirmation does not match. Try again.",
-  "error.HAS_DEPENDENCIES": "Active dependencies exist. Remove associations first.",
+  "error.HAS_DEPENDENCIES":
+    "Active dependencies exist. Remove associations first.",
   "error.RATE_LIMITED": "Too many requests. Try again shortly.",
   "error.INTERNAL": "Service temporarily unavailable. Please retry.",
   "error.NETWORK": "Network unavailable. Check your connection and retry.",
-  "error.QUOTA_EXCEEDED": "Maximum size exceeds regional quota. Reduce size or request quota.",
-  "error.INSUFFICIENT_CAPACITY": "Insufficient regional capacity. Change specification or region.",
+  "error.QUOTA_EXCEEDED":
+    "Maximum size exceeds regional quota. Reduce size or request quota.",
+  "error.INSUFFICIENT_CAPACITY":
+    "Insufficient regional capacity. Change specification or region.",
   "error.VALIDATION_ERROR": "Invalid configuration. Check fields and ranges.",
-  "error.POLICY_BOUND_RESOURCE_RUNNING": "Stop the resource before detaching its policy.",
-  "error.POLICY_EXISTS": "Resource already has a scaling policy. Edit the existing policy.",
-  "error.PROJECT_HAS_RESOURCES": "Project has unreleased resources and cannot be deleted",
+  "error.POLICY_BOUND_RESOURCE_RUNNING":
+    "Stop the resource before detaching its policy.",
+  "error.POLICY_EXISTS":
+    "Resource already has a scaling policy. Edit the existing policy.",
+  "error.PROJECT_HAS_RESOURCES":
+    "Project has unreleased resources and cannot be deleted",
   "error.DEFAULT_PROJECT": "The default project cannot be deleted",
   "error.DATASET_IN_USE": "Dataset is in use and cannot be deleted",
   "error.BUCKET_IN_USE": "Bucket is in use and cannot be deleted",
-  "error.MODEL_MEMORY_EXCEEDED": "Model VRAM requirements exceed selected GPU capacity",
+  "error.MODEL_MEMORY_EXCEEDED":
+    "Model VRAM requirements exceed selected GPU capacity",
   "error.LICENSE_EXCEEDED": "Insufficient available NVIDIA licenses",
   "error.INVALID_FILE": "Invalid file format or size",
   "success.saved": "Saved",
   "success.created": "Created",
   "success.deleted": "Deleted",
-  "success.updated": "Updated"
+  "success.updated": "Updated",
 } as const;

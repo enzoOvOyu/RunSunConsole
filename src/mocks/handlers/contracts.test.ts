@@ -1,17 +1,415 @@
-import { beforeAll,afterAll,beforeEach,it,expect } from 'vitest';
-import { setupServer } from 'msw/node';
-import { handlers } from './index';
-import { db,makeDatabase } from '../lib/database';
-import { RATES } from '../fixtures/pricing';
-import { defaultSpec,defaultScaling } from '../../lib/config';
-import { poolsFor } from '../fixtures/gpu-specs';
-import { metricsFor } from '../metrics';
-const server=setupServer(...handlers);
-beforeAll(()=>server.listen({onUnhandledRequest:'error'}));afterAll(()=>server.close());beforeEach(()=>Object.assign(db,makeDatabase()));
-async function request(path:string,method='GET',body?:unknown,role='owner'){const r=await fetch('http://localhost/api'+path,{method,headers:{'Content-Type':'application/json','X-Role':role},...(body?{body:JSON.stringify(body)}:{})});return {status:r.status,data:r.status===204?null:await r.json()};}
-it('filters regions and retains allocated GPU aggregate',async()=>{const jp=await request('/resources?region=jp&size=1000');const us=await request('/resources?region=us&size=1000');expect(jp.data.items.every((r:{region:string})=>r.region==='jp')).toBe(true);expect(jp.data.items.map((r:{resourceUuid:string})=>r.resourceUuid)).not.toEqual(us.data.items.map((r:{resourceUuid:string})=>r.resourceUuid));expect((await request('/overview')).data.allocated).toBe(1040);});
-it('enforces role, confirmation, dependencies and history for deletion',async()=>{const r=db.resources.find(r=>r.kind==='gpu_vm'&&r.status==='stopped')!;expect((await request(`/resources/${r.resourceUuid}?confirm=${r.displayId}`,'DELETE',undefined,'viewer')).status).toBe(403);expect((await request(`/resources/${r.resourceUuid}?confirm=wrong`,'DELETE')).data.code).toBe('CONFIRM_MISMATCH');expect((await request(`/resources/${r.resourceUuid}?confirm=${r.displayId}`,'DELETE')).status).toBe(200);expect(r.deletedAt).not.toBeNull();expect((await request(`/resources/${r.resourceUuid}`)).status).toBe(410);expect((await request(`/resources/${r.resourceUuid}?confirm=${r.displayId}`,'DELETE')).data.code).toBe('ALREADY_DELETED');const hosted=db.notebooks[0];const host=db.resources.find(r=>r.resourceUuid===hosted.resourceUuid)!;expect((await request(`/resources/${host.resourceUuid}?confirm=${host.displayId}`,'DELETE')).data.code).toBe('HAS_DEPENDENCIES');});
-it('stops compute, releases compute quota, and returns null metrics',async()=>{const r=db.resources[0];const before=(await request('/quotas?region=jp')).data.find((q:{metric:string})=>q.metric==='gpu').usedValue;expect((await request(`/resources/${r.resourceUuid}/stop`,'POST',{})).status).toBe(200);const after=(await request('/quotas?region=jp')).data.find((q:{metric:string})=>q.metric==='gpu').usedValue;expect(before-after).toBe(r.spec.gpuCount);expect(metricsFor(r).every(s=>s.points.every(p=>p.value===null))).toBe(true);expect((await request(`/resources/${r.resourceUuid}/start`,'POST',{})).status).toBe(200);});
-it('rejects unavailable pools, impossible model VRAM and maximum scaling quota',async()=>{const spec=defaultSpec('gpu_vm',poolsFor('jp')[0]);if('sshPubkey'in spec)spec.sshPubkey='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFOO';const base={kind:'gpu_vm',name:'contract-test',projectId:'default',region:'jp',mode:'on_demand',labels:[],nodePool:'GB300_NVL72',spec};expect((await request('/deployment-orders','POST',base)).data.code).toBe('INSUFFICIENT_CAPACITY');const inference=defaultSpec('inference',poolsFor('jp')[0]);if('modelRef'in inference){inference.modelRef='llama70';inference.quantization='bf16';}expect((await request('/deployment-orders','POST',{...base,kind:'inference',nodePool:'H100_SXM',spec:inference})).data.code).toBe('MODEL_MEMORY_EXCEEDED');spec.scaling={...defaultScaling('gpu_vm'),max_size:64};if('gpuPerInstance'in spec){spec.gpuPerInstance=8;spec.gpuCount=8;}expect((await request('/deployment-orders','POST',{...base,nodePool:'H100_SXM',spec})).status).toBe(409);});
-it('creates an order and materializes one matching policy',async()=>{const spec=defaultSpec('gpu_vm',poolsFor('th')[0]);if('subnet'in spec)spec.subnet='th-default';if('sshPubkey'in spec)spec.sshPubkey='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFOO';spec.scaling=defaultScaling('gpu_vm');const result=await request('/deployment-orders','POST',{kind:'gpu_vm',name:'contract-server',projectId:'default',region:'th',nodePool:'H100_SXM',mode:'on_demand',labels:[],spec});expect(result.status).toBe(201);expect(result.data.order.projectId).toBe('default');expect(db.policies.filter(p=>p.resourceUuid===result.data.resource.resourceUuid)).toHaveLength(1);expect(result.data.order.price_snapshot.lines.every((l:{unitPrice:number})=>RATES.some(r=>r.region==='th'&&Math.abs(r.unitPrice-l.unitPrice)<1e-9))).toBe(true);});
-it('protects organization entities and scaling policy uniqueness',async()=>{expect((await request('/projects/default','DELETE')).data.code).toBe('DEFAULT_PROJECT');expect((await request('/projects/training','DELETE')).data.code).toBe('PROJECT_HAS_RESOURCES');expect((await request('/datasets/instructions','DELETE')).data.code).toBe('DATASET_IN_USE');const policy=db.policies[0];expect((await request('/scaling/policies','POST',{resourceUuid:policy.resourceUuid,config:policy.config})).data.code).toBe('POLICY_EXISTS');expect((await request('/scaling/policies/'+policy.id,'DELETE')).data.code).toBe('POLICY_BOUND_RESOURCE_RUNNING');});
+import { beforeAll, afterAll, beforeEach, it, expect } from "vitest";
+import { setupServer } from "msw/node";
+import { handlers } from "./index";
+import { db, makeDatabase } from "../lib/database";
+import { RATES } from "../fixtures/pricing";
+import { defaultSpec, defaultScaling } from "../../lib/config";
+import { poolsFor } from "../fixtures/gpu-specs";
+import { metricsFor } from "../metrics";
+const server = setupServer(...handlers);
+beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
+afterAll(() => server.close());
+beforeEach(() => Object.assign(db, makeDatabase()));
+async function request(
+  path: string,
+  method = "GET",
+  body?: unknown,
+  role = "owner",
+) {
+  const r = await fetch("http://localhost/api" + path, {
+    method,
+    headers: { "Content-Type": "application/json", "X-Role": role },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  return { status: r.status, data: r.status === 204 ? null : await r.json() };
+}
+it("filters regions and retains allocated GPU aggregate", async () => {
+  const jp = await request("/resources?region=jp&size=1000");
+  const us = await request("/resources?region=us&size=1000");
+  expect(
+    jp.data.items.every((r: { region: string }) => r.region === "jp"),
+  ).toBe(true);
+  expect(
+    jp.data.items.map((r: { resourceUuid: string }) => r.resourceUuid),
+  ).not.toEqual(
+    us.data.items.map((r: { resourceUuid: string }) => r.resourceUuid),
+  );
+  expect((await request("/overview")).data.allocated).toBe(1040);
+});
+it("enforces role, confirmation, dependencies and history for deletion", async () => {
+  const r = db.resources.find(
+    (r) => r.kind === "gpu_vm" && r.status === "stopped",
+  )!;
+  expect(
+    (
+      await request(
+        `/resources/${r.resourceUuid}?confirm=${r.displayId}`,
+        "DELETE",
+        undefined,
+        "viewer",
+      )
+    ).status,
+  ).toBe(403);
+  expect(
+    (await request(`/resources/${r.resourceUuid}?confirm=wrong`, "DELETE")).data
+      .code,
+  ).toBe("CONFIRM_MISMATCH");
+  expect(
+    (
+      await request(
+        `/resources/${r.resourceUuid}?confirm=${r.displayId}`,
+        "DELETE",
+      )
+    ).status,
+  ).toBe(200);
+  expect(r.deletedAt).not.toBeNull();
+  expect((await request(`/resources/${r.resourceUuid}`)).status).toBe(410);
+  expect(
+    (
+      await request(
+        `/resources/${r.resourceUuid}?confirm=${r.displayId}`,
+        "DELETE",
+      )
+    ).data.code,
+  ).toBe("ALREADY_DELETED");
+  const hosted = db.notebooks[0];
+  const host = db.resources.find(
+    (r) => r.resourceUuid === hosted.resourceUuid,
+  )!;
+  expect(
+    (
+      await request(
+        `/resources/${host.resourceUuid}?confirm=${host.displayId}`,
+        "DELETE",
+      )
+    ).data.code,
+  ).toBe("HAS_DEPENDENCIES");
+});
+it("stops compute, releases compute quota, and returns null metrics", async () => {
+  const r = db.resources[0];
+  const before = (await request("/quotas?region=jp")).data.find(
+    (q: { metric: string }) => q.metric === "gpu",
+  ).usedValue;
+  expect(
+    (await request(`/resources/${r.resourceUuid}/stop`, "POST", {})).status,
+  ).toBe(200);
+  const after = (await request("/quotas?region=jp")).data.find(
+    (q: { metric: string }) => q.metric === "gpu",
+  ).usedValue;
+  expect(before - after).toBe(r.spec.gpuCount);
+  expect(
+    metricsFor(r).every((s) => s.points.every((p) => p.value === null)),
+  ).toBe(true);
+  expect(
+    (await request(`/resources/${r.resourceUuid}/start`, "POST", {})).status,
+  ).toBe(200);
+});
+it("rejects unavailable pools, impossible model VRAM and maximum scaling quota", async () => {
+  const spec = defaultSpec("gpu_vm", poolsFor("jp")[0]);
+  if ("sshPubkey" in spec)
+    spec.sshPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFOO";
+  const base = {
+    kind: "gpu_vm",
+    name: "contract-test",
+    projectId: "default",
+    region: "jp",
+    mode: "on_demand",
+    labels: [],
+    nodePool: "GB300_NVL72",
+    spec,
+  };
+  expect((await request("/deployment-orders", "POST", base)).data.code).toBe(
+    "INSUFFICIENT_CAPACITY",
+  );
+  const inference = defaultSpec("inference", poolsFor("jp")[0]);
+  if ("modelRef" in inference) {
+    inference.modelRef = "llama70";
+    inference.quantization = "bf16";
+  }
+  expect(
+    (
+      await request("/deployment-orders", "POST", {
+        ...base,
+        kind: "inference",
+        nodePool: "H100_SXM",
+        spec: inference,
+      })
+    ).data.code,
+  ).toBe("MODEL_MEMORY_EXCEEDED");
+  spec.scaling = { ...defaultScaling("gpu_vm"), max_size: 64 };
+  if ("gpuPerInstance" in spec) {
+    spec.gpuPerInstance = 8;
+    spec.gpuCount = 8;
+  }
+  expect(
+    (
+      await request("/deployment-orders", "POST", {
+        ...base,
+        nodePool: "H100_SXM",
+        spec,
+      })
+    ).status,
+  ).toBe(409);
+});
+it("creates an order and materializes one matching policy", async () => {
+  const spec = defaultSpec("gpu_vm", poolsFor("th")[0]);
+  if ("subnet" in spec) spec.subnet = "th-default";
+  if ("sshPubkey" in spec)
+    spec.sshPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFOO";
+  spec.scaling = defaultScaling("gpu_vm");
+  const result = await request("/deployment-orders", "POST", {
+    kind: "gpu_vm",
+    name: "contract-server",
+    projectId: "default",
+    region: "th",
+    nodePool: "H100_SXM",
+    mode: "on_demand",
+    labels: [],
+    spec,
+  });
+  expect(result.status).toBe(201);
+  expect(result.data.order.projectId).toBe("default");
+  expect(
+    db.policies.filter(
+      (p) => p.resourceUuid === result.data.resource.resourceUuid,
+    ),
+  ).toHaveLength(1);
+  expect(
+    result.data.order.price_snapshot.lines.every((l: { unitPrice: number }) =>
+      RATES.some(
+        (r) => r.region === "th" && Math.abs(r.unitPrice - l.unitPrice) < 1e-9,
+      ),
+    ),
+  ).toBe(true);
+});
+it("protects organization entities and scaling policy uniqueness", async () => {
+  expect((await request("/projects/default", "DELETE")).data.code).toBe(
+    "DEFAULT_PROJECT",
+  );
+  expect((await request("/projects/training", "DELETE")).data.code).toBe(
+    "PROJECT_HAS_RESOURCES",
+  );
+  expect((await request("/datasets/instructions", "DELETE")).data.code).toBe(
+    "DATASET_IN_USE",
+  );
+  const policy = db.policies[0];
+  expect(
+    (
+      await request("/scaling/policies", "POST", {
+        resourceUuid: policy.resourceUuid,
+        config: policy.config,
+      })
+    ).data.code,
+  ).toBe("POLICY_EXISTS");
+  expect(
+    (await request("/scaling/policies/" + policy.id, "DELETE")).data.code,
+  ).toBe("POLICY_BOUND_RESOURCE_RUNNING");
+});
+it("creates projects, updates names and blocks deletion while referenced", async () => {
+  const result = await request("/projects", "POST", {
+    name: "Evaluation Project",
+    slug: "evaluation",
+  });
+  expect(result.status).toBe(201);
+  const id = result.data.id;
+  expect(
+    (await request("/projects/" + id, "PATCH", { name: "Evaluation Updated" }))
+      .data.name,
+  ).toBe("Evaluation Updated");
+  expect((await request("/projects/" + id, "DELETE")).status).toBe(204);
+  expect(
+    (await request("/projects/default", "PATCH", { name: "wrong" }, "member"))
+      .status,
+  ).toBe(403);
+});
+it("keeps project cost trends scoped to that project", async () => {
+  const summary = (await request("/projects/production/summary")).data;
+  const expected = db.usage
+    .filter(
+      (u) =>
+        u.projectId === "production" &&
+        u.usageHour.startsWith(new Date().toISOString().slice(0, 7)),
+    )
+    .reduce((a, u) => a + u.amount, 0);
+  expect(summary.monthCost).toBeCloseTo(expected, 1);
+  const day = summary.costTrend7d.at(-2).date;
+  const dayCost = db.usage
+    .filter((u) => u.projectId === "production" && u.usageHour.startsWith(day))
+    .reduce((a, u) => a + u.amount, 0);
+  expect(summary.costTrend7d.at(-2).amount).toBeCloseTo(dayCost, 1);
+});
+it("isolates object prefixes and uploads, signs and deletes content", async () => {
+  const before = (await request("/buckets/bucket-jp/objects?prefix=models/"))
+    .data;
+  expect(before.prefixes).toEqual(["models/llama/"]);
+  expect(before.objects).toHaveLength(0);
+  const uploaded = await request("/buckets/bucket-jp/objects", "POST", {
+    key: "tests/file.txt",
+    size: 5,
+    contentType: "text/plain",
+    content: "data:text/plain;base64,aGVsbG8=",
+  });
+  expect(uploaded.status).toBe(201);
+  expect(
+    (await request("/buckets/bucket-jp/sign?key=tests%2Ffile.txt&expires=60"))
+      .data.url,
+  ).toBe("data:text/plain;base64,aGVsbG8=");
+  expect(
+    (await request("/buckets/bucket-jp/objects?key=tests%2Ffile.txt", "DELETE"))
+      .status,
+  ).toBe(204);
+  expect(
+    (await request("/buckets/bucket-jp/sign?key=tests%2Ffile.txt")).status,
+  ).toBe(404);
+});
+it("filters buckets by region and validates lifecycle bounds", async () => {
+  expect(
+    (await request("/buckets?region=th")).data.every(
+      (b: { region: string }) => b.region === "th",
+    ),
+  ).toBe(true);
+  const ok = await fetch("http://localhost/api/buckets/bucket-jp/lifecycle", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      rules: [{ prefix: "logs/", action: "delete", after_days: 30 }],
+    }),
+  });
+  expect(ok.status).toBe(200);
+  const bad = await fetch("http://localhost/api/buckets/bucket-jp/lifecycle", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      rules: [{ prefix: "logs/", action: "delete", after_days: 0 }],
+    }),
+  });
+  expect(bad.status).toBe(422);
+});
+it("creates dataset previews, versions and checks references", async () => {
+  const dataset = (
+    await request("/datasets", "POST", {
+      name: "Evaluation dataset",
+      size_gb: 1.2,
+      format_tag: "jsonl",
+      preview: [{ text: "hello", tokens: 1 }],
+    })
+  ).data;
+  expect(dataset.preview).toEqual([{ text: "hello", tokens: 1 }]);
+  const updated = (
+    await request("/datasets/" + dataset.id + "/versions", "POST", {
+      version: "v1.1",
+      size_gb: 2.4,
+      note: "expanded",
+    })
+  ).data;
+  expect(updated.latest_version).toBe("v1.1");
+  expect(updated.versions).toHaveLength(2);
+  expect((await request("/datasets/" + dataset.id, "DELETE")).status).toBe(204);
+});
+it("uses distinct scaling models and disallows zero warm floor for machines", async () => {
+  const r = db.resources.find(
+    (r) => r.kind === "gpu_baremetal" && r.status === "running",
+  )!;
+  const config = {
+    ...defaultScaling("gpu_baremetal"),
+    min_size: 0,
+    scale_to_zero: true,
+    max_size: 16,
+  };
+  expect(
+    (
+      await request("/scaling/policies", "POST", {
+        resourceUuid: r.resourceUuid,
+        config,
+      })
+    ).status,
+  ).toBe(422);
+  const wrong = { ...defaultScaling("inference"), max_size: 16 };
+  expect(
+    (
+      await request("/scaling/policies", "POST", {
+        resourceUuid: r.resourceUuid,
+        config: wrong,
+      })
+    ).status,
+  ).toBe(422);
+});
+it("uses immutable regional rate rows and honors discounts", async () => {
+  const spec = defaultSpec("gpu_vm", poolsFor("jp")[0]);
+  const base = {
+    kind: "gpu_vm",
+    region: "jp",
+    nodePool: "H100_SXM",
+    spec,
+    mode: "on_demand",
+  };
+  const standard = (await request("/deployment-orders/estimate", "POST", base))
+    .data;
+  const spot = (
+    await request("/deployment-orders/estimate", "POST", {
+      ...base,
+      mode: "spot",
+    })
+  ).data;
+  expect(spot.lines[0].unitPrice / standard.lines[0].unitPrice).toBeCloseTo(
+    0.55,
+  );
+  expect(
+    spot.lines.find((l: { key: string }) => l.key === "storage").unitPrice,
+  ).toBe(
+    standard.lines.find((l: { key: string }) => l.key === "storage").unitPrice,
+  );
+});
+it("does not permit a peak lower than requested current size", async () => {
+  const r = db.resources.find((r) => r.kind === "gpu_baremetal")!;
+  const config = {
+    ...defaultScaling("gpu_baremetal"),
+    min_size: 1,
+    max_size: 2,
+  };
+  expect(
+    (
+      await request("/scaling/policies", "POST", {
+        resourceUuid: r.resourceUuid,
+        config,
+      })
+    ).data.code,
+  ).toBe("VALIDATION_ERROR");
+});
+it("creates notebook attachments and deleting one keeps its host", async () => {
+  const host = db.resources[0];
+  const n = (
+    await request("/workbench/notebooks", "POST", {
+      resourceUuid: host.resourceUuid,
+      ide: "jupyter",
+      imageRef: "jupyter",
+      storageGb: 10,
+      autoShutdownIdleMin: 60,
+    })
+  ).data;
+  expect((await request("/workbench/notebooks/" + n.id, "DELETE")).status).toBe(
+    204,
+  );
+  expect(
+    db.resources.find((r) => r.resourceUuid === host.resourceUuid)?.deletedAt,
+  ).toBeNull();
+});
+it("creates pipeline runs and rejects cyclic DAG changes", async () => {
+  const result = await request("/pipelines/cleaning/runs", "POST", {});
+  expect(result.status).toBe(201);
+  expect(result.data.status).toBe("running");
+  const cyclic = [
+    {
+      id: "a",
+      name: "A",
+      type: "source",
+      inputs: ["b"],
+      parameters: { dataset: "instructions" },
+    },
+    { id: "b", name: "B", type: "process", inputs: ["a"], parameters: {} },
+  ];
+  expect(
+    (await request("/pipelines/cleaning", "PATCH", { nodes: cyclic })).status,
+  ).toBe(422);
+  expect(db.pipelines[0].nodes[0].id).toBe("source");
+});

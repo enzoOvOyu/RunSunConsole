@@ -1,8 +1,62 @@
-import { describe,it,expect } from 'vitest';
-import { seedResources } from '../fixtures/resources';
-import { RATES } from '../fixtures/pricing';
-import { MODELS } from '../fixtures/content';
-import { costPerHour,estimate,deriveTokensPerSecond,decodeUpperBound,modelMemory } from './derive';
-import { makeDatabase } from './database';
-import { assertConsistency } from './consistency';
-describe('derived business contracts',()=>{it('sums the seed allocation and enforces physical consistency',()=>{const db=makeDatabase();expect(db.resources.reduce((a,r)=>a+r.spec.gpuCount,0)).toBe(1040);expect(()=>assertConsistency(db,true)).not.toThrow();});it('bills bare metal by machines without multiplying GPUs twice',()=>{const r=seedResources().find(r=>r.kind==='gpu_baremetal')!;const e=estimate(r,RATES);const line=e.lines[0];expect(line.unit).toBe('per_machine_hour');expect(line.quantity).toBe(8);expect(line.hourly).toBeCloseTo(27.92*1.12*8);});it('stops compute and retains storage, provisioning has no billing',()=>{const r=seedResources()[0];r.status='stopped';expect(costPerHour(r,RATES)).toBeCloseTo(r.spec.storageGb*.08/730,5);r.status='provisioning';expect(costPerHour(r,RATES)).toBe(0);});it('scales compute while keeping control plane and PVC fixed',()=>{const r=seedResources().find(r=>r.kind==='vgpu')!;const e=estimate(r,RATES);expect(e.lines.find(l=>l.key==='control')?.scales).toBe(false);expect(e.lines.find(l=>l.key==='storage')?.scales).toBe(false);});it('uses 6N/8N training and a bandwidth-limited decode bound',()=>{const input={mfu:.47,gpuCount:2048,peakDenseFlops:312e12,params:65e9,recompute:false};expect(deriveTokensPerSecond(input)).toBeCloseTo(770048,0);expect(deriveTokensPerSecond({...input,recompute:true})/deriveTokensPerSecond(input)).toBe(.75);expect(decodeUpperBound(3350,70,1,.8)).toBeLessThan(48);});it('rejects infeasible 70B BF16 on a single H100',()=>{expect(modelMemory(MODELS[1],'bf16',8192).requiredGb).toBeGreaterThan(80);});});
+import { describe, it, expect } from "vitest";
+import { seedResources } from "../fixtures/resources";
+import { RATES } from "../fixtures/pricing";
+import { MODELS } from "../fixtures/content";
+import {
+  costPerHour,
+  estimate,
+  deriveTokensPerSecond,
+  decodeUpperBound,
+  modelMemory,
+} from "./derive";
+import { makeDatabase } from "./database";
+import { assertConsistency } from "./consistency";
+describe("derived business contracts", () => {
+  it("sums the seed allocation and enforces physical consistency", () => {
+    const db = makeDatabase();
+    expect(db.resources.reduce((a, r) => a + r.spec.gpuCount, 0)).toBe(1040);
+    expect(() => assertConsistency(db, true)).not.toThrow();
+  });
+  it("bills bare metal by machines without multiplying GPUs twice", () => {
+    const r = seedResources().find((r) => r.kind === "gpu_baremetal")!;
+    const e = estimate(r, RATES);
+    const line = e.lines[0];
+    expect(line.unit).toBe("per_machine_hour");
+    expect(line.quantity).toBe(8);
+    expect(line.hourly).toBeCloseTo(27.92 * 1.12 * 8);
+  });
+  it("stops compute and retains storage, provisioning has no billing", () => {
+    const r = seedResources()[0];
+    r.status = "stopped";
+    expect(costPerHour(r, RATES)).toBeCloseTo(
+      (r.spec.storageGb * 0.08) / 730,
+      5,
+    );
+    r.status = "provisioning";
+    expect(costPerHour(r, RATES)).toBe(0);
+  });
+  it("scales compute while keeping control plane and PVC fixed", () => {
+    const r = seedResources().find((r) => r.kind === "vgpu")!;
+    const e = estimate(r, RATES);
+    expect(e.lines.find((l) => l.key === "control")?.scales).toBe(false);
+    expect(e.lines.find((l) => l.key === "storage")?.scales).toBe(false);
+  });
+  it("uses 6N/8N training and a bandwidth-limited decode bound", () => {
+    const input = {
+      mfu: 0.47,
+      gpuCount: 2048,
+      peakDenseFlops: 312e12,
+      params: 65e9,
+      recompute: false,
+    };
+    expect(deriveTokensPerSecond(input)).toBeCloseTo(770048, 0);
+    expect(
+      deriveTokensPerSecond({ ...input, recompute: true }) /
+        deriveTokensPerSecond(input),
+    ).toBe(0.75);
+    expect(decodeUpperBound(3350, 70, 1, 0.8)).toBeLessThan(48);
+  });
+  it("rejects infeasible 70B BF16 on a single H100", () => {
+    expect(modelMemory(MODELS[1], "bf16", 8192).requiredGb).toBeGreaterThan(80);
+  });
+});

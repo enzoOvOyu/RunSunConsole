@@ -1,4 +1,7 @@
 export default {
+  "common.websocket": "实时通道已连接",
+  "data.event.requested": "下单已受理，正在分配区域内 GPU 与网络资源",
+  "error.INSUFFICIENT_BALANCE": "余额不足，暂无法创建资源，请充值后重试",
   "language.shortZh": "中",
   "language.zh": "中文",
   "brand.product": "GPU 云控制台",
@@ -341,7 +344,8 @@ export default {
   "wizard.license": "NVIDIA License 余量：{count}",
   "wizard.quantization": "量化精度",
   "wizard.context": "上下文长度 · 4096–1048576",
-  "wizard.memoryRequired": "每副本所需显存 {required} GB / 已选容量 {capacity} GB",
+  "wizard.memoryRequired":
+    "每副本所需显存 {required} GB / 已选容量 {capacity} GB",
   "wizard.memoryError": "显存不足，请增加张量并行卡数或降低量化精度",
   "wizard.review": "请确认配置与费用后创建资源",
   "wizard.leave": "离开将保留草稿，确定继续？",
@@ -360,10 +364,14 @@ export default {
   "scaling.enable": "开启弹性伸缩",
   "scaling.node_pool": "节点池伸缩策略",
   "scaling.replica": "服务副本伸缩策略",
-  "scaling.gpu_vm": "按整台虚拟机伸缩，扩容约 1–5 分钟；缩容前先摘除负载均衡并排空请求。",
-  "scaling.gpu_baremetal": "按整台物理机伸缩，扩容需 5–30 分钟装机；保留至少一台同构机器，缩容稳定窗口 10–30 分钟。",
-  "scaling.vgpu": "固定分片规格，优先填满已有卡；扩容前校验 NVIDIA License 余量。",
-  "scaling.inference": "按服务副本伸缩；默认保留最小副本，缩到 0 会带来 30 秒至数分钟冷启动。",
+  "scaling.gpu_vm":
+    "按整台虚拟机伸缩，扩容约 1–5 分钟；缩容前先摘除负载均衡并排空请求。",
+  "scaling.gpu_baremetal":
+    "按整台物理机伸缩，扩容需 5–30 分钟装机；保留至少一台同构机器，缩容稳定窗口 10–30 分钟。",
+  "scaling.vgpu":
+    "固定分片规格，优先填满已有卡；扩容前校验 NVIDIA License 余量。",
+  "scaling.inference":
+    "按服务副本伸缩；默认保留最小副本，缩到 0 会带来 30 秒至数分钟冷启动。",
   "scaling.queue_depth": "队列深度",
   "scaling.pending_pods": "待调度 Pod 数",
   "scaling.qpm": "每分钟查询数",
@@ -517,5 +525,5 @@ export default {
   "success.saved": "已保存",
   "success.created": "创建成功",
   "success.deleted": "已删除",
-  "success.updated": "更新成功"
+  "success.updated": "更新成功",
 } as const;

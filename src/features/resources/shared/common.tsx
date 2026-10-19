@@ -1,22 +1,588 @@
-import { lazy,Suspense,useState } from 'react';
-import { Link } from 'react-router-dom';
-import type { Resource,MetricSeries,Usage,Transaction,PriceEstimate,Order,ScalingPolicy,ScalingEvent,Notebook } from '../../../types/domain';
-import { t,dt } from '../../../i18n';
-import { EP,query } from '../../../lib/api-client';
-import { useData } from '../../shared/hooks';
-import { money,number } from '../../../lib/money';
-import { date } from '../../../lib/date';
-import { Button,Panel,Empty,Loading,ErrorState,DataTable,KeyValues,Progress,EventTimeline,CopyButton,Badge,download,csv } from '../../../components/ui';
-import type { ResourceEvent } from '../../../types/domain';
-const TrendChart=lazy(()=>import('../../../components/charts/TrendChart'));
-export function MonitorPanel({resource:r,only}:{resource:Resource;only?:string[]}){const [window,setWindow]=useState('1h');const data=useData<MetricSeries[]>(['metrics',r.resourceUuid,window],`${EP.metrics}/${r.kind}/${r.resourceUuid}${query({window})}`,{poll:true});return <div className="stack"><div className="row">{['1h','6h','24h','7d'].map(w=><Button key={w} variant={w===window?'primary':'default'} onClick={()=>setWindow(w)}>{w}</Button>)}</div>{data.isPending?<Loading/>:data.error?<ErrorState error={data.error}/>:<div className="grid grid-2">{data.data?.filter(s=>!only||only.includes(s.key)).map(series=>{const last=series.points.at(-1)?.value;const warning=last!=null&&series.threshold!=null&&last>=series.threshold;return <Panel key={series.key} title={t(`metric.${series.key}`)}><div className="between"><strong style={{fontSize:26,fontWeight:600}}>{last!=null?`${number(last,1)} ${series.unit}`:t('common.noData')}</strong><span className={warning?'danger-text':'muted'}>{series.threshold!=null?`${warning?'⚠':'✓'} ${t('metric.threshold')} ${series.threshold} ${series.unit}`:'—'}</span></div><Suspense fallback={<Loading/>}><TrendChart data={series.points.map(p=>({date:p.at,value:p.value}))} currency={false} keys={['value']}/></Suspense></Panel>;})}</div>}</div>;}
-export function MetricsOverview({resource:r}:{resource:Resource}){const data=useData<MetricSeries[]>(['metrics',r.resourceUuid,'1h'],`${EP.metrics}/${r.kind}/${r.resourceUuid}?window=1h`,{poll:true});return <div className="grid grid-4">{data.data?.slice(0,4).map(s=><div className="panel stat" key={s.key}><small>{t(`metric.${s.key}`)}</small><div className="stat-value" style={{fontSize:22}}>{s.points.at(-1)?.value!=null?`${number(s.points.at(-1)!.value!,1)} ${s.unit}`:'—'}</div><small>{s.points.at(-1)?.value==null?t('common.noData'):t('metric.healthy')}</small></div>)}</div>;}
-export function EventsPanel({resource:r}:{resource:Resource}){const events=useData<ResourceEvent[]>(['events',r.resourceUuid],EP.events+query({resource_id:r.resourceUuid}),{poll:true});return events.isPending?<Loading/>:<EventTimeline events={(events.data||[]).map(e=>({...e,reason:dt(e.reason),action:dt(e.action)}))}/>;}
-export function BillingPanel({resource:r}:{resource:Resource}){const [month,setMonth]=useState(new Date().toISOString().slice(0,7));const usage=useData<Usage[]>(['usage',r.resourceUuid,month],EP.usage+query({resource_id:r.resourceUuid,billing_period:month}),{poll:true});const tx=useData<Transaction[]>(['transactions',r.resourceUuid,month],EP.transactions+query({resource_id:r.resourceUuid,billing_period:month}));const price=useData<{order:Order}>(['resource-order',r.resourceUuid],EP.resources+'/'+r.resourceUuid,{enabled:!r.deletedAt});const current=useData<{hourly:number;today:number;month:number;total:number;remainingHours:number|null;estimate:PriceEstimate}>(['resource-billing',r.resourceUuid,month],EP.summary+query({resource_id:r.resourceUuid,billing_period:month}),{poll:true});const total=current.data?.month||0;const today=current.data?.today||0;const [from,setFrom]=useState('');const [to,setTo]=useState('');const shown=usage.data?.filter(u=>(!from||u.usageHour>=from)&&(!to||u.usageHour.slice(0,10)<=to))||[];return <div className="stack"><div className="toolbar"><label className="row">{t('billing.period')}<input type="month" className="input" value={month} onChange={e=>setMonth(e.target.value)}/></label></div>{r.status==='stopped'&&<div className="notice warning">{t('price.stopped')}</div>}{r.status==='provisioning'&&<div className="notice">{t('price.provisioning')}</div>}{r.kind==='inference'&&<div className="notice">{t('price.inferenceNote')}</div>}<Panel title={t('common.cost')}><KeyValues items={[[t('resource.hourly'),current.data?money(current.data.hourly):'—'],[t('price.lifetime'),current.data?money(current.data.total):'—'],[t('common.runtime'),current.data?.remainingHours?number(current.data.remainingHours,1)+'h':'—']]}/><div className="grid grid-3"><div><small>{t('common.today')}</small><div className="stat-value" style={{fontSize:24}}>{r.status==='provisioning'?'—':money(today)}</div></div><div><small>{t('common.mtd')}</small><div className="stat-value" style={{fontSize:24}}>{money(total)}</div></div><div><small>{t('price.orderEstimate')}</small><div className="stat-value" style={{fontSize:24}}>{price.data?.order?money(price.data.order.price_snapshot.hourly):'—'}<small>{t('common.perHour')}</small></div></div></div></Panel><Panel title={t('price.breakdown')}><KeyValues items={(current.data?.estimate?.lines||[]).map(line=>[t(`price.${line.key.split(':')[0]}`)+(line.key.includes(':')?' '+line.key.split(':')[1]:''),`${line.quantity} × ${money(line.unitPrice)} / ${t('unit.'+line.unit)} = ${money(line.hourly)}/h`])}/></Panel><Panel title={t('common.usage')} action={<Button onClick={()=>csv(`${r.displayId}-usage.csv`,shown as unknown as Record<string,unknown>[])}>{t('common.export')}</Button>}><div className="toolbar"><input type="date" aria-label={t('common.before')} className="input" value={from} onChange={e=>setFrom(e.target.value)}/><input type="date" aria-label={t('common.after')} className="input" value={to} onChange={e=>setTo(e.target.value)}/></div><DataTable data={shown} columns={[{accessorKey:'usageHour',header:t('common.time'),cell:({row})=>date(row.original.usageHour)},{accessorKey:'unit',header:t('common.unit'),cell:({row})=>t('unit.'+row.original.unit)},{accessorKey:'quantity',header:t('common.count'),cell:({row})=>number(row.original.quantity,4)},{accessorKey:'unitPrice',header:t('common.price'),cell:({row})=>money(row.original.unitPrice)},{accessorKey:'amount',header:t('common.amount'),cell:({row})=>money(row.original.amount)},{accessorKey:'status',header:t('common.status'),cell:({row})=><Badge status={row.original.status}/>} ]}/></Panel><Panel title={t('common.transactions')}><TransactionTable rows={tx.data||[]}/></Panel></div>;}
-export function TransactionTable({rows}:{rows:Transaction[]}){return <DataTable data={rows} columns={[{accessorKey:'at',header:t('common.time'),cell:({row})=>date(row.original.at)},{accessorKey:'type',header:t('common.type'),cell:({row})=>t('billing.'+row.original.type)},{accessorKey:'amount',header:t('common.amount'),cell:({row})=>money(row.original.amount)},{accessorKey:'balanceAfter',header:t('billing.balanceAfter'),cell:({row})=>money(row.original.balanceAfter)},{accessorKey:'referenceId',header:t('billing.reference')}]}/>;}
-export function ScalingReadonly({resource:r}:{resource:Resource}){const data=useData<ScalingPolicy[]>(['policies',r.resourceUuid],EP.policies+query({resource_id:r.resourceUuid}));const events=useData<ScalingEvent[]>(['scaling-events',r.resourceUuid],EP.scalingEvents+query({resource_id:r.resourceUuid}));return <div className="stack"><div className="notice">{t('resource.scaleReadonly')} · <Link to="/workbench/scaling">{t('nav.scaling')}</Link></div>{data.data?.length?data.data.map(p=><Panel key={p.id} title={p.name}><KeyValues items={[[t('common.status'),<Badge status={p.status}/>],[t('common.type'),t('scaling.'+p.config.strategy_model)],[t('common.metric'),t('scaling.'+p.config.trigger_metric)],[t('common.target'),p.config.target_value],[t('common.min'),p.config.min_size],[t('common.max'),p.config.max_size]]}/></Panel>):<Empty/>}<Panel title={t('scaling.events')}><DataTable data={events.data||[]} columns={[{accessorKey:'at',header:t('common.time'),cell:({row})=>date(row.original.at)},{accessorKey:'direction',header:t('common.type'),cell:({row})=>t('scaling.'+row.original.direction)},{id:'change',header:t('common.count'),cell:({row})=>`${row.original.from} → ${row.original.to}`},{accessorKey:'value',header:t('common.metric')},{accessorKey:'durationS',header:t('common.duration')}]}/></Panel></div>;}
-export function Associations({resource:r}:{resource:Resource}){const n=useData<Notebook[]>(['notebooks-related',r.resourceUuid],EP.notebooks);return <Panel title={t('resource.related')}><DataTable data={(n.data||[]).filter(n=>n.resourceUuid===r.resourceUuid)} columns={[{accessorKey:'name',header:t('common.name'),cell:({row})=>dt(row.original.name)},{accessorKey:'ide',header:'IDE'},{accessorKey:'status',header:t('common.status'),cell:({row})=><Badge status={row.original.status}/>} ]}/><Link to={`/workbench/notebooks?resource=${r.resourceUuid}`}>{t('resource.createNotebook')}</Link></Panel>;}
-export function AccessPanel({resource:r,mode='console'}:{resource:Resource;mode?:'console'|'bmc'|'firmware'|'governance'}){const data=useData<{privateIp:string;ssh:string;endpoint:string;bmc:{ip:string;firmware:string;reachable:boolean};driver:string;cuda:string;vbios:string;compliance:boolean}>(['access',r.resourceUuid],`${EP.resources}/${r.resourceUuid}/access`,{enabled:r.status==='running'&&!r.deletedAt});if(r.status!=='running')return <Empty text={t('resource.startToUse')}/>;if(data.isPending)return <Loading/>;if(data.error)return <ErrorState error={data.error}/>;const a=data.data;return <div className="stack">{mode==='console'?<><Panel title="SSH"><pre>{a.ssh}</pre><CopyButton value={a.ssh}/></Panel><div className="grid grid-3">{['JupyterLab','Web Terminal','File Manager'].map(name=><Panel title={name} key={name}><p>{t('resource.connectionNote')}</p><code>{a.privateIp}</code><CopyButton value={`${a.endpoint}/${name.toLowerCase().replaceAll(' ','-')}`}/></Panel>)}</div></>:mode==='bmc'?<Panel title="BMC / IPMI"><KeyValues items={[[t('common.endpoint'),a.bmc.ip],['Firmware',a.bmc.firmware],[t('common.status'),a.bmc.reachable?t('common.ready'):t('common.error')],['SEL',t('common.noData')]]}/></Panel>:mode==='firmware'?<Panel title={t('tab.firmware')}><KeyValues items={ [['VBIOS',a.vbios],['NVIDIA Driver',a.driver],['CUDA',a.cuda],['Compliance',a.compliance?'✓':'⚠']]}/></Panel>:<><Panel title={t('common.endpoint')}><pre>{a.endpoint}</pre><CopyButton value={a.endpoint}/><pre>{`curl ${a.endpoint}/v1/chat/completions -H 'Authorization: Bearer $RUNSUN_API_KEY' -H 'Content-Type: application/json' -d '{"model":"${r.kind==='inference'?r.spec.modelRef:''}","messages":[{"role":"user","content":"Hello"}]}'`}</pre></Panel><p className="notice">{t('price.inferenceNote')}</p></>}</div>;}
-export function SpecPanel({resource:r}:{resource:Resource}){return <Panel title={t('resource.config')}><KeyValues items={Object.entries(r.spec).filter(([,v])=>typeof v!=='object').map(([key,value])=>[key,String(value)])}/></Panel>;}
-export function Provisioning({resource:r}:{resource:Resource}){const steps=useData<{name:string;status:string}[]>(['steps',r.resourceUuid],`${EP.resources}/${r.resourceUuid}/steps`,{poll:r.status==='provisioning'});return r.status==='provisioning'?<Panel title={t('resource.provisionSteps')}><Progress value={(steps.data?.filter(s=>s.status==='success').length||0)/(steps.data?.length||1)*100}/><div className="row" style={{marginTop:12}}>{steps.data?.map(s=><span className="chip" key={s.name}>{s.status==='success'?'✓':'○'} {s.name}</span>)}</div></Panel>:null;}
-export function Kubeconfig({resource:r}:{resource:Resource}){return <Button disabled={r.status!=='running'} onClick={()=>download(`${r.displayId}-kubeconfig.yaml`,`apiVersion: v1\nkind: Config\nclusters:\n  - name: ${r.displayId}\n    cluster:\n      server: https://${r.displayId}.${r.region}.runsun.cloud\ncontexts: []\nusers: []\n`)}>{t('resource.kubeconfig')}</Button>;}
+import { lazy, Suspense, useState } from "react";
+import { Link } from "react-router-dom";
+import type {
+  Resource,
+  MetricSeries,
+  Usage,
+  Transaction,
+  PriceEstimate,
+  Order,
+  ScalingPolicy,
+  ScalingEvent,
+  Notebook,
+} from "../../../types/domain";
+import { t, dt } from "../../../i18n";
+import { EP, query } from "../../../lib/api-client";
+import { useData } from "../../shared/hooks";
+import { money, number, unitMoney } from "../../../lib/money";
+import { date } from "../../../lib/date";
+import {
+  Button,
+  Panel,
+  Empty,
+  Loading,
+  ErrorState,
+  DataTable,
+  KeyValues,
+  Progress,
+  EventTimeline,
+  CopyButton,
+  Badge,
+  download,
+  csv,
+} from "../../../components/ui";
+import type { ResourceEvent } from "../../../types/domain";
+const TrendChart = lazy(() => import("../../../components/charts/TrendChart"));
+export function MonitorPanel({
+  resource: r,
+  only,
+}: {
+  resource: Resource;
+  only?: string[];
+}) {
+  const [window, setWindow] = useState("1h");
+  const data = useData<MetricSeries[]>(
+    ["metrics", r.resourceUuid, window],
+    `${EP.metrics}/${r.kind}/${r.resourceUuid}${query({ window })}`,
+    { poll: true },
+  );
+  return (
+    <div className="stack">
+      <div className="row">
+        {["1h", "6h", "24h", "7d"].map((w) => (
+          <Button
+            key={w}
+            variant={w === window ? "primary" : "default"}
+            onClick={() => setWindow(w)}
+          >
+            {w}
+          </Button>
+        ))}
+      </div>
+      {data.isPending ? (
+        <Loading />
+      ) : data.error ? (
+        <ErrorState error={data.error} />
+      ) : (
+        <div className="grid grid-2">
+          {data.data
+            ?.filter((s) => !only || only.includes(s.key))
+            .map((series) => {
+              const last = series.points.at(-1)?.value;
+              const warning =
+                last != null &&
+                series.threshold != null &&
+                last >= series.threshold;
+              return (
+                <Panel key={series.key} title={t(`metric.${series.key}`)}>
+                  <div className="between">
+                    <strong style={{ fontSize: 26, fontWeight: 600 }}>
+                      {last != null
+                        ? `${number(last, 1)} ${series.unit}`
+                        : t("common.noData")}
+                    </strong>
+                    <span className={warning ? "danger-text" : "muted"}>
+                      {series.threshold != null
+                        ? `${warning ? "⚠" : "✓"} ${t("metric.threshold")} ${series.threshold} ${series.unit}`
+                        : "—"}
+                    </span>
+                  </div>
+                  <Suspense fallback={<Loading />}>
+                    <TrendChart
+                      data={series.points.map((p) => ({
+                        date: p.at,
+                        value: p.value,
+                      }))}
+                      currency={false}
+                      keys={["value"]}
+                    />
+                  </Suspense>
+                </Panel>
+              );
+            })}
+        </div>
+      )}
+    </div>
+  );
+}
+export function MetricsOverview({ resource: r }: { resource: Resource }) {
+  const data = useData<MetricSeries[]>(
+    ["metrics", r.resourceUuid, "1h"],
+    `${EP.metrics}/${r.kind}/${r.resourceUuid}?window=1h`,
+    { poll: true },
+  );
+  return (
+    <div className="grid grid-4">
+      {data.data?.slice(0, 4).map((s) => (
+        <div className="panel stat" key={s.key}>
+          <small>{t(`metric.${s.key}`)}</small>
+          <div className="stat-value" style={{ fontSize: 22 }}>
+            {s.points.at(-1)?.value != null
+              ? `${number(s.points.at(-1)!.value!, 1)} ${s.unit}`
+              : "—"}
+          </div>
+          <small>
+            {s.points.at(-1)?.value == null
+              ? t("common.noData")
+              : t("metric.healthy")}
+          </small>
+        </div>
+      ))}
+    </div>
+  );
+}
+export function EventsPanel({ resource: r }: { resource: Resource }) {
+  const events = useData<ResourceEvent[]>(
+    ["events", r.resourceUuid],
+    EP.events + query({ resource_id: r.resourceUuid }),
+    { poll: true },
+  );
+  return events.isPending ? (
+    <Loading />
+  ) : (
+    <EventTimeline
+      events={(events.data || []).map((e) => ({
+        ...e,
+        reason: dt(e.reason),
+        action: dt(e.action),
+      }))}
+    />
+  );
+}
+export function BillingPanel({ resource: r }: { resource: Resource }) {
+  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
+  const usage = useData<Usage[]>(
+    ["usage", r.resourceUuid, month],
+    EP.usage + query({ resource_id: r.resourceUuid, billing_period: month }),
+    { poll: true },
+  );
+  const tx = useData<Transaction[]>(
+    ["transactions", r.resourceUuid, month],
+    EP.transactions +
+      query({ resource_id: r.resourceUuid, billing_period: month }),
+  );
+  const price = useData<{ order: Order }>(
+    ["resource-order", r.resourceUuid],
+    EP.resources + "/" + r.resourceUuid,
+    { enabled: !r.deletedAt },
+  );
+  const current = useData<{
+    hourly: number;
+    today: number;
+    month: number;
+    total: number;
+    remainingHours: number | null;
+    estimate: PriceEstimate;
+  }>(
+    ["resource-billing", r.resourceUuid, month],
+    EP.summary + query({ resource_id: r.resourceUuid, billing_period: month }),
+    { poll: true },
+  );
+  const total = current.data?.month || 0;
+  const today = current.data?.today || 0;
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const shown =
+    usage.data?.filter(
+      (u) =>
+        (!from || u.usageHour >= from) &&
+        (!to || u.usageHour.slice(0, 10) <= to),
+    ) || [];
+  return (
+    <div className="stack">
+      <div className="toolbar">
+        <label className="row">
+          {t("billing.period")}
+          <input
+            type="month"
+            className="input"
+            value={month}
+            onChange={(e) => setMonth(e.target.value)}
+          />
+        </label>
+      </div>
+      {r.status === "stopped" && (
+        <div className="notice warning">{t("price.stopped")}</div>
+      )}
+      {r.status === "provisioning" && (
+        <div className="notice">{t("price.provisioning")}</div>
+      )}
+      {r.kind === "inference" && (
+        <div className="notice">{t("price.inferenceNote")}</div>
+      )}
+      <Panel title={t("common.cost")}>
+        <KeyValues
+          items={[
+            [
+              t("resource.hourly"),
+              current.data ? money(current.data.hourly) : "—",
+            ],
+            [
+              t("price.lifetime"),
+              current.data ? money(current.data.total) : "—",
+            ],
+            [
+              t("common.runtime"),
+              current.data?.remainingHours
+                ? number(current.data.remainingHours, 1) + "h"
+                : "—",
+            ],
+          ]}
+        />
+        <div className="grid grid-3">
+          <div>
+            <small>{t("common.today")}</small>
+            <div className="stat-value" style={{ fontSize: 24 }}>
+              {r.status === "provisioning" ? "—" : money(today)}
+            </div>
+          </div>
+          <div>
+            <small>{t("common.mtd")}</small>
+            <div className="stat-value" style={{ fontSize: 24 }}>
+              {money(total)}
+            </div>
+          </div>
+          <div>
+            <small>{t("price.orderEstimate")}</small>
+            <div className="stat-value" style={{ fontSize: 24 }}>
+              {price.data?.order
+                ? money(price.data.order.price_snapshot.hourly)
+                : "—"}
+              <small>{t("common.perHour")}</small>
+            </div>
+          </div>
+        </div>
+      </Panel>
+      <Panel title={t("price.breakdown")}>
+        <KeyValues
+          items={(current.data?.estimate?.lines || []).map((line) => [
+            t(`price.${line.key.split(":")[0]}`) +
+              (line.key.includes(":") ? " " + line.key.split(":")[1] : ""),
+            `${line.quantity} × ${unitMoney(line.unitPrice)} / ${t("unit." + line.unit)} = ${money(line.hourly)}/h`,
+          ])}
+        />
+      </Panel>
+      <Panel
+        title={t("common.usage")}
+        action={
+          <Button
+            onClick={() =>
+              csv(
+                `${r.displayId}-usage.csv`,
+                shown as unknown as Record<string, unknown>[],
+              )
+            }
+          >
+            {t("common.export")}
+          </Button>
+        }
+      >
+        <div className="toolbar">
+          <input
+            type="date"
+            aria-label={t("common.before")}
+            className="input"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+          />
+          <input
+            type="date"
+            aria-label={t("common.after")}
+            className="input"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+          />
+        </div>
+        <DataTable
+          data={shown}
+          columns={[
+            {
+              accessorKey: "usageHour",
+              header: t("common.time"),
+              cell: ({ row }) => date(row.original.usageHour),
+            },
+            {
+              accessorKey: "unit",
+              header: t("common.unit"),
+              cell: ({ row }) => t("unit." + row.original.unit),
+            },
+            {
+              accessorKey: "quantity",
+              header: t("common.count"),
+              cell: ({ row }) => number(row.original.quantity, 4),
+            },
+            {
+              accessorKey: "unitPrice",
+              header: t("common.price"),
+              cell: ({ row }) => unitMoney(row.original.unitPrice),
+            },
+            {
+              accessorKey: "amount",
+              header: t("common.amount"),
+              cell: ({ row }) => money(row.original.amount),
+            },
+            {
+              accessorKey: "status",
+              header: t("common.status"),
+              cell: ({ row }) => <Badge status={row.original.status} />,
+            },
+          ]}
+        />
+      </Panel>
+      <Panel title={t("common.transactions")}>
+        <TransactionTable rows={tx.data || []} />
+      </Panel>
+    </div>
+  );
+}
+export function TransactionTable({ rows }: { rows: Transaction[] }) {
+  return (
+    <DataTable
+      data={rows}
+      columns={[
+        {
+          accessorKey: "at",
+          header: t("common.time"),
+          cell: ({ row }) => date(row.original.at),
+        },
+        {
+          accessorKey: "type",
+          header: t("common.type"),
+          cell: ({ row }) => t("billing." + row.original.type),
+        },
+        {
+          accessorKey: "amount",
+          header: t("common.amount"),
+          cell: ({ row }) => money(row.original.amount),
+        },
+        {
+          accessorKey: "balanceAfter",
+          header: t("billing.balanceAfter"),
+          cell: ({ row }) => money(row.original.balanceAfter),
+        },
+        { accessorKey: "referenceId", header: t("billing.reference") },
+      ]}
+    />
+  );
+}
+export function ScalingReadonly({ resource: r }: { resource: Resource }) {
+  const data = useData<ScalingPolicy[]>(
+    ["policies", r.resourceUuid],
+    EP.policies + query({ resource_id: r.resourceUuid }),
+  );
+  const events = useData<ScalingEvent[]>(
+    ["scaling-events", r.resourceUuid],
+    EP.scalingEvents + query({ resource_id: r.resourceUuid }),
+  );
+  return (
+    <div className="stack">
+      <div className="notice">
+        {t("resource.scaleReadonly")} ·{" "}
+        <Link to="/workbench/scaling">{t("nav.scaling")}</Link>
+      </div>
+      {data.data?.length ? (
+        data.data.map((p) => (
+          <Panel key={p.id} title={p.name}>
+            <KeyValues
+              items={[
+                [t("common.status"), <Badge status={p.status} />],
+                [t("common.type"), t("scaling." + p.config.strategy_model)],
+                [t("common.metric"), t("scaling." + p.config.trigger_metric)],
+                [t("common.target"), p.config.target_value],
+                [t("common.min"), p.config.min_size],
+                [t("common.max"), p.config.max_size],
+              ]}
+            />
+          </Panel>
+        ))
+      ) : (
+        <Empty />
+      )}
+      <Panel title={t("scaling.events")}>
+        <DataTable
+          data={events.data || []}
+          columns={[
+            {
+              accessorKey: "at",
+              header: t("common.time"),
+              cell: ({ row }) => date(row.original.at),
+            },
+            {
+              accessorKey: "direction",
+              header: t("common.type"),
+              cell: ({ row }) => t("scaling." + row.original.direction),
+            },
+            {
+              id: "change",
+              header: t("common.count"),
+              cell: ({ row }) => `${row.original.from} → ${row.original.to}`,
+            },
+            { accessorKey: "value", header: t("common.metric") },
+            { accessorKey: "durationS", header: t("common.duration") },
+          ]}
+        />
+      </Panel>
+    </div>
+  );
+}
+export function Associations({ resource: r }: { resource: Resource }) {
+  const n = useData<Notebook[]>(
+    ["notebooks-related", r.resourceUuid],
+    EP.notebooks,
+  );
+  return (
+    <Panel title={t("resource.related")}>
+      <DataTable
+        data={(n.data || []).filter((n) => n.resourceUuid === r.resourceUuid)}
+        columns={[
+          {
+            accessorKey: "name",
+            header: t("common.name"),
+            cell: ({ row }) => dt(row.original.name),
+          },
+          { accessorKey: "ide", header: "IDE" },
+          {
+            accessorKey: "status",
+            header: t("common.status"),
+            cell: ({ row }) => <Badge status={row.original.status} />,
+          },
+        ]}
+      />
+      <Link to={`/workbench/notebooks?resource=${r.resourceUuid}`}>
+        {t("resource.createNotebook")}
+      </Link>
+    </Panel>
+  );
+}
+export function AccessPanel({
+  resource: r,
+  mode = "console",
+}: {
+  resource: Resource;
+  mode?: "console" | "bmc" | "firmware" | "governance";
+}) {
+  const data = useData<{
+    privateIp: string;
+    ssh: string;
+    endpoint: string;
+    bmc: { ip: string; firmware: string; reachable: boolean };
+    driver: string;
+    cuda: string;
+    vbios: string;
+    compliance: boolean;
+  }>(["access", r.resourceUuid], `${EP.resources}/${r.resourceUuid}/access`, {
+    enabled: r.status === "running" && !r.deletedAt,
+  });
+  if (r.status !== "running") return <Empty text={t("resource.startToUse")} />;
+  if (data.isPending) return <Loading />;
+  if (data.error) return <ErrorState error={data.error} />;
+  const a = data.data;
+  return (
+    <div className="stack">
+      {mode === "console" ? (
+        <>
+          <Panel title="SSH">
+            <pre>{a.ssh}</pre>
+            <CopyButton value={a.ssh} />
+          </Panel>
+          <div className="grid grid-3">
+            {["JupyterLab", "Web Terminal", "File Manager"].map((name) => (
+              <Panel title={name} key={name}>
+                <p>{t("resource.connectionNote")}</p>
+                <code>{a.privateIp}</code>
+                <CopyButton
+                  value={`${a.endpoint}/${name.toLowerCase().replaceAll(" ", "-")}`}
+                />
+              </Panel>
+            ))}
+          </div>
+        </>
+      ) : mode === "bmc" ? (
+        <Panel title="BMC / IPMI">
+          <KeyValues
+            items={[
+              [t("common.endpoint"), a.bmc.ip],
+              ["Firmware", a.bmc.firmware],
+              [
+                t("common.status"),
+                a.bmc.reachable ? t("common.ready") : t("common.error"),
+              ],
+              ["SEL", t("common.noData")],
+            ]}
+          />
+        </Panel>
+      ) : mode === "firmware" ? (
+        <Panel title={t("tab.firmware")}>
+          <KeyValues
+            items={[
+              ["VBIOS", a.vbios],
+              ["NVIDIA Driver", a.driver],
+              ["CUDA", a.cuda],
+              ["Compliance", a.compliance ? "✓" : "⚠"],
+            ]}
+          />
+        </Panel>
+      ) : (
+        <>
+          <Panel title={t("common.endpoint")}>
+            <pre>{a.endpoint}</pre>
+            <CopyButton value={a.endpoint} />
+            <pre>{`curl ${a.endpoint}/v1/chat/completions -H 'Authorization: Bearer $RUNSUN_API_KEY' -H 'Content-Type: application/json' -d '{"model":"${r.kind === "inference" ? r.spec.modelRef : ""}","messages":[{"role":"user","content":"Hello"}]}'`}</pre>
+          </Panel>
+          <p className="notice">{t("price.inferenceNote")}</p>
+        </>
+      )}
+    </div>
+  );
+}
+export function SpecPanel({ resource: r }: { resource: Resource }) {
+  return (
+    <Panel title={t("resource.config")}>
+      <KeyValues
+        items={Object.entries(r.spec)
+          .filter(([, v]) => typeof v !== "object")
+          .map(([key, value]) => [key, String(value)])}
+      />
+    </Panel>
+  );
+}
+export function Provisioning({ resource: r }: { resource: Resource }) {
+  const steps = useData<{ name: string; status: string }[]>(
+    ["steps", r.resourceUuid],
+    `${EP.resources}/${r.resourceUuid}/steps`,
+    { poll: r.status === "provisioning" },
+  );
+  return r.status === "provisioning" ? (
+    <Panel title={t("resource.provisionSteps")}>
+      <Progress
+        value={
+          ((steps.data?.filter((s) => s.status === "success").length || 0) /
+            (steps.data?.length || 1)) *
+          100
+        }
+      />
+      <div className="row" style={{ marginTop: 12 }}>
+        {steps.data?.map((s) => (
+          <span className="chip" key={s.name}>
+            {s.status === "success" ? "✓" : "○"} {s.name}
+          </span>
+        ))}
+      </div>
+    </Panel>
+  ) : null;
+}
+export function Kubeconfig({ resource: r }: { resource: Resource }) {
+  return (
+    <Button
+      disabled={r.status !== "running"}
+      onClick={() =>
+        download(
+          `${r.displayId}-kubeconfig.yaml`,
+          `apiVersion: v1\nkind: Config\nclusters:\n  - name: ${r.displayId}\n    cluster:\n      server: https://${r.displayId}.${r.region}.runsun.cloud\ncontexts: []\nusers: []\n`,
+        )
+      }
+    >
+      {t("resource.kubeconfig")}
+    </Button>
+  );
+}

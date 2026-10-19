@@ -1,4 +1,4 @@
-# AGENTS.md — RunSun GPU Cloud 控制台（Gdashbord）
+# AGENTS.md — RunSun GPU Cloud 控制台（RunSunConsole）
 
 > 给接手本项目的 AI Agent / 开发者看的最短上手路径。
 > 改动代码前**先读「4. 硬性约定」和「8. 排障手册」**——这两节能避免 90% 的返工。
@@ -10,6 +10,7 @@
 
 ### 工作原则
 
+- 所有开发操作在开发设备的 `/home/ubuntu/runsun` 工作目录，通过 `runsuncos` tmux 会话执行。
 - 优先解决根因，避免表面修补。
 - 默认最小化修改范围，不顺手重构无关模块。
 - 修改前检查 Git 状态，保留用户已有改动。
@@ -28,7 +29,7 @@
 - 运行受影响的测试和必要的构建检查。
 - 说明未通过的测试及无法验证的部分。
 - 完成后简要列出修改文件、关键变化和风险。
-- 未经明确要求，不自动提交 Git Commit 或部署。
+- 按用户授权，每完成一个里程碑，在验收通过后提交并推送到 `enzoOvOyu/RunSunConsole`；提交作者固定使用 `enzoOvOyu`，仅配置仓库级 Git 身份。未经明确要求，不部署。
 
 > 落到本项目：受影响的测试至少跑 `pnpm test`（含架构守护）与 `pnpm typecheck`；改了构建/依赖时补跑 `pnpm build`（见 §7）。
 
@@ -38,29 +39,29 @@
 
 GPU 公有云（RunSun）的 **Web 控制台前端**。把「部署中心（创建）+ 资源（四类展示）+ 运营 / 工作台 / 数据 / 费用中心」整合为一体。
 
-- **当前状态**：以 `PRD.md` v0.10 为产品基线；架构、UI、Mock 与伸缩参考文档已对齐可确认的需求。新工作区目前不含应用源码，旧代码快照保存在 `archive/current-gdashboard/`。未经用户指令，不从归档代码继续开发。
+- **当前状态**：以 `PRD.md` v0.10 为产品基线；架构、UI、Mock 与伸缩参考文档已对齐可确认的需求。工作区已建立前端源码、Mock、回归测试与浏览器测试，当前实现和验收记录见 README；旧代码快照保存在 `archive/current-gdashboard/`。未经用户指令，不从归档代码继续开发。
 - **范围边界**：**纯前端 + Mock**。无真实后端，`/api/*` 全部由 **MSW** 拦截。PostgreSQL 只在 `docker/postgres/init/` 里跑 DDL 种子，应用不访问它。
 - **技术栈**：React 19 + TypeScript 5（strict）+ Vite 6 + pnpm 9 + Zustand + TanStack Query + MSW 2 + Recharts + cmdk + 自研轻量 i18n。
-- 源码仓库：`https://github.com/enzoOvOyu/Gdashbord`（main 分支，SSH 部署密钥推送）。
+- 源码仓库：`https://github.com/enzoOvOyu/RunSunConsole`（main 分支，SSH 部署密钥推送）。
 
 ---
 
 ## 2. 快速开始
 
-当前工作区尚未创建 `package.json` 或 `src/`；以下前端命令是源码脚手架完成后的目标流程，当前不要执行。
+当前工作区已创建 `package.json` 与 `src/`。以下 pnpm 命令通过 `docker compose exec -T dev` 在开发容器中执行；浏览器验收在宿主通过 `sh scripts/test-browser.sh` 执行。所有命令均须在远端 tmux 内启动。
 
 ```bash
 pnpm install
 pnpm exec msw init public/ --save   # 首次：生成 public/mockServiceWorker.js（已入库则跳过）
 pnpm dev                            # http://127.0.0.1:5173
-pnpm test                           # Vitest（7 文件 65 例）
+pnpm test                           # Vitest（含架构、接口契约、派生、指标与 i18n 回归）
 pnpm typecheck                      # tsc -b --noEmit
 pnpm build                          # tsc -b && vite build
 ```
 
 | 命令 | 说明 |
 | --- | --- |
-| `pnpm dev` | 宿主直接跑（**推荐**：改代码即时生效） |
+| `pnpm dev` | 在 dev 容器中执行，改代码即时生效 |
 | `pnpm test:watch` | 测试 watch 模式 |
 | `pnpm lint` / `pnpm format` | ESLint / Prettier |
 
@@ -70,7 +71,7 @@ pnpm build                          # tsc -b && vite build
 
 ## 3. 目标目录结构（按 `ARCHITECTURE.md`）
 
-当前目录以设计文档、Docker 基础环境和归档快照为主；下列 `src/` 树是目标结构，不代表当前已经存在。
+当前目录包含应用源码、设计文档、Docker 环境、测试与归档快照；下列树为模块结构与职责索引。
 
 ```
 src/
@@ -96,7 +97,7 @@ src/
 │  ├─ lib/                    # derive.ts（派生引擎）/ rng.ts / timeseries.ts / env.ts / consistency.ts
 │  ├─ metrics.ts  browser.ts
 ├─ lib/                       # api-client.ts（EP 端点常量）/ rbac.ts / ids.ts / money.ts / date.ts
-├─ i18n/                      # index.ts（t/dt）+ locales/{zh-CN,en-US}.ts（1476 键，中英严格对齐）
+├─ i18n/                      # index.ts（t/dt）+ locales/{zh-CN,en-US}.ts（字典键与占位符中英严格对齐）
 ├─ types/domain.ts            # 领域类型（与 ARCH §12 DDL 同构）
 ├─ test/                      # setup.ts + architecture.test.ts（架构守护）
 └─ styles/theme.css           # 设计 Token（亮/暗）
@@ -174,7 +175,7 @@ src/
 ## 7. 测试与 CI
 
 ```bash
-pnpm test          # vitest run（7 文件 65 例）
+pnpm test          # vitest run（含架构、接口契约、派生、指标与 i18n 回归）
 pnpm typecheck     # 注意：CI 用 tsc -b --force --noEmit
 ```
 

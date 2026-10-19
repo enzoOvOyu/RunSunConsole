@@ -25,3 +25,18 @@ The development endpoint is bound to `127.0.0.1:5173`. PostgreSQL and Adminer st
 M1 validated with `pnpm typecheck`, `pnpm test` (7 files, 13 assertions), and `pnpm build`.
 
 M2 validated with type checking, 19 regression assertions, production build, and remote Chromium checks of all resource Drawers plus a complete server deployment. Routes load on demand to retain an entry chunk under 250 KB.
+
+M3 adds Operations (projects, quotas, cost and support), Workbench (Notebook attachments, image/model catalog, app templates and scaling policies), Data (dataset versions/previews/references, bucket prefixes/object content/lifecycle and pipeline DAG/runs/logs), and Billing (usage, transactions, invoices and vouchers).
+
+Validation: 31 unit/API/architecture assertions in 9 Vitest files; 9 Chromium browser scenarios covering every navigation page, all four deployment wizards, data persistence, read-only roles, typed deletion and history, internationalization, command palette and responsive navigation. TypeScript, ESLint, Stylelint and production build pass. Entry JavaScript remains below the 250 KB budget.
+
+Run browser scenarios on a host with Chromium available:
+
+```sh
+# The dev server must already be running in tmux.
+sh scripts/test-browser.sh
+```
+
+The browser runner reads the Playwright version from the development container, uses temporary host tooling, and copies the committed tests/config unchanged. `PLAYWRIGHT_CHROMIUM_EXECUTABLE` can select an existing Chromium executable. The Alpine development container is used for compilation, unit tests and the Vite server; browser execution takes place on the Ubuntu host.
+
+Business data and mutations are served by MSW. Compact billing state is saved in browser storage and uploaded object content in IndexedDB. Real GPU provisioning, SSH/Jupyter/BMC sessions, external object endpoints and invoice issuance require backend services; this repository implements the frontend and its Mock contracts as scoped by the design.
