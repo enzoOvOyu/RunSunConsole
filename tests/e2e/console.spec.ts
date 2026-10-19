@@ -312,3 +312,108 @@ test("password login never stores the secret in a wizard draft", async ({
   );
   expect(stored).not.toContain(secret);
 });
+test("inference governance reviews changes, persists settings and stays read-only for viewers", async ({
+  page,
+}) => {
+  await page.goto("/overview");
+  await expect(page.getByText("1,040", { exact: true })).toBeVisible();
+  const r = await page.evaluate(async () => {
+    const data = await (
+      await fetch("/api/resources?kind=inference&size=1000")
+    ).json();
+    return data.items.find(
+      (r: { status: string }) => r.status === "running",
+    ) as { resourceUuid: string; region: string; displayId: string };
+  });
+  await page.goto(
+    `/resources/inference?drawer=${r.resourceUuid}&region=${r.region}`,
+  );
+  await page.getByRole("tab", { name: "服务治理", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "版本与灰度流量", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("dialog").locator("pre")).toContainText(
+    "Authorization: Bearer $RUNSUN_API_KEY",
+  );
+  const before = await page.evaluate(
+    async (uuid) =>
+      await (await fetch(`/api/resources/${uuid}/governance`)).json(),
+    r.resourceUuid,
+  );
+  let writes = 0;
+  page.on("request", (req) => {
+    if (req.method() === "POST" && req.url().endsWith("/governance")) writes++;
+  });
+  const edit = async () => {
+    await page
+      .getByRole("button", { name: "编辑治理配置", exact: true })
+      .click();
+    const modal = page.getByRole("dialog", {
+      name: "编辑治理配置",
+      exact: true,
+    });
+    await modal.getByLabel("灰度流量比例", { exact: true }).fill("17");
+    await modal.getByLabel("QPS 上限", { exact: true }).fill("240");
+    await modal.getByLabel("请求超时", { exact: true }).fill("45000");
+    await modal
+      .getByRole("button", { name: "核对治理变更", exact: true })
+      .click();
+    return page.getByRole("dialog", { name: "核对治理变更", exact: true });
+  };
+  const canceled = await edit();
+  await expect(canceled).toContainText("→ 17 %");
+  expect(writes).toBe(0);
+  await canceled.getByRole("button", { name: "取消", exact: true }).click();
+  const unchanged = await page.evaluate(
+    async (uuid) =>
+      await (await fetch(`/api/resources/${uuid}/governance`)).json(),
+    r.resourceUuid,
+  );
+  expect(unchanged.canaryPercent).toBe(before.canaryPercent);
+  const review = await edit();
+  await review.getByRole("button", { name: "确认", exact: true }).click();
+  await expect(review).not.toBeVisible();
+  expect(writes).toBe(1);
+  await expect(
+    page.getByRole("dialog").getByRole("cell", { name: "17%", exact: true }),
+  ).toBeVisible();
+  await page.reload();
+  await page.getByRole("tab", { name: "服务治理", exact: true }).click();
+  await expect(
+    page.getByRole("dialog").getByRole("cell", { name: "83%", exact: true }),
+  ).toBeVisible();
+  const saved = await page.evaluate(
+    async (uuid) =>
+      await (await fetch(`/api/resources/${uuid}/governance`)).json(),
+    r.resourceUuid,
+  );
+  expect(saved).toMatchObject({
+    canaryPercent: 17,
+    qpsLimit: 240,
+    timeoutMs: 45000,
+  });
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "账号与组织", exact: true }).click();
+  await page.getByLabel("切换角色视图").selectOption("viewer");
+  await page.keyboard.press("Escape");
+  await page.locator("main tbody tr").filter({ hasText: r.displayId }).click();
+  await page.getByRole("tab", { name: "服务治理", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "编辑治理配置", exact: true }),
+  ).toBeDisabled();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "English", exact: true }).click();
+  await page.locator("main tbody tr").filter({ hasText: r.displayId }).click();
+  await page
+    .getByRole("tab", { name: "Service governance", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Versions and traffic", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("tab", { name: "Events", exact: true }).click();
+  await expect(
+    page.getByText("Inference gateway policy and canary traffic updated", {
+      exact: true,
+    }),
+  ).toBeVisible();
+});

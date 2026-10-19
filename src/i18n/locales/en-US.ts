@@ -751,4 +751,31 @@ export default {
   "抢占式资源重新就绪，算力恢复计费":
     "Spot capacity ready; compute billing resumed",
   "检查点已保存，可继续工作负载": "Checkpoint saved; workload can resume",
+  "governance.authentication": "Authentication",
+  "governance.apiKey": "API Key",
+  "governance.noAuth": "Authentication disabled",
+  "governance.keyOnce":
+    "The API key is shown only at creation. Supply your key through an environment variable when making requests.",
+  "governance.example": "Request example",
+  "governance.traffic": "Versions and traffic",
+  "governance.edit": "Edit governance",
+  "governance.rule":
+    "Route requests by weight. Stable and canary traffic shares always total 100%.",
+  "governance.version": "Serving version",
+  "governance.stable": "Stable",
+  "governance.canary": "Canary",
+  "governance.share": "Traffic share",
+  "governance.gateway": "Gateway policy",
+  "governance.qpsLimit": "QPS limit",
+  "governance.timeoutMs": "Request timeout",
+  "governance.canaryPercent": "Canary traffic share",
+  "governance.canaryHint":
+    "0–99%; the stable version retains at least 1% of traffic.",
+  "governance.slider": "Adjust canary traffic",
+  "governance.review": "Review governance changes",
+  "governance.confirmNote":
+    "Confirmation updates traffic routing and gateway settings. GPU allocation and billing units stay the same.",
+  "data.governanceUpdated":
+    "Inference gateway policy and canary traffic updated",
+  "data.governanceObserve": "Check request error rates and latency",
 } as const;

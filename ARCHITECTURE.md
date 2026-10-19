@@ -1199,6 +1199,14 @@ GET /api/resources/:uuid
 - 计费三表另有三接口（PRD §7.8）：`GET /api/billing/usage`、`/api/billing/transactions`、`/api/billing/rates`。
 - **字段可空性**：上表中 `?` 标记字段为可选，前端一律 `?.` 读取并缺省"—"（PRD §13.3 空指针约束）。
 
+#### 12.11.5 推理服务治理接口（PRD §4.3.4）
+
+- `GET /api/resources/:uuid/governance`：返回 `endpoint`、`modelRef`、`modelName`、`authEnabled`、`active`、`versions[]`、`canaryPercent`、`qpsLimit`、`timeoutMs` 与只读 `scalingPolicy`。不返回 API Key。停止或已释放资源可读取历史配置，`active=false`。
+- `POST /api/resources/:uuid/governance`：原子保存 `{ canaryPercent, qpsLimit, timeoutMs }`。仅 owner/admin/member 可修改运行中的推理服务；其他资源类型返回 404，停止态返回 409 INVALID_STATE，已释放返回 410 GONE，只读角色返回 403 FORBIDDEN。
+- `canaryPercent` 为 0–99 的整数；稳定版本流量为 `100-canaryPercent`。`qpsLimit` 为 1–100000 的整数，默认 100 req/s；`timeoutMs` 为 1000–300000 的整数，默认 30000 ms。字段不合法返回 422 VALIDATION_ERROR，所有字段校验成功后才写入。
+- 流量比例持久化到 `spec.canaryPercent`；网关配置持久化到可选 `spec.gateway={qpsLimit,timeoutMs}`，旧资源缺省值由接口提供。保存记录 `GOVERNANCE_UPDATED` 事件，含变更前后配置和灰度比例。兼容的 `POST /api/resources/:uuid/traffic {percent}` 使用相同的比例校验、角色与状态限制。
+- 编辑使用 Modal，先核对变更摘要再提交；取消不发写请求。保存失效相关查询缓存。副本数、GPU 分配、计费方式与伸缩策略不由本接口修改；伸缩的唯一写入口仍为工作台（PRD §4.5.2）。
+
 ### 12.12 弹性伸缩数据模型
 
 > 对应 PRD §4.2.6 / §4.5.2。策略是资源的运行时治理配置，**不落时序库**；伸缩过程的指标快照随事件存档（§12.8 边界不变）。

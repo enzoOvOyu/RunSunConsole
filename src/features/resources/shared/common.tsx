@@ -512,7 +512,7 @@ export function AccessPanel({
   mode = "console",
 }: {
   resource: Resource;
-  mode?: "console" | "bmc" | "firmware" | "governance";
+  mode?: "console" | "bmc" | "firmware";
 }) {
   const data = useData<{
     privateIp: string;
@@ -564,7 +564,7 @@ export function AccessPanel({
             ]}
           />
         </Panel>
-      ) : mode === "firmware" ? (
+      ) : (
         <Panel title={t("tab.firmware")}>
           <KeyValues
             items={[
@@ -575,15 +575,6 @@ export function AccessPanel({
             ]}
           />
         </Panel>
-      ) : (
-        <>
-          <Panel title={t("common.endpoint")}>
-            <pre>{a.endpoint}</pre>
-            <CopyButton value={a.endpoint} />
-            <pre>{`curl ${a.endpoint}/v1/chat/completions -H 'Authorization: Bearer $RUNSUN_API_KEY' -H 'Content-Type: application/json' -d '{"model":"${r.kind === "inference" ? r.spec.modelRef : ""}","messages":[{"role":"user","content":"Hello"}]}'`}</pre>
-          </Panel>
-          <p className="notice">{t("price.inferenceNote")}</p>
-        </>
       )}
     </div>
   );

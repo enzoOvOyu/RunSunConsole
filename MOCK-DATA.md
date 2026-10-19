@@ -558,6 +558,8 @@
 | 结构化日志                     | `TSDB/日志流`（§6.5 日志契约，含 request_id）                       |
 | **显存可行性闸门**               | `ƒ(weightsGb)` §7.3 + `ƒ(kvRequiredGb)` §7.4，创建时校验（PRD §4.2.4） |
 
+**服务治理 Mock 口径**：`GET /api/resources/:uuid/governance` 从当前推理资源和同资源伸缩策略派生。版本标签固定为 `${modelRef}-v1`（stable）与 `${modelRef}-v2`（canary），是同一已选模型的两个服务修订，不新增模型或 GPU 分配；运行态为 ready，其他状态为未就绪。灰度版本权重取 `spec.canaryPercent`，稳定版本取 `100-canaryPercent`，合计恒为 100%。网关从 `spec.gateway` 读取，旧种子默认 100 req/s、30000 ms；写入验证和状态约束见 ARCH §12.11.5。配置保存在现有浏览器 Mock 状态；真实多版本部署、流量路由、限流与请求超时执行由后端网关承担。接口与持久化数据不包含 API Key。
+
 #### 6.8.6 计费 Tab（PRD §7.8 四段，四类共用）
 
 | UI 段                 | 来源                                                           |

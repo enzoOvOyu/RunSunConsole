@@ -1,3 +1,4 @@
+import type { InferenceGatewaySettings } from "./inference";
 export const KINDS = ["gpu_vm", "gpu_baremetal", "vgpu", "inference"] as const;
 export const REGIONS = ["jp", "th", "sg", "us"] as const;
 export const POOLS = [
@@ -113,6 +114,7 @@ export interface VgpuSpec extends CommonSpec {
   subnet: string;
 }
 export interface InferenceSpec extends CommonSpec {
+  gateway?: InferenceGatewaySettings;
   modelRef: string;
   replicas: number;
   gpuPerReplica: number;

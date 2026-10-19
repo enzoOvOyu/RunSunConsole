@@ -1,3 +1,7 @@
+import type {
+  InferenceGovernance,
+  InferenceGovernanceSettings,
+} from "../../types/inference";
 import { hardwareSnapshot, clusterView, replicaView } from "../lib/runtime";
 import { seedResources } from "../fixtures/resources";
 import { http, HttpResponse, delay } from "msw";
@@ -29,7 +33,12 @@ import {
   costPerHour,
   modelMemory,
 } from "../lib/derive";
-import { orderSchema, scalingSchema, isCidr } from "../../lib/schema";
+import {
+  orderSchema,
+  scalingSchema,
+  isCidr,
+  inferenceGovernanceSchema,
+} from "../../lib/schema";
 import { canWrite, canManageOrg } from "../../lib/rbac";
 import { displayId } from "../../lib/ids";
 import { round } from "../../lib/money";
@@ -489,6 +498,15 @@ function summary(
     trend,
   };
 }
+function governanceSettings(
+  r: Extract<Resource, { kind: "inference" }>,
+): InferenceGovernanceSettings {
+  return {
+    canaryPercent: r.spec.canaryPercent,
+    qpsLimit: r.spec.gateway?.qpsLimit ?? 100,
+    timeoutMs: r.spec.gateway?.timeoutMs ?? 30000,
+  };
+}
 function enrich(r: Resource): Resource {
   const estimatePrice = estimate(r, RATES);
   const nodeCount =
@@ -711,6 +729,38 @@ async function dispatch(request: Request) {
           );
         return json(data);
       }
+      if (action === "governance") {
+        if (r.kind !== "inference") fail(404, "NOT_FOUND");
+        const model = db.models.find((m) => m.id === r.spec.modelRef);
+        const policy = db.policies.find(
+          (p) => p.resourceUuid === r.resourceUuid,
+        );
+        const active = r.status === "running" && !r.deletedAt;
+        const data: InferenceGovernance = {
+          resourceUuid: r.resourceUuid,
+          endpoint: `https://${r.displayId}.${r.region}.runsun.cloud`,
+          modelRef: r.spec.modelRef,
+          modelName: model?.name || r.spec.modelRef,
+          authEnabled: r.spec.authEnabled,
+          active,
+          ...governanceSettings(r),
+          versions: (["stable", "canary"] as const).map((id) => ({
+            id,
+            version: `${r.spec.modelRef}-${id === "stable" ? "v1" : "v2"}`,
+            modelRef: r.spec.modelRef,
+            engine: r.spec.engine,
+            trafficPercent:
+              id === "canary"
+                ? r.spec.canaryPercent
+                : 100 - r.spec.canaryPercent,
+            ready: active,
+          })),
+          scalingPolicy: policy
+            ? { id: policy.id, status: policy.status, config: policy.config }
+            : null,
+        };
+        return json(data);
+      }
       if (action === "logs") {
         if (r.status !== "running" && r.status !== "error") return json([]);
         return json(
@@ -815,6 +865,8 @@ async function dispatch(request: Request) {
     if (method === "POST" && action) {
       if (r.deletedAt) fail(410, "GONE");
       const before = r.status;
+      const governanceBefore =
+        r.kind === "inference" ? JSON.stringify(governanceSettings(r)) : "";
       if (action === "start") {
         if (r.status !== "stopped") fail(409, "INVALID_STATE");
         precheck(r, r.resourceUuid);
@@ -863,9 +915,20 @@ async function dispatch(request: Request) {
           ...r.labels.filter((l) => !l.startsWith("node:")),
           `node:${action}`,
         ];
+      } else if (action === "governance") {
+        if (r.kind !== "inference") fail(404, "NOT_FOUND");
+        if (r.status !== "running") fail(409, "INVALID_STATE");
+        const settings = inferenceGovernanceSchema.parse(body);
+        r.spec.canaryPercent = settings.canaryPercent;
+        r.spec.gateway = {
+          qpsLimit: settings.qpsLimit,
+          timeoutMs: settings.timeoutMs,
+        };
       } else if (action === "traffic") {
         if (r.kind !== "inference") fail(422, "VALIDATION_ERROR");
-        r.spec.canaryPercent = z.number().min(0).max(99).parse(body.percent);
+        if (r.status !== "running") fail(409, "INVALID_STATE");
+        r.spec.canaryPercent =
+          inferenceGovernanceSchema.shape.canaryPercent.parse(body.percent);
       } else if (action === "restart-replica") {
         if (r.kind !== "inference" || r.status !== "running")
           fail(409, "INVALID_STATE");
@@ -903,6 +966,20 @@ async function dispatch(request: Request) {
         } else fail(422, "VALIDATION_ERROR");
       } else fail(404, "NOT_FOUND");
       addEvent(r, action === "stop" ? "stopped" : action, before, r.status);
+      if (
+        r.kind === "inference" &&
+        (action === "governance" || action === "traffic")
+      )
+        Object.assign(db.events[0], {
+          type: "GOVERNANCE_UPDATED",
+          reason: "推理网关策略与灰度流量已更新",
+          action: "核对服务请求错误率与延迟",
+          before: governanceBefore,
+          after: JSON.stringify(governanceSettings(r)),
+          metric: "canary_percent",
+          value: r.spec.canaryPercent,
+          threshold: 99,
+        });
       persist();
       return json(r);
     }

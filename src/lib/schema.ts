@@ -118,6 +118,11 @@ export const vgpuSchema = z.object({
   vpc: z.string(),
   subnet: z.string(),
 });
+export const inferenceGovernanceSchema = z.object({
+  canaryPercent: z.number().int().min(0).max(99),
+  qpsLimit: z.number().int().min(1).max(100000),
+  timeoutMs: z.number().int().min(1000).max(300000),
+});
 export const inferenceSchema = z.object({
   ...common,
   modelRef: z.string().min(1),
@@ -136,7 +141,10 @@ export const inferenceSchema = z.object({
   maxBatchSize: z.number().int().min(1).max(512),
   prefixCaching: z.boolean(),
   chunkedPrefill: z.boolean(),
-  canaryPercent: z.number().min(0).max(99),
+  canaryPercent: inferenceGovernanceSchema.shape.canaryPercent,
+  gateway: inferenceGovernanceSchema
+    .pick({ qpsLimit: true, timeoutMs: true })
+    .optional(),
   coldStandby: z.boolean(),
   warmupPrompt: z.string(),
 });

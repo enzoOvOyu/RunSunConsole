@@ -22,6 +22,7 @@ The development endpoint is bound to `127.0.0.1:5173`. PostgreSQL and Adminer st
 - M2: Four independent resource lists, resource Drawers, deployment wizards, lifecycle actions and scaling integration.
 - M3: Operations, workbench, datasets, object storage, pipelines and billing workflows.
 - M4: Resource runtime diagnostics, secure password drafts, idempotent deployment, billing and historical data consistency.
+- M5: Inference service governance, weighted release traffic, gateway settings and review before saving.
 
 M1 validated with `pnpm typecheck`, `pnpm test` (7 files, 13 assertions), and `pnpm build`.
 
@@ -34,6 +35,10 @@ M3 validation: 31 unit/API/architecture assertions in 9 Vitest files; 9 Chromium
 M4 adds per-machine hardware health (ECC, PCIe, IB, NVMe, power and cooling), scoped vGPU nodes/workloads/control-plane diagnostics, inference replica counters and restart actions, deterministic monitoring samples, deployment options from the API, password authentication with credentials excluded from persisted state, and idempotent order submission. Metering combines pools by billing unit, retains fractional charges, accounts for voucher credits and overdue grace periods, and preserves project references after archival. Overview spend can be grouped by project or resource kind.
 
 M4 validation: 37 tests in 9 Vitest files, plus 11 Chromium scenarios. Type checking, ESLint, Stylelint and production build pass; entry JavaScript is 142.12 KB. Browser coverage includes runtime diagnostics, replica restart persistence and password draft privacy alongside the existing workflows.
+
+M5 implements PRD §4.3.4 service governance: weighted stable/canary releases, QPS limits and request timeouts, a change review before saving, read-only role/state guards, persisted settings and configuration audit events. Calling examples respect the service authentication setting and use an environment variable for the API key. Scaling remains managed exclusively from Workbench. API and deterministic release data contracts are documented in `ARCHITECTURE.md` §12.11.5 and `MOCK-DATA.md` §6.8.5. Actual deployment and gateway enforcement require backend services.
+
+M5 validation: 46 tests in 10 Vitest files and 12 Chromium scenarios, including cancellation without a write, saved settings after reload, read-only controls, and English governance/event text. Type checking, ESLint, Stylelint and production build pass; entry JavaScript remains below 250 KB.
 
 Run browser scenarios on a host with Chromium available:
 

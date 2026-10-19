@@ -16,3 +16,17 @@ it("translates data labels at render time", () => {
   useLocale.setState({ locale: "zh-CN" });
   expect(t("nav.overview")).toBe("总览");
 });
+
+it("translates governance event details", () => {
+  try {
+    useLocale.setState({ locale: "en-US" });
+    expect(dt("推理网关策略与灰度流量已更新")).toBe(
+      "Inference gateway policy and canary traffic updated",
+    );
+    expect(dt("核对服务请求错误率与延迟")).toBe(
+      "Check request error rates and latency",
+    );
+  } finally {
+    useLocale.setState({ locale: "zh-CN" });
+  }
+});

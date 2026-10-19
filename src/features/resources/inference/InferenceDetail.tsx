@@ -1,3 +1,4 @@
+import { GovernancePanel } from "./GovernancePanel";
 import { ReplicaManagement } from "../shared/RuntimePanels";
 import { useState } from "react";
 import type { ResourceOf } from "../../../types/domain";
@@ -7,7 +8,6 @@ import { useData } from "../../shared/hooks";
 import { Panel, Tabs, Empty } from "../../../components/ui";
 import {
   MonitorPanel,
-  AccessPanel,
   SpecPanel,
   EventsPanel,
   BillingPanel,
@@ -61,7 +61,7 @@ export function InferenceDetail({
       ) : tab === "monitoring" ? (
         <MonitorPanel resource={r} />
       ) : tab === "governance" ? (
-        <AccessPanel resource={r} mode="governance" />
+        <GovernancePanel resource={r} />
       ) : tab === "logs" ? (
         <Panel title={t("tab.logs")}>
           <select

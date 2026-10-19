@@ -1,5 +1,6 @@
 import { useAuth } from "../stores/auth";
 export const EP = {
+  governance: (uuid: string) => `/api/resources/${uuid}/governance`,
   options: "/api/deployment-options",
   overview: "/api/overview",
   resources: "/api/resources",
