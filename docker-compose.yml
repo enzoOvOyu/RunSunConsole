@@ -5,7 +5,7 @@ services:
     working_dir: /workspace
     command: ["sh", "-c", "corepack enable && sleep infinity"]
     ports:
-      - "0.0.0.0:5173:5173"
+      - "5173:5173/tcp"
     volumes:
       - .:/workspace
       - runsun_node_modules:/workspace/node_modules
