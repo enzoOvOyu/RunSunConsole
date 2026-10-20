@@ -251,7 +251,7 @@ export default function OverviewPage() {
         )}
         {show("quotas") && (
           <Panel title={t("overview.quotas")} hint={t("overview.quotaScope")}>
-            <div className="grid grid-4">
+            <div className="grid grid-3">
               {REGIONS.map((region) => (
                 <div key={region}>
                   <h3>
