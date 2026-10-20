@@ -102,13 +102,7 @@ export function seedResources(): Resource[] {
       spec.maxBatchSize = [16, 32, 64][i % 3];
     }
     const status =
-      i === 7 || i === 12
-        ? "stopped"
-        : i === 8
-          ? "provisioning"
-          : i === 15
-            ? "error"
-            : "running";
+      i === 7 || i === 12 ? "stopped" : i === 8 ? "provisioning" : "running";
     const createdAt = new Date(
       status === "provisioning"
         ? seedTime - 60000
@@ -134,9 +128,7 @@ export function seedResources(): Resource[] {
       stoppedAt:
         status === "stopped"
           ? new Date(seedTime - 8 * 3600000).toISOString()
-          : status === "error"
-            ? new Date(seedTime - 4 * 3600000).toISOString()
-            : null,
+          : null,
       deletedAt: null,
       mode: i % 7 === 0 ? "spot" : "on_demand",
       labels: [region, kind === "inference" ? "production" : "research"],

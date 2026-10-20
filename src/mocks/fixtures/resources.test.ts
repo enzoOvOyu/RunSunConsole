@@ -12,6 +12,7 @@ import {
 it("offers diverse valid resource specifications in every region and kind", () => {
   const resources = seedResources();
   expect(resources).toHaveLength(41);
+  expect(resources.some((resource) => resource.status === "error")).toBe(false);
   expect(
     resources.reduce((sum, resource) => sum + resource.spec.gpuCount, 0),
   ).toBe(1040);

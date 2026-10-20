@@ -33,7 +33,10 @@ it("generates deterministic physical metrics with nulls for inactive resources",
   vi.useRealTimers();
 });
 it("freezes the last known error metrics", () => {
-  const r = seedResources().find((r) => r.status === "error")!;
+  const r = seedResources().find((r) => r.kind === "inference")!;
+  r.status = "error";
+  r.stoppedAt = new Date().toISOString();
+  r.runningSince = null;
   vi.useFakeTimers();
   const before = metricsFor(r);
   vi.advanceTimersByTime(3600000);

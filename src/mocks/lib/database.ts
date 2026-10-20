@@ -340,6 +340,7 @@ export function makeDatabase(): Database {
 const KEY = "rs.mock.database.v2";
 type StoredDatabase = Omit<Database, "usage"> & {
   usage: [string, number | string, number, number, number, number, number][];
+  resourceStatusMigrationVersion?: number;
 };
 const unitNames = [
   "per_gpu_hour",
@@ -383,6 +384,38 @@ export function restoreDatabase() {
       data.resources = data.resources.map(
         (r) => ({ ...r, spec: normalizeSpec(r.spec) }) as Resource,
       );
+      if (!data.resourceStatusMigrationVersion) {
+        const resumedAt = new Date().toISOString();
+        data.billingCursors ??= {};
+        for (const resource of data.resources) {
+          if (resource.deletedAt || resource.status !== "error") continue;
+          resource.status = "running";
+          resource.runningSince = resumedAt;
+          resource.stoppedAt = null;
+          resource.provisioningSince = undefined;
+          data.billingCursors[resource.resourceUuid] = Date.parse(resumedAt);
+          const order = data.orders.find(
+            (item) => item.resourceUuid === resource.resourceUuid,
+          );
+          if (order?.status === "failed") order.status = "completed";
+          data.events.unshift({
+            id: `status-normalized-${resource.resourceUuid}`,
+            resourceUuid: resource.resourceUuid,
+            type: "ready",
+            at: resumedAt,
+            actor: "system",
+            component: resource.kind,
+            reason: "资源供给完成，探活检查通过",
+            before: "error",
+            after: "running",
+            action: "—",
+            metric: "readiness",
+            value: 1,
+            threshold: 1,
+          });
+        }
+        data.resourceStatusMigrationVersion = 1;
+      }
       data.network ??= makeNetwork(data.resources, data.projects);
       for (const list of [
         data.network.vpcs,
@@ -457,6 +490,7 @@ export function persist() {
   const indexes = new Map(db.resources.map((r, i) => [r.resourceUuid, i]));
   const stored: StoredDatabase = {
     ...db,
+    resourceStatusMigrationVersion: 1,
     transactions: db.transactions.slice(-3000),
     usage: db.usage.map((u) => [
       u.id,
