@@ -248,11 +248,11 @@ export default {
   "overview.noProjects": "暂无项目",
   "overview.metrics": "关键指标",
   "overview.allocated": "已分配 GPU 总卡数",
-  "overview.allocatedScope": "未释放资源的 GPU 卡数 · 三区域合计",
+  "overview.allocatedScope": "运行中及创建中的 GPU 卡数 · 三区域合计",
   "overview.running": "运行中资源",
   "overview.matrix": "资源分布",
   "overview.matrixScope":
-    "按区域与资源类型统计未释放资源；主值为 GPU 卡数，次值分别为台数、集群数或副本数。",
+    "按区域与资源类型统计资源；主值为当前占用配额的 GPU 卡数，次值分别为台数、集群数或副本数。",
   "overview.quotas": "配额用量",
   "overview.quotaScope":
     "主机内存按实际设备与实例配置汇总，云存储单独计算；停止后释放算力和内存配额。",

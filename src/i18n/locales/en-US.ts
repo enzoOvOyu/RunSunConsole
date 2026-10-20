@@ -253,11 +253,12 @@ export default {
   "overview.noProjects": "No projects yet",
   "overview.metrics": "Key metrics",
   "overview.allocated": "Allocated GPUs",
-  "overview.allocatedScope": "GPUs in unreleased resources · all three regions",
+  "overview.allocatedScope":
+    "GPUs in running and provisioning resources · all three regions",
   "overview.running": "Running resources",
   "overview.matrix": "Resource distribution",
   "overview.matrixScope":
-    "Unreleased allocations by region and type. Primary values are GPU counts; secondary values show machines, clusters or replicas.",
+    "Resources by region and type. Primary values are GPUs consuming quota; secondary values show machines, clusters or replicas.",
   "overview.quotas": "Quota usage",
   "overview.quotaScope":
     "Host memory follows assigned machine and instance capacity; cloud storage is separate. Stopping releases compute and memory quotas.",

@@ -293,3 +293,33 @@ it("applies due object lifecycle rules to matching objects", async () => {
     false,
   );
 });
+
+it("removes seeded storage from quota when its backing record is deleted", async () => {
+  const volume = db.volumes.find(
+    (item) => item.id.includes("-allocated-") && item.region === "jp",
+  )!;
+  const before = (await request("/quotas?region=jp")).data.find(
+    (quota: { metric: string }) => quota.metric === "storage",
+  );
+  const response = await fetch(
+    `http://localhost/api/storage/volumes/${volume.id}`,
+    {
+      method: "DELETE",
+      headers: { "X-Role": "owner" },
+    },
+  );
+  expect(response.status).toBe(204);
+  const after = (await request("/quotas?region=jp")).data.find(
+    (quota: { metric: string }) => quota.metric === "storage",
+  );
+  expect(after.usedValue).toBe(before.usedValue - volume.sizeGb);
+  expect(
+    after.storageBreakdown.find(
+      (item: { kind: string }) => item.kind === volume.kind,
+    ).usedGb,
+  ).toBe(
+    before.storageBreakdown.find(
+      (item: { kind: string }) => item.kind === volume.kind,
+    ).usedGb - volume.sizeGb,
+  );
+});

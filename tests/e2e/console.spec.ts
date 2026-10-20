@@ -1,4 +1,22 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
+async function expectOverviewAllocation(page: Page) {
+  await expect(page.locator(".overview-stats .stat")).toHaveCount(4);
+  const allocated = await page.evaluate(async () => {
+    const quotas = (await (await fetch("/api/quotas")).json()) as {
+      metric: string;
+      usedValue: number;
+    }[];
+    return quotas
+      .filter((quota) => quota.metric === "gpu")
+      .reduce((sum, quota) => sum + quota.usedValue, 0);
+  });
+  await expect(
+    page
+      .locator(".overview-stats")
+      .getByText(allocated.toLocaleString("en-US"), { exact: true }),
+  ).toBeVisible();
+  return allocated;
+}
 const routes = [
   "overview",
   "resources/servers",
@@ -54,7 +72,7 @@ test("overview groups allocated GPU models across every region", async ({
     .allTextContents();
   expect(
     counts.reduce((sum, label) => sum + Number(label.replace(/\D/g, "")), 0),
-  ).toBe(1040);
+  ).toBe(await expectOverviewAllocation(page));
   await expect(page.getByText("近 7 日费用变化")).toHaveCount(0);
 });
 test("submenu pages describe their own resource and billing functions", async ({
@@ -109,9 +127,7 @@ test("aggregate, locale, theme, commands and responsive navigation", async ({
   page,
 }) => {
   await page.goto("/overview");
-  await expect(
-    page.locator(".overview-stats").getByText("1,040", { exact: true }),
-  ).toBeVisible();
+  await expectOverviewAllocation(page);
   await page.getByRole("button", { name: "English", exact: true }).click();
   await expect(page.locator("h1")).toHaveText("Overview");
   await page.getByRole("button", { name: "Toggle theme", exact: true }).click();
@@ -307,9 +323,7 @@ test("runtime diagnostics and replica restart persist across refresh", async ({
   page,
 }) => {
   await page.goto("/overview");
-  await expect(
-    page.locator(".overview-stats").getByText("1,040", { exact: true }),
-  ).toBeVisible();
+  await expectOverviewAllocation(page);
   const resources = await page.evaluate(
     async () =>
       (await (await fetch("/api/resources?size=1000")).json()).items as {
@@ -391,9 +405,7 @@ test("inference governance reviews changes, persists settings and stays read-onl
   page,
 }) => {
   await page.goto("/overview");
-  await expect(
-    page.locator(".overview-stats").getByText("1,040", { exact: true }),
-  ).toBeVisible();
+  await expectOverviewAllocation(page);
   const r = await page.evaluate(async () => {
     const data = await (
       await fetch("/api/resources?kind=inference&size=1000")
@@ -499,9 +511,7 @@ test("overview uses regional allocations and realistic separate memory quotas", 
   page,
 }) => {
   await page.goto("/overview");
-  await expect(
-    page.locator(".overview-stats").getByText("1,040", { exact: true }),
-  ).toBeVisible();
+  await expectOverviewAllocation(page);
   await expect(page.locator(".overview-stats .stat")).toHaveCount(4);
   await expect(
     page.getByRole("heading", { name: "区域分布", exact: true }),
@@ -513,7 +523,9 @@ test("overview uses regional allocations and realistic separate memory quotas", 
   await expect(matrix).toContainText("14 台设备");
   await expect(matrix).toContainText("128 GPU");
   await expect(page.getByText("主机内存 GB", { exact: true })).toHaveCount(3);
-  await expect(page.getByText("云存储 GB", { exact: true })).toHaveCount(3);
+  await expect(page.getByText("块存储 · TB", { exact: true })).toHaveCount(3);
+  await expect(page.getByText("文件存储 · TB", { exact: true })).toHaveCount(3);
+  await expect(page.getByText("对象存储 · TB", { exact: true })).toHaveCount(3);
   await page.getByRole("button", { name: "自定义模块", exact: true }).click();
   await expect(page.getByRole("dialog")).not.toContainText("区域分布");
   await page.keyboard.press("Escape");
@@ -548,9 +560,7 @@ test("bare metal clusters expose every machine and switch hardware and firmware 
   page,
 }) => {
   await page.goto("/overview");
-  await expect(
-    page.locator(".overview-stats").getByText("1,040", { exact: true }),
-  ).toBeVisible();
+  await expectOverviewAllocation(page);
   const r = await page.evaluate(async () => {
     const data = await (
       await fetch("/api/resources?kind=gpu_baremetal&size=1000")
@@ -595,9 +605,7 @@ test("restored mock state repairs PVC capacity without discarding saved resource
   page,
 }) => {
   await page.goto("/overview");
-  await expect(
-    page.locator(".overview-stats").getByText("1,040", { exact: true }),
-  ).toBeVisible();
+  await expectOverviewAllocation(page);
   const project = await page.evaluate(
     async () =>
       await (
@@ -627,9 +635,7 @@ test("restored mock state repairs PVC capacity without discarding saved resource
     };
   });
   await page.reload();
-  await expect(
-    page.locator(".overview-stats").getByText("1,040", { exact: true }),
-  ).toBeVisible();
+  await expectOverviewAllocation(page);
   const restored = await page.evaluate(
     async (id) => await (await fetch(`/api/resources/${id}`)).json(),
     original.id,
@@ -774,14 +780,12 @@ test("overview and quota page render the same regional quota records", async ({
     has: page.getByRole("heading", { name: "配额用量", exact: true }),
   });
   const japan = overview
-    .locator(".grid-4 > div")
+    .locator(".grid-3 > div")
     .filter({ hasText: "日本 JP" });
-  for (const value of values)
-    await expect(japan.getByText(value, { exact: true })).toBeVisible();
+  for (const value of values) await expect(japan).toContainText(value);
   await page.goto("/ops/quotas?region=jp");
   const quotas = page.locator(".grid-4");
-  for (const value of values)
-    await expect(quotas.getByText(value, { exact: true })).toBeVisible();
+  for (const value of values) await expect(quotas).toContainText(value);
 });
 test("network allocations update regional quotas and prefill a quota request", async ({
   page,

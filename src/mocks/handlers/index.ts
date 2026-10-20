@@ -50,7 +50,7 @@ import {
 } from "../../types/domain";
 import { db, persist, addEvent } from "../lib/database";
 import { RATES } from "../fixtures/pricing";
-import { BUCKETS, IMAGES, PIPELINES } from "../fixtures/content";
+import { IMAGES, PIPELINES } from "../fixtures/content";
 import { poolsFor, GPU_SPECS } from "../fixtures/gpu-specs";
 import {
   provisioningSeconds,
@@ -101,56 +101,38 @@ const limits: Record<Region, Record<Quota["metric"], number>> = {
   sg: { gpu: 320, vcpu: 5120, memory: 90112, storage: 500_000, ip: 12 },
   us: { gpu: 640, vcpu: 10240, memory: 196608, storage: 1_000_000, ip: 32 },
 };
-const storageQuotas: Record<
+const storageLimits: Record<
   Region,
-  { kind: "block" | "file" | "object"; usedGb: number; limitGb: number }[]
+  Record<"block" | "file" | "object", number>
 > = {
-  jp: [
-    { kind: "block", usedGb: 360_000, limitGb: 450_000 },
-    { kind: "file", usedGb: 280_000, limitGb: 350_000 },
-    { kind: "object", usedGb: 160_000, limitGb: 200_000 },
-  ],
-  sg: [
-    { kind: "block", usedGb: 180_000, limitGb: 225_000 },
-    { kind: "file", usedGb: 140_000, limitGb: 175_000 },
-    { kind: "object", usedGb: 80_000, limitGb: 100_000 },
-  ],
-  us: [
-    { kind: "block", usedGb: 360_000, limitGb: 450_000 },
-    { kind: "file", usedGb: 260_000, limitGb: 325_000 },
-    { kind: "object", usedGb: 180_000, limitGb: 225_000 },
-  ],
+  jp: { block: 450_000, file: 350_000, object: 200_000 },
+  sg: { block: 225_000, file: 175_000, object: 100_000 },
+  us: { block: 450_000, file: 325_000, object: 225_000 },
 };
 const initialAllocations = seedResources();
-const initialResourceIds = new Set(
-  initialAllocations.map((resource) => resource.resourceUuid),
-);
-const initialBucketIds = new Set(BUCKETS.map((bucket) => bucket.id));
 function storageQuotaBreakdown(region: Region, exclude?: string) {
-  return storageQuotas[region].map((allocation) => {
-    const additionalGb =
-      allocation.kind === "object"
+  return (["block", "file", "object"] as const).map((kind) => ({
+    kind,
+    limitGb: storageLimits[region][kind],
+    usedGb:
+      kind === "object"
         ? db.buckets
             .filter(
               (bucket) =>
                 bucket.region === region &&
-                !initialBucketIds.has(bucket.id) &&
-                bucket.attachedResourceUuid !== exclude,
+                (!exclude || bucket.attachedResourceUuid !== exclude),
             )
             .reduce((total, bucket) => total + bucket.quotaGb, 0)
         : db.volumes
             .filter(
               (volume) =>
                 volume.region === region &&
-                volume.kind === allocation.kind &&
+                volume.kind === kind &&
                 volume.resourceUuid !== exclude &&
-                !volume.deletedAt &&
-                (!volume.resourceUuid ||
-                  !initialResourceIds.has(volume.resourceUuid)),
+                !volume.deletedAt,
             )
-            .reduce((total, volume) => total + volume.sizeGb, 0);
-    return { ...allocation, usedGb: allocation.usedGb + additionalGb };
-  });
+            .reduce((total, volume) => total + volume.sizeGb, 0),
+  }));
 }
 const used = (region: Region, metric: Quota["metric"], exclude?: string) =>
   metric === "ip"
@@ -197,8 +179,8 @@ export const quotas = (): Quota[] =>
       metric,
       limitValue:
         metric === "storage"
-          ? storageQuotas[region].reduce(
-              (total, item) => total + item.limitGb,
+          ? Object.values(storageLimits[region]).reduce(
+              (total, limit) => total + limit,
               0,
             )
           : limits[region][metric],
@@ -323,6 +305,28 @@ function precheck(r: Resource, exclude?: string) {
         limit: limits[r.region][metric],
         used: used(r.region, metric, exclude),
         requested: amount,
+      });
+  }
+  const requestedStorage = {
+    block: volumesForResource(r)
+      .filter((volume) => volume.kind === "block")
+      .reduce((total, volume) => total + volume.sizeGb, 0),
+    file: volumesForResource(r)
+      .filter((volume) => volume.kind === "file")
+      .reduce((total, volume) => total + volume.sizeGb, 0),
+    object: (r.spec.storageSelections || [])
+      .filter((row) => row.kind === "object")
+      .reduce((total, row) => total + row.sizeGb * row.count, 0),
+  };
+  for (const allocation of storageQuotaBreakdown(r.region, exclude)) {
+    const requested = requestedStorage[allocation.kind];
+    if (allocation.usedGb + requested > allocation.limitGb)
+      fail(409, "QUOTA_EXCEEDED", {
+        metric: "storage",
+        kind: allocation.kind,
+        limit: allocation.limitGb,
+        used: allocation.usedGb,
+        requested,
       });
   }
   if (r.kind === "inference") {
@@ -723,7 +727,7 @@ function summary(
       : null,
     remainingHours: hourly > 0 ? db.account.creditBalance / hourly : null,
     running: rs.filter((r) => r.status === "running").length,
-    allocated: rs.reduce((a, r) => a + r.spec.gpuCount, 0),
+    allocated: rs.reduce((a, r) => a + quotaUse(r, "gpu"), 0),
     balance: db.account.creditBalance,
     budget: db.account.budget,
     voucherUsed: db.vouchers
@@ -1575,7 +1579,7 @@ async function dispatch(request: Request) {
           return {
             region,
             kind,
-            gpuCount: rows.reduce((n, r) => n + r.spec.gpuCount, 0),
+            gpuCount: rows.reduce((n, r) => n + quotaUse(r, "gpu"), 0),
             unitCount: rows.reduce(
               (n, r) =>
                 n +
@@ -2300,7 +2304,7 @@ async function dispatch(request: Request) {
             },
           ]),
         ),
-        gpuTotal: rs.reduce((a, r) => a + r.spec.gpuCount, 0),
+        gpuTotal: rs.reduce((a, r) => a + quotaUse(r, "gpu"), 0),
         resourceItems: rs,
         monthCost: round(
           db.usage

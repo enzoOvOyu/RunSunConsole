@@ -27,13 +27,15 @@ it("distributes allocations by region and type with comparable GPU totals and ty
       (n: number, c: { gpuCount: number }) => n + c.gpuCount,
       0,
     ),
-  ).toBe(1040);
+  ).toBe(overview.allocated);
   expect(overview).not.toHaveProperty("regions");
   for (const cell of overview.distribution) {
     const rows = db.resources.filter(
       (r) => !r.deletedAt && r.kind === cell.kind && r.region === cell.region,
     );
-    expect(cell.gpuCount).toBe(rows.reduce((n, r) => n + r.spec.gpuCount, 0));
+    expect(cell.gpuCount).toBe(
+      rows.reduce((n, r) => n + quotaUse(r, "gpu"), 0),
+    );
     expect(cell.unitCount).toBe(
       rows.reduce(
         (n, r) =>
@@ -63,24 +65,55 @@ it("shares one quota snapshot between overview and regional quota pages", async 
   for (const region of REGIONS) {
     const regional = (await request(`/quotas?region=${region}`)).data;
     expect(regional).toEqual(
-      overview.quotas.filter((quota: { region: string }) => quota.region === region),
+      overview.quotas.filter(
+        (quota: { region: string }) => quota.region === region,
+      ),
     );
   }
   const storage = allQuotas.filter(
     (quota: { metric: string }) => quota.metric === "storage",
   );
-  expect(storage.reduce((sum: number, quota: { usedValue: number }) => sum + quota.usedValue, 0)).toBe(2_000_000);
-  expect(storage.every((quota: { usedValue: number; limitValue: number; storageBreakdown: { usedGb: number; limitGb: number }[] }) =>
-    quota.usedValue === quota.storageBreakdown.reduce((sum, item) => sum + item.usedGb, 0) &&
-    quota.limitValue === quota.storageBreakdown.reduce((sum, item) => sum + item.limitGb, 0),
-  )).toBe(true);
+  expect(
+    storage.reduce(
+      (sum: number, quota: { usedValue: number }) => sum + quota.usedValue,
+      0,
+    ),
+  ).toBe(
+    db.volumes
+      .filter((volume) => !volume.deletedAt)
+      .reduce((sum, volume) => sum + volume.sizeGb, 0) +
+      db.buckets.reduce((sum, bucket) => sum + bucket.quotaGb, 0),
+  );
+  expect(
+    storage.every(
+      (quota: {
+        usedValue: number;
+        limitValue: number;
+        storageBreakdown: { usedGb: number; limitGb: number }[];
+      }) =>
+        quota.usedValue ===
+          quota.storageBreakdown.reduce((sum, item) => sum + item.usedGb, 0) &&
+        quota.limitValue ===
+          quota.storageBreakdown.reduce((sum, item) => sum + item.limitGb, 0),
+    ),
+  ).toBe(true);
 });
 it("keeps resources and their billing, storage, network and workbench references linked", async () => {
   const overview = (await request("/overview")).data;
   const resources = (await request("/resources?size=1000")).data.items;
-  const ids = new Set(resources.map((resource: { resourceUuid: string }) => resource.resourceUuid));
-  expect(overview.resources.map((resource: { resourceUuid: string }) => resource.resourceUuid).sort()).toEqual(
-    resources.map((resource: { resourceUuid: string }) => resource.resourceUuid).sort(),
+  const ids = new Set(
+    resources.map(
+      (resource: { resourceUuid: string }) => resource.resourceUuid,
+    ),
+  );
+  expect(
+    overview.resources
+      .map((resource: { resourceUuid: string }) => resource.resourceUuid)
+      .sort(),
+  ).toEqual(
+    resources
+      .map((resource: { resourceUuid: string }) => resource.resourceUuid)
+      .sort(),
   );
   for (const row of [
     ...db.volumes,
@@ -91,9 +124,11 @@ it("keeps resources and their billing, storage, network and workbench references
     ...db.scalingEvents,
     ...db.notebooks,
     ...db.network.interfaces,
-  ]) expect(ids.has(row.resourceUuid)).toBe(true);
+  ])
+    if (row.resourceUuid) expect(ids.has(row.resourceUuid)).toBe(true);
   for (const transaction of db.transactions)
-    if (transaction.resourceUuid) expect(ids.has(transaction.resourceUuid)).toBe(true);
+    if (transaction.resourceUuid)
+      expect(ids.has(transaction.resourceUuid)).toBe(true);
   for (const bucket of db.buckets)
     if (bucket.attachedResourceUuid)
       expect(ids.has(bucket.attachedResourceUuid)).toBe(true);
@@ -108,11 +143,9 @@ it("computes host RAM from VM, physical machine, node pool and replica allocatio
       (q: { region: string; metric: string }) =>
         q.region === region && q.metric === "storage",
     );
-    expect(storage.storageBreakdown.map((item: { kind: string }) => item.kind)).toEqual([
-      "block",
-      "file",
-      "object",
-    ]);
+    expect(
+      storage.storageBreakdown.map((item: { kind: string }) => item.kind),
+    ).toEqual(["block", "file", "object"]);
     const regionStorageGb = storage.storageBreakdown.reduce(
       (sum: number, item: { usedGb: number }) => sum + item.usedGb,
       0,
@@ -131,7 +164,12 @@ it("computes host RAM from VM, physical machine, node pool and replica allocatio
     );
     expect(memory.limitValue).toBeGreaterThanOrEqual(memory.usedValue);
   }
-  expect(allocatedStorageGb).toBe(2_000_000);
+  expect(allocatedStorageGb).toBe(
+    db.volumes
+      .filter((volume) => !volume.deletedAt)
+      .reduce((sum, volume) => sum + volume.sizeGb, 0) +
+      db.buckets.reduce((sum, bucket) => sum + bucket.quotaGb, 0),
+  );
   for (const r of db.resources) {
     if (r.kind === "gpu_baremetal")
       expect(allocatedMemoryGb(r)).toBe(r.spec.memoryGb * r.spec.machineCount);
@@ -284,4 +322,38 @@ it("checks peak RAM allocation before admitting an elastic deployment", async ()
   expect(refused.data.metric).toBe("memory");
   spec.scaling = null;
   expect((await request("/deployment-orders", "POST", body)).status).toBe(201);
+});
+
+it("keeps overview, region quota, project and model totals aligned after stopping compute", async () => {
+  const active = db.resources.find(
+    (resource) => resource.status === "running" && resource.spec.gpuCount > 0,
+  )!;
+  const before = (await request("/overview")).data;
+  const beforeQuota = (
+    await request(`/quotas?region=${active.region}`)
+  ).data.find((quota: { metric: string }) => quota.metric === "gpu");
+  expect(
+    (await request(`/resources/${active.resourceUuid}/stop`, "POST", {}))
+      .status,
+  ).toBe(200);
+  const after = (await request("/overview")).data;
+  const afterQuota = (
+    await request(`/quotas?region=${active.region}`)
+  ).data.find((quota: { metric: string }) => quota.metric === "gpu");
+  const project = (await request(`/projects/${active.projectId}/summary`)).data;
+  expect(after.allocated).toBe(before.allocated - active.spec.gpuCount);
+  expect(afterQuota.usedValue).toBe(
+    beforeQuota.usedValue - active.spec.gpuCount,
+  );
+  expect(
+    after.distribution.reduce(
+      (sum: number, cell: { gpuCount: number }) => sum + cell.gpuCount,
+      0,
+    ),
+  ).toBe(after.allocated);
+  expect(project.gpuTotal).toBe(
+    db.resources
+      .filter((resource) => resource.projectId === active.projectId)
+      .reduce((sum, resource) => sum + quotaUse(resource, "gpu"), 0),
+  );
 });

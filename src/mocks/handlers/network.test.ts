@@ -466,24 +466,32 @@ it("round-trips EIP usage and migrates old snapshots without losing compute reso
     ).toBe(e.id);
     expect(restored.network.eips.find((x) => x.id === e.id)).toBeTruthy();
     const old = JSON.parse(storage.get("rs.mock.database.v2")!);
-    const moved = old.resources.find((r: { region: string }) => r.region === "jp");
+    const moved = old.resources.find(
+      (r: { region: string }) => r.region === "jp",
+    );
     const projectId = moved.projectId;
     const oldVpcId = `vpc-${projectId}-th`;
     const oldSubnetId = `vsw-${projectId}-th-a`;
     const oldGroupId = `sg-${projectId}-th-default`;
     old.network.vpcs.push({
-      ...old.network.vpcs.find((v: { id: string }) => v.id === `vpc-${projectId}-jp`),
+      ...old.network.vpcs.find(
+        (v: { id: string }) => v.id === `vpc-${projectId}-jp`,
+      ),
       id: oldVpcId,
       region: "th",
     });
     old.network.subnets.push({
-      ...old.network.subnets.find((v: { id: string }) => v.id === `vsw-${projectId}-jp-a`),
+      ...old.network.subnets.find(
+        (v: { id: string }) => v.id === `vsw-${projectId}-jp-a`,
+      ),
       id: oldSubnetId,
       vpcId: oldVpcId,
       region: "th",
     });
     old.network.groups.push({
-      ...old.network.groups.find((v: { id: string }) => v.id === `sg-${projectId}-jp-default`),
+      ...old.network.groups.find(
+        (v: { id: string }) => v.id === `sg-${projectId}-jp-default`,
+      ),
       id: oldGroupId,
       vpcId: oldVpcId,
       region: "th",
@@ -494,12 +502,16 @@ it("round-trips EIP usage and migrates old snapshots without losing compute reso
     moved.spec.securityGroups = ["default"];
     storage.set("rs.mock.database.v2", JSON.stringify(old));
     const relocated = restoreDatabase();
-    const relocatedResource = relocated.resources.find((r) => r.resourceUuid === moved.resourceUuid)!;
+    const relocatedResource = relocated.resources.find(
+      (r) => r.resourceUuid === moved.resourceUuid,
+    )!;
     expect(relocatedResource.region).toBe("jp");
     expect(relocatedResource.spec.vpc).toBe(oldVpcId);
     expect(relocatedResource.spec.subnet).toBe(oldSubnetId);
     expect(relocatedResource.spec.securityGroups).toEqual([oldGroupId]);
-    expect(relocated.network.vpcs.find((v) => v.id === oldVpcId)?.region).toBe("jp");
+    expect(relocated.network.vpcs.find((v) => v.id === oldVpcId)?.region).toBe(
+      "jp",
+    );
     delete old.network;
     old.usage = old.usage.filter((u: unknown[]) => typeof u[1] === "number");
     storage.set("rs.mock.database.v2", JSON.stringify(old));
@@ -508,7 +520,7 @@ it("round-trips EIP usage and migrates old snapshots without losing compute reso
       db.resources.map((r) => r.resourceUuid),
     );
     expect(migrated.resources.reduce((n, r) => n + r.spec.gpuCount, 0)).toBe(
-      1040,
+      db.resources.reduce((sum, resource) => sum + resource.spec.gpuCount, 0),
     );
     expect(migrated.usage).toHaveLength(old.usage.length);
     expect(migrated.network.interfaces.length).toBeGreaterThan(

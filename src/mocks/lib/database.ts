@@ -1,6 +1,6 @@
 import type { NetworkState } from "../../types/network";
 import type { StorageVolume } from "../../types/storage";
-import { seedStorageVolumes } from "../fixtures/storage";
+import { seedStandaloneVolumes, seedStorageVolumes } from "../fixtures/storage";
 import { makeNetwork } from "./network";
 import type {
   Resource,
@@ -341,6 +341,7 @@ const KEY = "rs.mock.database.v2";
 type StoredDatabase = Omit<Database, "usage"> & {
   usage: [string, number | string, number, number, number, number, number][];
   resourceStatusMigrationVersion?: number;
+  storageAllocationMigrationVersion?: number;
 };
 const unitNames = [
   "per_gpu_hour",
@@ -437,6 +438,21 @@ export function restoreDatabase() {
           ),
         ];
       data.volumes ??= seedStorageVolumes(data.resources);
+      for (const bucket of data.buckets) {
+        bucket.projectId ??= "default";
+        bucket.storageClass ??= "STANDARD";
+        bucket.attachedResourceUuid ??= null;
+      }
+      if (!data.storageAllocationMigrationVersion) {
+        const existingIds = new Set(data.volumes.map((volume) => volume.id));
+        for (const volume of seedStandaloneVolumes(seedResources()))
+          if (!existingIds.has(volume.id)) data.volumes.push(volume);
+        for (const bucket of data.buckets) {
+          const seed = BUCKETS.find((item) => item.id === bucket.id);
+          if (seed && bucket.quotaGb === 2048) bucket.quotaGb = seed.quotaGb;
+        }
+        data.storageAllocationMigrationVersion = 1;
+      }
       const savedFavorites = new Map(
         (data.models || []).map((model) => [model.id, model.favorite]),
       );
@@ -498,6 +514,7 @@ export function persist() {
   const stored: StoredDatabase = {
     ...db,
     resourceStatusMigrationVersion: 1,
+    storageAllocationMigrationVersion: 1,
     transactions: db.transactions.slice(-3000),
     usage: db.usage.map((u) => [
       u.id,

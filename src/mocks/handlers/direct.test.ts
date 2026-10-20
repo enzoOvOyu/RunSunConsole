@@ -11,7 +11,16 @@ it("serves the same API response without a Service Worker", async () => {
     }),
   );
   expect(response.status).toBe(200);
-  expect((await response.json()).allocated).toBe(1040);
+  expect((await response.json()).allocated).toBe(
+    db.resources.reduce(
+      (sum, resource) =>
+        sum +
+        (["running", "provisioning"].includes(resource.status)
+          ? resource.spec.gpuCount
+          : 0),
+      0,
+    ),
+  );
 });
 
 it("returns structured validation errors in the direct Mock fallback", async () => {

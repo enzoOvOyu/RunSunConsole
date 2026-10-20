@@ -37,7 +37,23 @@ export default function QuotasPage() {
   const [expanded, setExpanded] = useState("");
   const navigate = useNavigate();
   const resources = rs.data?.items || [];
-  const pools = [...new Set(resources.map((r) => r.nodePool))];
+  const poolGpu = (resource: Resource, pool: string) =>
+    resource.kind === "vgpu"
+      ? resource.spec.nodePools
+          .filter((item) => item.poolCode === pool)
+          .reduce((sum, item) => sum + item.nodeCount * item.gpuPerNode, 0)
+      : resource.nodePool === pool
+        ? resource.spec.gpuCount
+        : 0;
+  const pools = [
+    ...new Set(
+      resources.flatMap((resource) =>
+        resource.kind === "vgpu"
+          ? resource.spec.nodePools.map((item) => item.poolCode)
+          : [resource.nodePool],
+      ),
+    ),
+  ];
   return (
     <>
       <PageHeader
@@ -80,7 +96,10 @@ export default function QuotasPage() {
                     </Panel>
                   ))
                 : [
-                    <Panel key={quota.metric} title={t("quota." + quota.metric)}>
+                    <Panel
+                      key={quota.metric}
+                      title={t("quota." + quota.metric)}
+                    >
                       <div className="stat-value">
                         {number(quota.usedValue)}
                         <small> / {number(quota.limitValue)}</small>
@@ -110,7 +129,7 @@ export default function QuotasPage() {
                 </thead>
                 <tbody>
                   {pools.map((pool) => {
-                    const rows = resources.filter((r) => r.nodePool === pool);
+                    const rows = resources.filter((r) => poolGpu(r, pool) > 0);
                     return (
                       <Fragment key={pool}>
                         <tr
@@ -127,13 +146,19 @@ export default function QuotasPage() {
                           <td>{pool}</td>
                           <td>{t("common." + region)}</td>
                           <td>
-                            {rows.reduce((a, r) => a + r.spec.gpuCount, 0)}
+                            {rows
+                              .filter(
+                                (r) =>
+                                  r.status === "running" ||
+                                  r.status === "provisioning",
+                              )
+                              .reduce((a, r) => a + poolGpu(r, pool), 0)}
                           </td>
                           <td>
                             {number(
                               rows
                                 .filter((r) => r.status === "running")
-                                .reduce((n, r) => n + r.spec.gpuCount, 0),
+                                .reduce((n, r) => n + poolGpu(r, pool), 0),
                             )}
                           </td>
                           <td>
@@ -156,7 +181,7 @@ export default function QuotasPage() {
                                     </Link>
                                     <span className="row">
                                       <Badge status={r.status} />
-                                      {r.spec.gpuCount} GPU
+                                      {poolGpu(r, pool)} GPU
                                     </span>
                                   </div>
                                 ))}

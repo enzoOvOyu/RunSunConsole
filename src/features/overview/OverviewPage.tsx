@@ -115,6 +115,8 @@ export default function OverviewPage() {
     ]),
   ) as Record<PoolCode, Record<Region, number>>;
   for (const resource of data.resources) {
+    if (resource.status !== "running" && resource.status !== "provisioning")
+      continue;
     if (resource.kind === "vgpu") {
       for (const pool of resource.spec.nodePools)
         gpuByModel[pool.poolCode][resource.region] +=
@@ -138,7 +140,9 @@ export default function OverviewPage() {
       return {
         ...project,
         resourceCount: resources.length,
-        gpuCount: resources.reduce((total, r) => total + r.spec.gpuCount, 0),
+        gpuCount: resources
+          .filter((r) => r.status === "running" || r.status === "provisioning")
+          .reduce((total, r) => total + r.spec.gpuCount, 0),
         spend30d: data.trend.reduce(
           (total, day) => total + Number(day[project.id] || 0),
           0,

@@ -35,7 +35,16 @@ it("filters regions and retains allocated GPU aggregate", async () => {
   ).not.toEqual(
     us.data.items.map((r: { resourceUuid: string }) => r.resourceUuid),
   );
-  expect((await request("/overview")).data.allocated).toBe(1040);
+  expect((await request("/overview")).data.allocated).toBe(
+    db.resources.reduce(
+      (sum, resource) =>
+        sum +
+        (["running", "provisioning"].includes(resource.status)
+          ? resource.spec.gpuCount
+          : 0),
+      0,
+    ),
+  );
   expect((await request("/resources?region=th")).status).toBe(422);
   expect(db.resources.every((r) => r.region !== ("th" as string))).toBe(true);
 });

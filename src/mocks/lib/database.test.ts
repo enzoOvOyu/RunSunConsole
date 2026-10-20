@@ -73,9 +73,61 @@ it("merges the current model catalog into saved snapshots and keeps favorites", 
 
     const restored = restoreDatabase();
     expect(restored.models).toHaveLength(MODELS.length);
-    expect(restored.models.find((model) => model.id === old.models[0].id)?.favorite).toBe(false);
-    expect(restored.models.find((model) => model.id === "catalog-1")?.context).toBeGreaterThan(0);
+    expect(
+      restored.models.find((model) => model.id === old.models[0].id)?.favorite,
+    ).toBe(false);
+    expect(
+      restored.models.find((model) => model.id === "catalog-1")?.context,
+    ).toBeGreaterThan(0);
     expect(restored.resources).toHaveLength(old.resources.length);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+it("migrates legacy storage allocations once and preserves later volume deletion", () => {
+  const key = "rs.mock.database.v2";
+  const storage = new Map<string, string>();
+  vi.stubGlobal("localStorage", {
+    getItem: (name: string) => storage.get(name) ?? null,
+    setItem: (name: string, value: string) => storage.set(name, value),
+  });
+  try {
+    const old = makeDatabase();
+    old.volumes = old.volumes.filter(
+      (volume) => !volume.id.includes("-allocated-"),
+    );
+    for (const bucket of old.buckets) {
+      bucket.quotaGb = 2048;
+      delete bucket.projectId;
+    }
+    storage.set(key, JSON.stringify({ ...old, usage: [] }));
+    const migrated = restoreDatabase();
+    expect(migrated.volumes.length).toBeGreaterThan(old.volumes.length);
+    expect(
+      migrated.buckets.every((bucket) => bucket.projectId === "default"),
+    ).toBe(true);
+    expect(
+      migrated.buckets.find((bucket) => bucket.region === "us")?.quotaGb,
+    ).toBe(180_000);
+    const removed = migrated.volumes.find((volume) =>
+      volume.id.includes("-allocated-"),
+    )!;
+    const count = migrated.volumes.length;
+    storage.set(
+      key,
+      JSON.stringify({
+        ...migrated,
+        volumes: migrated.volumes.filter((volume) => volume.id !== removed.id),
+        usage: [],
+        storageAllocationMigrationVersion: 1,
+      }),
+    );
+    const restored = restoreDatabase();
+    expect(restored.volumes).toHaveLength(count - 1);
+    expect(restored.volumes.some((volume) => volume.id === removed.id)).toBe(
+      false,
+    );
   } finally {
     vi.unstubAllGlobals();
   }

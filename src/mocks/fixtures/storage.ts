@@ -103,5 +103,58 @@ export function volumesForResource(resource: Resource): StorageVolume[] {
   return volumes;
 }
 
-export const seedStorageVolumes = (resources: Resource[]) =>
-  resources.flatMap(volumesForResource);
+// Existing tenant allocations are represented by individual volumes, not quota baselines.
+const allocatedStorageGb = {
+  jp: { block: 360_000, file: 280_000 },
+  sg: { block: 180_000, file: 140_000 },
+  us: { block: 360_000, file: 260_000 },
+} as const;
+
+export function seedStandaloneVolumes(resources: Resource[]): StorageVolume[] {
+  const attached = resources.flatMap(volumesForResource);
+  const volumes: StorageVolume[] = [];
+  for (const region of ["jp", "sg", "us"] as const) {
+    for (const kind of ["block", "file"] as const) {
+      const attachedGb = attached
+        .filter(
+          (volume) =>
+            volume.region === region &&
+            volume.kind === kind &&
+            !volume.deletedAt,
+        )
+        .reduce((total, volume) => total + volume.sizeGb, 0);
+      let remaining = allocatedStorageGb[region][kind] - attachedGb;
+      if (remaining < 0)
+        throw new Error(`Seed ${region} ${kind} exceeds allocation`);
+      let index = 0;
+      while (remaining > 0) {
+        const sizeGb = Math.min(
+          remaining,
+          kind === "block" ? 32_760 : 1_048_500,
+        );
+        index++;
+        volumes.push({
+          id: `vol-${region}-${kind}-allocated-${index}`,
+          name: `${region.toUpperCase()}-${kind}-allocated-${index}`,
+          kind,
+          tier: kind === "block" ? "essd_pl1" : "nas_capacity",
+          role: "custom",
+          sizeGb,
+          projectId: "default",
+          region,
+          resourceUuid: null,
+          mountPath: "",
+          createdAt: resources[0].createdAt,
+          deletedAt: null,
+        });
+        remaining -= sizeGb;
+      }
+    }
+  }
+  return volumes;
+}
+
+export const seedStorageVolumes = (resources: Resource[]) => [
+  ...resources.flatMap(volumesForResource),
+  ...seedStandaloneVolumes(resources),
+];
