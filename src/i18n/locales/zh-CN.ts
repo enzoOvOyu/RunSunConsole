@@ -580,7 +580,7 @@ export default {
   "storage.bucketDeleteHint": "删除前需清空对象并解除资源关联。",
   "storage.objectSubtitle": "管理存储桶、对象访问、容量用量和生命周期规则。",
   "storage.lifecycleHint":
-    "规则按对象最后更新时间计算，并在每日检查时转换存储类型或删除对象。",
+    "规则按对象最后更新时间计算；到期后，下一次访问存储桶时执行转换或删除。",
   "storage.lifecycleAction.delete": "删除对象",
   "storage.lifecycleAction.infrequent": "转为低频存储",
   "storage.volumeDetails": "存储卷详情",

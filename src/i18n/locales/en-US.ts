@@ -605,7 +605,7 @@ export default {
   "storage.objectSubtitle":
     "Manage buckets, object access, capacity usage, and lifecycle rules.",
   "storage.lifecycleHint":
-    "Rules use each object’s last update time and transition or delete matching objects during daily checks.",
+    "Rules use the object’s last update time; due actions run the next time the bucket is accessed.",
   "storage.lifecycleAction.delete": "Delete object",
   "storage.lifecycleAction.infrequent": "Transition to infrequent access",
   "storage.volumeDetails": "Volume details",
