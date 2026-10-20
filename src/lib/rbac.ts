@@ -10,10 +10,8 @@ export function canSeePath(role: Role, path: string) {
       path.startsWith("/resources/") ||
       path.startsWith("/billing/") ||
       path === "/network/eips" ||
-      path === "/ops/cost" ||
       path === "/overview"
     );
-  if (role === "member")
-    return !path.startsWith("/billing/") && path !== "/ops/cost";
+  if (role === "member") return !path.startsWith("/billing/");
   return true;
 }

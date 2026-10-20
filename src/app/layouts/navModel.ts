@@ -110,7 +110,7 @@ export function buildGroups(role: Role): NavGroup[] {
       {
         id: "ops",
         icon: Briefcase,
-        items: ["projects", "quotas", "cost", "tickets"],
+        items: ["projects", "quotas", "tickets"],
       },
       {
         id: "workbench",
@@ -122,7 +122,7 @@ export function buildGroups(role: Role): NavGroup[] {
         icon: Database,
         items: ["datasets", "storage", "pipelines"],
       },
-      { id: "billing", icon: Wallet, items: ["bills", "vouchers"] },
+      { id: "billing", icon: Wallet, items: ["cost", "bills", "vouchers"] },
     ].map((group) => ({
       id: group.id,
       label: () => t(`nav.${group.id}`),

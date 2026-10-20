@@ -36,6 +36,16 @@ export default function InferencePage() {
       cell: ({ row }) => row.original.spec.engine,
     },
     {
+      id: "quantization",
+      header: t("field.quantization"),
+      cell: ({ row }) => row.original.spec.quantization.toUpperCase(),
+    },
+    {
+      id: "gpuPerReplica",
+      header: t("resource.gpuPerReplica"),
+      cell: ({ row }) => row.original.spec.gpuPerReplica,
+    },
+    {
       id: "replicas",
       header: t("resource.replicas"),
       cell: ({ row }) => row.original.spec.replicas,
@@ -57,5 +67,28 @@ export default function InferencePage() {
       cell: ({ row }) => money(row.original.cost?.perHour || 0),
     },
   ];
-  return <ResourceListShell kind="inference" columns={columns} />;
+  return (
+    <ResourceListShell
+      kind="inference"
+      columns={columns}
+      facets={[
+        {
+          id: "model",
+          label: t("resource.model"),
+          value: (r) => r.spec.modelRef,
+        },
+        {
+          id: "engine",
+          label: t("resource.engine"),
+          value: (r) => r.spec.engine,
+        },
+        {
+          id: "quantization",
+          label: t("field.quantization"),
+          value: (r) => r.spec.quantization,
+          format: (value) => value.toUpperCase(),
+        },
+      ]}
+    />
+  );
 }

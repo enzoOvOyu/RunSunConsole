@@ -62,7 +62,8 @@ src/
 │  │  ├─ vgpu/                #   vGPU：列表 + 详情（含控制面/节点池/工作负载/拓扑）
 │  │  └─ inference/           #   推理服务：列表 + 详情（含实例管理/监控/服务治理/日志）
 │  │                          #   共享：ResourceListShell（列表骨架 + 区域/项目筛选）
-│  ├─ ops/                    # 运营：项目 / 配额（含已分配节点池视图）/ 成本 / 工单
+│  ├─ ops/                    # 项目与支持：项目 / 配额（含已分配节点池视图）/ 工单
+│  ├─ billing/                # 费用中心：成本分析 / 我的账单 / 代金券
 │  │                          #   （原 cluster + operations 合并；无 monitoring、无 topology 独立页）
 │  ├─ workbench/              # 工作台（v0.7：原 development 更名）：notebooks / images / apps / scaling
 │  ├─ data/
@@ -117,9 +118,9 @@ vitest.config.ts              # 测试配置（environment: node，含 @/ 别名
 /workbench/scaling               （四类资源分区配置 / 伸缩事件）
 /data/datasets                   /data/storage         /data/pipelines
 /ops/projects                    /ops/projects/:projectUuid     （项目页，A 档整页详情）
-/ops/quotas                      /ops/cost                       （C 档行内展开；配额含「已分配节点池」视图）
+/ops/quotas                      （C 档行内展开；配额含「已分配节点池」视图）
 /ops/tickets                     /ops/tickets/:id                （A 档整页详情）
-/billing/bills                   /billing/vouchers               （费用中心：我的账单 / 代金券）
+/billing/cost                    /billing/bills                   /billing/vouchers
 ```
 
 **API 契约（前端调用面，见 §12.11）**

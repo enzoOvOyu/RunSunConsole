@@ -23,8 +23,8 @@ describe("derived business contracts", () => {
     const e = estimate(r, RATES);
     const line = e.lines[0];
     expect(line.unit).toBe("per_machine_hour");
-    expect(line.quantity).toBe(8);
-    expect(line.hourly).toBeCloseTo(27.92 * 1.12 * 8);
+    expect(line.quantity).toBe(r.spec.machineCount);
+    expect(line.hourly).toBeCloseTo(27.92 * 1.12 * r.spec.machineCount);
   });
   it("stops compute and retains storage, provisioning has no billing", () => {
     const r = seedResources()[0];

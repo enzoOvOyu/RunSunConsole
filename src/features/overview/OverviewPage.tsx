@@ -326,7 +326,7 @@ export default function OverviewPage() {
                     </Link>
                   )}
                   {data.month > data.account.budget && (
-                    <Link className="notice warning" to="/ops/cost">
+                    <Link className="notice warning" to="/billing/cost">
                       {t("billing.overBudget")}
                     </Link>
                   )}

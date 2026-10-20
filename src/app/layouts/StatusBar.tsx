@@ -15,7 +15,7 @@ export function StatusBar() {
     /^\/(resources|deployment)\//.test(pathname) ||
     [
       "/ops/quotas",
-      "/ops/cost",
+      "/billing/cost",
       "/ops/tickets",
       "/workbench/notebooks",
       "/workbench/scaling",

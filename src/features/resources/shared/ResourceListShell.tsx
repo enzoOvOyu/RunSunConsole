@@ -43,12 +43,20 @@ export function ResourceName({ resource: r }: { resource: Resource }) {
     </div>
   );
 }
+export type ResourceFacet<K extends Kind> = {
+  id: string;
+  label: string;
+  value: (resource: Extract<Resource, { kind: K }>) => string;
+  format?: (value: string) => string;
+};
 export function ResourceListShell<K extends Kind>({
   kind,
   columns,
+  facets = [],
 }: {
   kind: K;
   columns: ColumnDef<Extract<Resource, { kind: K }>>[];
+  facets?: ResourceFacet<K>[];
 }) {
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
@@ -71,6 +79,7 @@ export function ResourceListShell<K extends Kind>({
   const [confirm, setConfirm] = useState("");
   const [showColumns, setShowColumns] = useState(false);
   const [hidden, setHidden] = useState<string[]>([]);
+  const [facetValues, setFacetValues] = useState<Record<string, string>>({});
   const action = useAction();
   const client = useQueryClient();
   const status = params.get("status") || "";
@@ -92,7 +101,11 @@ export function ResourceListShell<K extends Kind>({
     { poll: true },
   );
   const projects = useData<Project[]>(["projects"], EP.projects);
-  useEffect(() => setSelected([]), [kind, region, project, status, q]);
+  useEffect(() => {
+    setSelected([]);
+    setFacetValues({});
+  }, [kind, region, project]);
+  useEffect(() => setSelected([]), [status, q]);
   const transition = useResourceTransition((s) => s.items);
   const items = [
     ...(resources.data?.items || []),
@@ -103,7 +116,15 @@ export function ResourceListShell<K extends Kind>({
         !resources.data?.items.some((x) => x.resourceUuid === r.resourceUuid),
     ) as Extract<Resource, { kind: K }>[]),
   ];
-  const chosen = items.filter((r) => selected.includes(r.resourceUuid));
+  const shown = items.filter((resource) =>
+    facets.every(
+      (facet) =>
+        !facetValues[facet.id] ||
+        facet.value(resource) === facetValues[facet.id],
+    ),
+  );
+  const hasFacetFilter = Object.values(facetValues).some(Boolean);
+  const chosen = shown.filter((r) => selected.includes(r.resourceUuid));
   const toggle = (id: string) =>
     setSelected((s) =>
       s.includes(id) ? s.filter((x) => x !== id) : [...s, id],
@@ -114,11 +135,11 @@ export function ResourceListShell<K extends Kind>({
       <input
         aria-label={t("common.all")}
         type="checkbox"
-        checked={!!items.length && selected.length === items.length}
+        checked={!!shown.length && selected.length === shown.length}
         onChange={(e) =>
           setSelected(
             e.target.checked
-              ? items.slice(0, 20).map((r) => r.resourceUuid)
+              ? shown.slice(0, 20).map((r) => r.resourceUuid)
               : [],
           )
         }
@@ -162,7 +183,13 @@ export function ResourceListShell<K extends Kind>({
         title={
           <span className="row">
             {t(`common.${kind}`)}{" "}
-            <span className="chip">{resources.data?.total ?? "—"}</span>
+            <span className="chip">
+              {resources.isPending
+                ? "—"
+                : hasFacetFilter
+                  ? shown.length
+                  : (resources.data?.total ?? "—")}
+            </span>
           </span>
         }
         actions={
@@ -239,6 +266,29 @@ export function ResourceListShell<K extends Kind>({
             ),
           )}
         </select>
+        {facets.map((facet) => (
+          <select
+            key={facet.id}
+            aria-label={facet.label}
+            value={facetValues[facet.id] || ""}
+            onChange={(event) => {
+              setSelected([]);
+              setFacetValues((current) => ({
+                ...current,
+                [facet.id]: event.target.value,
+              }));
+            }}
+          >
+            <option value="">
+              {facet.label} · {t("common.all")}
+            </option>
+            {[...new Set(items.map(facet.value))].sort().map((value) => (
+              <option key={value} value={value}>
+                {facet.format ? facet.format(value) : value}
+              </option>
+            ))}
+          </select>
+        ))}
         <input
           className="input search"
           placeholder={t("common.search")}
@@ -287,7 +337,7 @@ export function ResourceListShell<K extends Kind>({
             error={resources.error}
             retry={() => void resources.refetch()}
           />
-        ) : !items.length && !q && !status ? (
+        ) : !items.length && !q && !status && !hasFacetFilter ? (
           <Empty
             text={t("overview.noResources")}
             action={
@@ -300,9 +350,11 @@ export function ResourceListShell<K extends Kind>({
               </Button>
             }
           />
+        ) : !shown.length ? (
+          <Empty text={t("resource.noMatchingSpecs")} />
         ) : (
           <DataTable
-            data={items}
+            data={shown}
             columns={[checkbox, ...visibleCols]}
             onRow={(r) => navigate(resourceLink(r))}
           />

@@ -15,7 +15,7 @@ const routes = [
   "network/tunnels",
   "ops/projects",
   "ops/quotas",
-  "ops/cost",
+  "billing/cost",
   "ops/tickets",
   "workbench/notebooks",
   "workbench/images",
@@ -477,7 +477,7 @@ test("deployment estimates remain beside the form on laptop and desktop screens"
     ),
   ).toBe(true);
 });
-test("bare metal clusters expose every machine and switch BMC and hardware scope", async ({
+test("bare metal clusters expose every machine and switch hardware and firmware scope", async ({
   page,
 }) => {
   await page.goto("/overview");
@@ -513,11 +513,15 @@ test("bare metal clusters expose every machine and switch BMC and hardware scope
   await expect(
     page.getByRole("heading", { name: devices[1].name, exact: true }),
   ).toBeVisible();
-  await page.getByRole("tab", { name: "带外管理", exact: true }).click();
-  await expect(page.getByRole("dialog")).toContainText(devices[1].bmcIp);
+  await expect(page.getByRole("tab", { name: "带外管理" })).toHaveCount(0);
+  await page.getByRole("tab", { name: "固件与驱动", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: `${devices[1].name} · 固件与驱动` }),
+  ).toBeVisible();
   await page.getByLabel("当前设备", { exact: true }).selectOption("0");
-  await expect(page.getByRole("dialog")).toContainText(devices[0].bmcIp);
-  await expect(page.getByRole("dialog")).not.toContainText(devices[1].bmcIp);
+  await expect(
+    page.getByRole("heading", { name: `${devices[0].name} · 固件与驱动` }),
+  ).toBeVisible();
 });
 
 test("restored mock state repairs PVC capacity without discarding saved resources", async ({
@@ -807,4 +811,41 @@ test("resource monitoring loads six charts at a time across all four kinds", asy
       ).toHaveCount(6);
     }
   }
+});
+test("expanded resource specifications can be filtered in every resource list", async ({
+  page,
+}) => {
+  for (const [route, label] of [
+    ["servers", "单实例卡数"],
+    ["baremetal", "机型"],
+    ["vgpu", "切片策略"],
+    ["inference", "模型"],
+  ]) {
+    await page.goto(`/resources/${route}?region=jp`);
+    const rows = page.locator("tbody tr");
+    await expect(rows.first()).toBeVisible();
+    const before = await rows.count();
+    expect(before).toBeGreaterThanOrEqual(2);
+    const filter = page.getByRole("combobox", { name: label, exact: true });
+    const values = await filter
+      .locator("option")
+      .evaluateAll((options) =>
+        options
+          .map((option) => (option as HTMLOptionElement).value)
+          .filter(Boolean),
+      );
+    expect(values.length).toBeGreaterThanOrEqual(2);
+    await filter.selectOption(values[0]);
+    await expect.poll(() => rows.count()).toBeLessThan(before);
+    expect(await rows.count()).toBeGreaterThan(0);
+  }
+});
+test("cost analysis belongs to Billing while the old route redirects", async ({
+  page,
+}) => {
+  await page.goto("/billing/cost");
+  await expect(page.locator("h1")).toContainText("成本分析");
+  await expect(page.locator("aside")).toContainText("项目与支持");
+  await page.goto("/ops/cost");
+  await expect(page).toHaveURL(/billing\/cost$/);
 });

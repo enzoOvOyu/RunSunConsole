@@ -32,6 +32,16 @@ export default function BaremetalPage() {
       cell: ({ row }) => row.original.spec.machineType,
     },
     {
+      id: "raid",
+      header: t("resource.raid"),
+      cell: ({ row }) => row.original.spec.raidLevel.toUpperCase(),
+    },
+    {
+      id: "image",
+      header: t("resource.image"),
+      cell: ({ row }) => row.original.spec.imageRef,
+    },
+    {
       id: "count",
       header: t("resource.machineCount"),
       cell: ({ row }) => row.original.spec.machineCount,
@@ -64,5 +74,23 @@ export default function BaremetalPage() {
       cell: ({ row }) => money(row.original.cost?.unitPrice || 0),
     },
   ];
-  return <ResourceListShell kind="gpu_baremetal" columns={columns} />;
+  return (
+    <ResourceListShell
+      kind="gpu_baremetal"
+      columns={columns}
+      facets={[
+        {
+          id: "machine",
+          label: t("resource.machineType"),
+          value: (r) => r.spec.machineType,
+        },
+        {
+          id: "raid",
+          label: t("resource.raid"),
+          value: (r) => r.spec.raidLevel,
+          format: (value) => value.toUpperCase(),
+        },
+      ]}
+    />
+  );
 }

@@ -18,7 +18,7 @@ import {
   ErrorState,
   Progress,
 } from "../../components/ui";
-import { BillingUsageTable } from "../billing/BillingTables";
+import { BillingUsageTable } from "./BillingTables";
 const TrendChart = lazy(() => import("../../components/charts/TrendChart"));
 export default function CostPage() {
   const region = useRegion((s) => s.region);

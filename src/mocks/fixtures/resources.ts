@@ -11,29 +11,52 @@ import { poolsFor } from "./gpu-specs";
 import { seededUuid } from "../lib/rng";
 export const seedTime = Date.now();
 export function seedResources(): Resource[] {
-  const rows: [Region, Kind, PoolCode, number, number?][] = [
+  const baseRows: [Region, Kind, PoolCode, number, number?][] = [
     ["jp", "gpu_vm", "H100_SXM", 8],
-    ["jp", "gpu_vm", "H200_NVL", 8],
+    ["jp", "gpu_vm", "H200_NVL", 4],
     ["jp", "gpu_vm", "H100_SXM", 8],
-    ["jp", "gpu_baremetal", "H100_SXM", 8],
-    ["jp", "vgpu", "H200_NVL", 16],
-    ["jp", "inference", "H100_SXM", 4, 4],
+    ["jp", "gpu_baremetal", "H100_SXM", 4],
+    ["jp", "vgpu", "H100_SXM", 8],
+    ["jp", "inference", "H100_SXM", 4, 2],
     ["th", "gpu_vm", "H100_SXM", 4],
-    ["th", "gpu_vm", "H100_SXM", 2],
-    ["th", "gpu_baremetal", "H100_SXM", 6],
-    ["th", "vgpu", "H100_SXM", 4],
-    ["th", "inference", "H100_SXM", 2, 1],
+    ["th", "gpu_vm", "H100_SXM", 1],
+    ["th", "gpu_baremetal", "H100_SXM", 3],
+    ["th", "vgpu", "H100_SXM", 2],
+    ["th", "inference", "H100_SXM", 1, 1],
     ["sg", "gpu_vm", "H100_SXM", 8],
-    ["sg", "gpu_vm", "H200_NVL", 4],
-    ["sg", "gpu_baremetal", "H200_NVL", 10],
-    ["sg", "vgpu", "B300", 12],
-    ["sg", "inference", "H200_NVL", 4, 5],
+    ["sg", "gpu_vm", "H200_NVL", 2],
+    ["sg", "gpu_baremetal", "H200_NVL", 5],
+    ["sg", "vgpu", "B300", 6],
+    ["sg", "inference", "H200_NVL", 4, 3],
     ["us", "gpu_vm", "B300", 8],
-    ["us", "gpu_vm", "H100_SXM", 8],
-    ["us", "gpu_baremetal", "B200_NVL72", 16],
-    ["us", "vgpu", "H100_SXM", 32],
-    ["us", "inference", "B300", 8, 14],
+    ["us", "gpu_vm", "H100_SXM", 4],
+    ["us", "gpu_baremetal", "B200_NVL72", 8],
+    ["us", "vgpu", "H100_SXM", 16],
+    ["us", "inference", "B300", 8, 8],
   ];
+  const additionalRows: [Region, Kind, PoolCode, number, number?][] = [
+    ["jp", "gpu_vm", "H100_SXM", 2],
+    ["jp", "gpu_vm", "B200_NVL72", 2],
+    ["jp", "gpu_baremetal", "H200_NVL", 4],
+    ["jp", "vgpu", "B200_NVL72", 8],
+    ["jp", "inference", "H200_NVL", 2, 2],
+    ["jp", "inference", "B200_NVL72", 1, 4],
+    ["th", "gpu_vm", "H100_SXM", 1],
+    ["th", "gpu_baremetal", "H100_SXM", 3],
+    ["th", "vgpu", "H100_SXM", 2],
+    ["th", "inference", "H100_SXM", 1, 1],
+    ["sg", "gpu_vm", "H200_NVL", 2],
+    ["sg", "gpu_baremetal", "H100_SXM", 5],
+    ["sg", "vgpu", "H100_SXM", 6],
+    ["sg", "inference", "H200_NVL", 4, 2],
+    ["us", "gpu_vm", "B300", 2],
+    ["us", "gpu_vm", "H200_NVL", 2],
+    ["us", "gpu_baremetal", "H200_NVL", 8],
+    ["us", "vgpu", "H100_SXM", 16],
+    ["us", "inference", "H200_NVL", 8, 4],
+    ["us", "inference", "B300", 4, 4],
+  ];
+  const rows = [...baseRows, ...additionalRows];
   return rows.map(([region, kind, code, count, replicas], i) => {
     const pool = poolsFor(region).find((p) => p.code === code)!;
     const spec = defaultSpec(kind, pool);
@@ -45,26 +68,38 @@ export function seedResources(): Resource[] {
       spec.vcpu = count * 16;
       spec.memoryGb = count * 128;
       spec.sshPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAISEED";
+      spec.imageRef = ["pytorch", "jupyter", "vscode", "vllm"][i % 4];
+      spec.dataDiskGb = [0, 200, 500][i % 3];
+      spec.bandwidthMbps = [10, 25, 50, 100][i % 4];
       spec.subnet = `${region}-default`;
     }
     if ("machineCount" in spec) {
       spec.machineCount = count;
       spec.gpuCount = count * pool.gpusPerNode;
       spec.sshPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAISEED";
+      spec.raidLevel = ["none", "raid0", "raid10"][i % 3];
+      spec.imageRef = i % 2 ? "rocky" : "ubuntu";
       spec.subnet = `${region}-default`;
     }
     if ("nodePools" in spec) {
       spec.nodePools[0].nodeCount = count;
       spec.gpuCount = count * pool.gpusPerNode;
-      spec.defaultPvcGb = 500;
-      spec.storageGb = 500;
+      spec.defaultPvcGb = [200, 500, 1000][i % 3];
+      spec.storageGb = spec.defaultPvcGb;
+      spec.controlPlaneTier = i % 2 ? "ha" : "standard";
+      spec.nodePools[0].slicingPolicy = ["mig", "time_slicing", "mps"][i % 3];
+      spec.storageClass = ["ssd", "nvme", "shared-fs"][i % 3];
       spec.subnet = `${region}-default`;
     }
     if ("replicas" in spec) {
       spec.gpuPerReplica = count;
       spec.replicas = replicas || 1;
       spec.gpuCount = count * (replicas || 1);
-      spec.modelRef = count >= 4 ? "llama70" : "llama8";
+      spec.modelRef =
+        count >= 4 ? "llama70" : count === 2 ? "qwen32" : "llama8";
+      spec.quantization = count >= 4 && i % 2 ? "bf16" : "fp8";
+      spec.engine = ["vllm", "sglang", "trt-llm"][i % 3];
+      spec.maxBatchSize = [16, 32, 64][i % 3];
     }
     const status =
       i === 7 || i === 12
@@ -77,7 +112,8 @@ export function seedResources(): Resource[] {
     const createdAt = new Date(
       status === "provisioning"
         ? seedTime - 60000
-        : seedTime - (10 + (i % 8)) * 86400000,
+        : seedTime -
+            (i >= baseRows.length ? 2 + (i % 3) : 10 + (i % 8)) * 86400000,
     ).toISOString();
     return {
       resourceUuid,

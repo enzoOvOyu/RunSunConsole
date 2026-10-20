@@ -66,3 +66,11 @@ Network Management adds regional, project-isolated VPCs and vSwitches, per-devic
 Existing browser snapshots migrate without dropping compute resources or historical bills. EIP fees and quota remain allocated after unbind, VM stop or VM deletion, and end on EIP release. PSKs are validated only and never stored or returned. Network actions follow existing roles and dependency checks. This remains a frontend/MSW implementation: no actual firewall rules, routes or VPN connections are applied. Product and API contracts are in PRD §14 and ARCHITECTURE §16, with official Alibaba Cloud references in the PRD.
 
 Validation: 68 Vitest assertions in 13 files; all 21 Chromium scenarios, followed by 5 network scenarios after the final quota layout and input-limit adjustments. TypeScript, ESLint, Stylelint, `git diff --check` and production build pass. Entry JavaScript is 173.49 kB, below the 250 kB budget. Remote screenshots were inspected for network details and the expanded quota page.
+
+### M8 resource specifications and navigation
+
+The fresh Mock catalog now contains 41 logical resources across all four regions and all four resource kinds while retaining the 1,040 allocated GPU total. Server instances cover 1/2/4/8 GPU shapes, bare metal clusters vary by machine and RAID configuration, vGPU clusters vary by slicing and control-plane tier, and inference services vary by model, engine and quantization. Resource lists show the relevant specification fields and offer type-specific filters. Existing browser-saved Mock state remains intact; the expanded seed applies to a fresh browser state.
+
+The Operations navigation group is labeled “Projects & Support” and contains projects, quotas and tickets. Cost Analysis is under Billing at `/billing/cost`, with the former route redirecting there. The bare metal Drawer no longer shows the out-of-band management tab; BMC/IPMI Mock data and provisioning behavior remain available to the underlying contract.
+
+Validation: 71 Vitest assertions in 14 files, 24 Chromium scenarios, TypeScript, ESLint, production build and `git diff --check` pass. The entry JavaScript remains below the 250 kB budget.

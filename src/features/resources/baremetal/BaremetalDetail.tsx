@@ -1,5 +1,5 @@
 import { ResourceNetwork } from "../../network/ResourceNetwork";
-import { MachineInventory, MachineAccess } from "./MachinePanels";
+import { MachineInventory, MachineFirmware } from "./MachinePanels";
 import type { BaremetalMachine } from "../../../types/baremetal";
 import { EP } from "../../../lib/api-client";
 import { useData } from "../../shared/hooks";
@@ -44,7 +44,6 @@ export function BaremetalDetail({
         items={[
           "overview",
           "hardware",
-          "oob",
           "network",
           "firmware",
           "events",
@@ -58,7 +57,7 @@ export function BaremetalDetail({
         value={tab}
         onChange={setTab}
       />
-      {["hardware", "network", "oob", "firmware"].includes(tab) && (
+      {["hardware", "network", "firmware"].includes(tab) && (
         <Field label={t("baremetal.selectedMachine")}>
           <select
             aria-label={t("baremetal.selectedMachine")}
@@ -135,15 +134,9 @@ export function BaremetalDetail({
         </div>
       ) : tab === "hardware" ? (
         <HardwareHealthPanel resource={r} nodeIndex={selected} />
-      ) : tab === "oob" ? (
-        machine ? (
-          <MachineAccess resource={r} machine={machine} />
-        ) : (
-          <Loading />
-        )
       ) : tab === "firmware" ? (
         machine ? (
-          <MachineAccess resource={r} machine={machine} firmware />
+          <MachineFirmware resource={r} machine={machine} />
         ) : (
           <Loading />
         )

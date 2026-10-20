@@ -12,7 +12,6 @@ import {
   Loading,
   ErrorState,
   KeyValues,
-  CopyButton,
 } from "../../../components/ui";
 export function MachineInventory({
   machines,
@@ -69,14 +68,12 @@ export function MachineInventory({
     </Panel>
   );
 }
-export function MachineAccess({
+export function MachineFirmware({
   resource: r,
   machine,
-  firmware = false,
 }: {
   resource: ResourceOf<"gpu_baremetal">;
   machine: BaremetalMachine;
-  firmware?: boolean;
 }) {
   const q = useData<HardwareSnapshot>(
     ["hardware", r.resourceUuid, machine.index],
@@ -85,53 +82,19 @@ export function MachineAccess({
   );
   if (q.isPending) return <Loading />;
   if (q.error) return <ErrorState error={q.error} />;
-  const data = q.data;
   return (
-    <Panel
-      title={`${machine.name} · ${firmware ? t("tab.firmware") : "BMC / IPMI"}`}
-    >
-      {firmware ? (
-        <KeyValues
-          items={[
-            ["VBIOS", data.firmware.vbios],
-            ["NVIDIA Driver", data.firmware.driver],
-            ["CUDA", data.firmware.cuda],
-            [
-              t("baremetal.compliance"),
-              data.firmware.compliance ? t("common.ready") : t("common.error"),
-            ],
-          ]}
-        />
-      ) : (
-        <KeyValues
-          items={[
-            [t("baremetal.hostname"), machine.hostname],
-            [
-              t("baremetal.privateIp"),
-              <span className="row">
-                <code>{machine.privateIp}</code>
-                <CopyButton value={machine.privateIp} />
-              </span>,
-            ],
-            [
-              t("baremetal.bmcIp"),
-              <span className="row">
-                <code>{data.bmc.ip}</code>
-                <CopyButton value={data.bmc.ip} />
-              </span>,
-            ],
-            [
-              t("common.status"),
-              data.bmc.reachable ? t("common.ready") : t("common.unavailable"),
-            ],
-            [t("tab.firmware"), data.bmc.firmware],
-            [
-              "SEL",
-              `${data.bmc.selLogCount} · ${data.bmc.lastSelEntry || t("common.noData")}`,
-            ],
-          ]}
-        />
-      )}
+    <Panel title={`${machine.name} · ${t("tab.firmware")}`}>
+      <KeyValues
+        items={[
+          ["VBIOS", q.data.firmware.vbios],
+          ["NVIDIA Driver", q.data.firmware.driver],
+          ["CUDA", q.data.firmware.cuda],
+          [
+            t("baremetal.compliance"),
+            q.data.firmware.compliance ? t("common.ready") : t("common.error"),
+          ],
+        ]}
+      />
     </Panel>
   );
 }

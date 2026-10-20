@@ -135,13 +135,14 @@ export const router = createBrowserRouter([
         }),
       },
       {
-        path: "ops/cost",
+        path: "billing/cost",
         lazy: async () => ({
           Component: withLocale(
-            (await import("../features/ops/CostPage")).default,
+            (await import("../features/billing/CostPage")).default,
           ),
         }),
       },
+      { path: "ops/cost", element: <Navigate to="/billing/cost" replace /> },
       {
         path: "ops/tickets",
         lazy: async () => ({

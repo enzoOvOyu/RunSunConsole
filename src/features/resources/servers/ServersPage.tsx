@@ -28,6 +28,19 @@ export default function ServersPage() {
     },
     { accessorKey: "nodePool", header: t("resource.pool") },
     {
+      id: "family",
+      header: t("resource.specFamily"),
+      cell: ({ row }) => {
+        const { gpuPerInstance, vcpu, memoryGb } = row.original.spec;
+        return `gpu.${gpuPerInstance}x${row.original.nodePool.split("_")[0].toLowerCase()}.${vcpu}c.${memoryGb}g`;
+      },
+    },
+    {
+      id: "image",
+      header: t("resource.image"),
+      cell: ({ row }) => row.original.spec.imageRef,
+    },
+    {
       id: "gpu",
       header: t("resource.gpu"),
       cell: ({ row }) =>
@@ -61,5 +74,19 @@ export default function ServersPage() {
       cell: ({ row }) => money(row.original.cost?.perHour || 0),
     },
   ];
-  return <ResourceListShell kind="gpu_vm" columns={columns} />;
+  return (
+    <ResourceListShell
+      kind="gpu_vm"
+      columns={columns}
+      facets={[
+        { id: "pool", label: t("resource.pool"), value: (r) => r.nodePool },
+        {
+          id: "cards",
+          label: t("resource.gpuPerInstance"),
+          value: (r) => String(r.spec.gpuPerInstance),
+          format: (value) => `${value} GPU`,
+        },
+      ]}
+    />
+  );
 }

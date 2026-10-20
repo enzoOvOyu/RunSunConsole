@@ -31,6 +31,22 @@ export default function VgpuPage() {
       cell: ({ row }) => row.original.spec.k8sVersion,
     },
     {
+      id: "pool",
+      header: t("resource.pool"),
+      cell: ({ row }) =>
+        row.original.spec.nodePools.map((p) => p.poolCode).join(", "),
+    },
+    {
+      id: "controlTier",
+      header: t("field.controlPlaneTier"),
+      cell: ({ row }) => t(`spec.${row.original.spec.controlPlaneTier}`),
+    },
+    {
+      id: "storageClass",
+      header: t("resource.storageClass"),
+      cell: ({ row }) => row.original.spec.storageClass,
+    },
+    {
       id: "nodes",
       header: t("resource.nodeCount"),
       cell: ({ row }) =>
@@ -46,7 +62,11 @@ export default function VgpuPage() {
       header: t("resource.slicing"),
       cell: ({ row }) =>
         row.original.spec.nodePools
-          .map((p) => p.slicingPolicy + " " + p.migProfile)
+          .map(
+            (p) =>
+              t(`spec.${p.slicingPolicy}`) +
+              (p.slicingPolicy === "mig" ? ` ${p.migProfile}` : ""),
+          )
           .join(", "),
     },
     {
@@ -55,5 +75,24 @@ export default function VgpuPage() {
       cell: ({ row }) => money(row.original.cost?.perHour || 0),
     },
   ];
-  return <ResourceListShell kind="vgpu" columns={columns} />;
+  return (
+    <ResourceListShell
+      kind="vgpu"
+      columns={columns}
+      facets={[
+        {
+          id: "tier",
+          label: t("field.controlPlaneTier"),
+          value: (r) => r.spec.controlPlaneTier,
+          format: (value) => t(`spec.${value}`),
+        },
+        {
+          id: "slicing",
+          label: t("resource.slicing"),
+          value: (r) => r.spec.nodePools[0]?.slicingPolicy || "none",
+          format: (value) => t(`spec.${value}`),
+        },
+      ]}
+    />
+  );
 }

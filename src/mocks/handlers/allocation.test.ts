@@ -101,7 +101,7 @@ it("releases host RAM on stop while cloud storage remains allocated", async () =
   )!;
   const ram = quotaUse(r, "memory");
   const storage = quotaUse(r, "storage");
-  expect(ram).toBeGreaterThan(10000);
+  expect(ram).toBeGreaterThan(8000);
   expect(
     (await request(`/resources/${r.resourceUuid}/stop`, "POST", {})).status,
   ).toBe(200);

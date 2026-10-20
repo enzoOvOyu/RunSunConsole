@@ -1485,7 +1485,7 @@ async function dispatch(request: Request) {
       items.push({
         id: "budget",
         messageKey: "billing.overBudget",
-        href: role === "member" ? "/ops/tickets?new=budget" : "/ops/cost",
+        href: role === "member" ? "/ops/tickets?new=budget" : "/billing/cost",
         read: false,
       });
     return json(items);
