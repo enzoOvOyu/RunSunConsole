@@ -186,9 +186,9 @@ export const DATASETS: Dataset[] = [
     references: [],
   },
 ];
-export const BUCKETS: Bucket[] = ["jp", "th", "sg", "us"].map((region, i) => ({
-  id: `bucket-${region}`,
-  name: `runsun-${region}-artifacts`,
+export const BUCKETS: Bucket[] = ["jp", "jp", "sg", "us"].map((region, i) => ({
+  id: i === 1 ? "bucket-jp-legacy" : `bucket-${region}`,
+  name: i === 1 ? "runsun-jp-legacy-artifacts" : `runsun-${region}-artifacts`,
   region: region as Bucket["region"],
   access: "private",
   quotaGb: 2048,
@@ -341,7 +341,7 @@ export const VOUCHERS: Voucher[] = [
     faceValue: 500,
     remaining: 350,
     expiresAt: iso(-30),
-    regions: ["jp", "th", "sg", "us"],
+    regions: ["jp", "sg", "us"],
     kinds: ["gpu_vm", "inference", "vgpu", "gpu_baremetal"],
     redemptions: [
       { at: iso(1), amount: 150, referenceId: `invoice-${iso(1).slice(0, 7)}` },

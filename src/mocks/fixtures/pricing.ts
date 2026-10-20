@@ -24,7 +24,6 @@ export const MULTIPLIERS: Record<Region, number> = {
   us: 1,
   sg: 1.08,
   jp: 1.12,
-  th: 0.95,
 };
 export const RATES: Rate[] = REGIONS.flatMap((region) => [
   ...KINDS.flatMap((kind) =>

@@ -100,14 +100,12 @@ const used = (region: Region, metric: Quota["metric"], exclude?: string) =>
         .filter((r) => r.region === region && r.resourceUuid !== exclude)
         .reduce((a, r) => a + quotaUse(r, metric), 0);
 const limits: Record<Region, Record<Quota["metric"], number>> = {
-  jp: { gpu: 400, vcpu: 6400, memory: 102400, storage: 20480, ip: 16 },
-  th: { gpu: 128, vcpu: 2048, memory: 32768, storage: 10240, ip: 8 },
+  jp: { gpu: 528, vcpu: 8448, memory: 135168, storage: 30720, ip: 24 },
   sg: { gpu: 320, vcpu: 5120, memory: 90112, storage: 16384, ip: 12 },
   us: { gpu: 640, vcpu: 10240, memory: 196608, storage: 32768, ip: 32 },
 };
 const networkLimits = {
-  jp: { vpc: 20, subnet: 100, security_group: 100, tunnel: 20 },
-  th: { vpc: 10, subnet: 50, security_group: 50, tunnel: 10 },
+  jp: { vpc: 30, subnet: 150, security_group: 150, tunnel: 30 },
   sg: { vpc: 20, subnet: 100, security_group: 100, tunnel: 20 },
   us: { vpc: 30, subnet: 150, security_group: 150, tunnel: 30 },
 };

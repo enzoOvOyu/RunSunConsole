@@ -128,7 +128,7 @@ src/
 ### 4.3 业务口径
 
 11. **计费单位**：裸金属 `per_machine_hour`（**台·小时，禁止按卡**）、vGPU 控制面 `per_cluster_hour`、推理/云服务器 `per_gpu_hour`。
-12. **配额是区域作用域**：`QUOTAS` = 4 区域 × 5 指标（GPU / vCPU / 主机内存 / 云存储 / 公网 IP）；org 级行（`region=null`）派生时累加全部区域。下单预检超限 → `409 QUOTA_EXCEEDED`；**开弹性时按 max 档预检**。
+12. **配额是区域作用域**：`QUOTAS` = 3 区域 × 5 指标（GPU / vCPU / 主机内存 / 云存储 / 公网 IP）；org 级行（`region=null`）派生时累加全部区域。下单预检超限 → `409 QUOTA_EXCEEDED`；**开弹性时按 max 档预检**。
 13. **两类伸缩策略模型不共用表单**：`node_pool`（云服务器实例 / 裸金属台 / vGPU 每池节点）与 `replica`（推理副本）。写入口**唯一**在工作台·弹性伸缩页；资源详情「弹性」Tab **只读**；下单即物化 `scaling_policies` 行。
 14. 费用双档：`PriceEstimate.floorMonthly` / `peakMonthly`；只有 `PriceLine.scales=true` 的行随规模折算（vGPU 控制面与 PVC 为 `false`）。
 15. **导航改动走 `app/layouts/navModel.ts`**，Sidebar 与 ⌘K 面板共用同一份 RBAC 过滤，禁止另写一套。

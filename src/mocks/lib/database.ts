@@ -357,10 +357,44 @@ export function restoreDatabase() {
       typeof localStorage !== "undefined" ? localStorage.getItem(KEY) : null;
     if (stored) {
       const data = JSON.parse(stored) as StoredDatabase;
+      const hadNetwork = !!data.network;
+      for (const r of data.resources) {
+        if ((r.region as string) !== "th") continue;
+        if (hadNetwork) {
+          if (!r.spec.vpc || r.spec.vpc === "default-vpc")
+            r.spec.vpc = `vpc-${r.projectId}-th`;
+          if (r.spec.subnet === "th-default" || r.spec.subnet === "th-private")
+            r.spec.subnet = `vsw-${r.projectId}-th-${r.spec.subnet === "th-private" ? "b" : "a"}`;
+          r.spec.securityGroups = (r.spec.securityGroups || ["default"]).map((id) =>
+            ["default", "ssh-only", "web", "restricted"].includes(id)
+              ? `sg-${r.projectId}-th-${id}`
+              : id,
+          );
+        } else {
+          r.spec.subnet = "jp-default";
+        }
+        r.region = "jp";
+      }
       data.resources = data.resources.map(
         (r) => ({ ...r, spec: normalizeSpec(r.spec) }) as Resource,
       );
       data.network ??= makeNetwork(data.resources, data.projects);
+      for (const list of [
+        data.network.vpcs,
+        data.network.subnets,
+        data.network.groups,
+        data.network.interfaces,
+        data.network.eips,
+        data.network.tunnels,
+        data.network.audit,
+        data.buckets,
+      ])
+        for (const entity of list)
+          if ((entity.region as string) === "th") entity.region = "jp";
+      for (const voucher of data.vouchers)
+        voucher.regions = [...new Set(voucher.regions.map((r) =>
+          (r as string) === "th" ? "jp" : r,
+        ))];
       data.usageMeters ??= {};
       data.replicaRestarts ??= {};
       data.voucherPending ??= {};

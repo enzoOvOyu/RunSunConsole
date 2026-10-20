@@ -1,7 +1,7 @@
 import type { DeploymentNetworkOptions } from "./network";
 import type { InferenceGatewaySettings } from "./inference";
 export const KINDS = ["gpu_vm", "gpu_baremetal", "vgpu", "inference"] as const;
-export const REGIONS = ["jp", "th", "sg", "us"] as const;
+export const REGIONS = ["jp", "sg", "us"] as const;
 export const POOLS = [
   "H100_SXM",
   "H200_NVL",

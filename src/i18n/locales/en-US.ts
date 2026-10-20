@@ -32,7 +32,6 @@ export default {
   "common.vgpu": "vGPU",
   "common.inference": "Inference Service",
   "common.jp": "Japan",
-  "common.th": "Thailand",
   "common.sg": "Singapore",
   "common.us": "United States",
   "common.running": "Running",
@@ -196,7 +195,7 @@ export default {
   "overview.customize": "Customize modules",
   "overview.metrics": "Key metrics",
   "overview.allocated": "Allocated GPUs",
-  "overview.allocatedScope": "GPUs in unreleased resources · all four regions",
+  "overview.allocatedScope": "GPUs in unreleased resources · all three regions",
   "overview.running": "Running resources",
   "overview.matrix": "Resource distribution",
   "overview.matrixScope":
@@ -821,7 +820,7 @@ export default {
   "nav.network": "Network management",
   "nav.vpcs": "VPC networks",
   "nav.eips": "Elastic IPs",
-  "nav.firewalls": "VM firewalls",
+  "nav.firewalls": "Security groups",
   "nav.tunnels": "IPsec tunnels",
   "network.description.vpcs":
     "Plan private networks, subnet address pools and resource membership",

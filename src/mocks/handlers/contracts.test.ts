@@ -36,6 +36,8 @@ it("filters regions and retains allocated GPU aggregate", async () => {
     us.data.items.map((r: { resourceUuid: string }) => r.resourceUuid),
   );
   expect((await request("/overview")).data.allocated).toBe(1040);
+  expect((await request("/resources?region=th")).status).toBe(422);
+  expect(db.resources.every((r) => r.region !== ("th" as string))).toBe(true);
 });
 it("enforces role, confirmation, dependencies and history for deletion", async () => {
   const r = db.resources.find(
@@ -153,8 +155,8 @@ it("rejects unavailable pools, impossible model VRAM and maximum scaling quota",
   ).toBe(409);
 });
 it("creates an order and materializes one matching policy", async () => {
-  const spec = defaultSpec("gpu_vm", poolsFor("th")[0]);
-  if ("subnet" in spec) spec.subnet = "th-default";
+  const spec = defaultSpec("gpu_vm", poolsFor("sg")[0]);
+  if ("subnet" in spec) spec.subnet = "sg-default";
   if ("sshPubkey" in spec)
     spec.sshPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFOO";
   spec.scaling = defaultScaling("gpu_vm");
@@ -162,7 +164,7 @@ it("creates an order and materializes one matching policy", async () => {
     kind: "gpu_vm",
     name: "contract-server",
     projectId: "default",
-    region: "th",
+    region: "sg",
     nodePool: "H100_SXM",
     mode: "on_demand",
     labels: [],
@@ -178,7 +180,7 @@ it("creates an order and materializes one matching policy", async () => {
   expect(
     result.data.order.price_snapshot.lines.every((l: { unitPrice: number }) =>
       RATES.some(
-        (r) => r.region === "th" && Math.abs(r.unitPrice - l.unitPrice) < 1e-9,
+        (r) => r.region === "sg" && Math.abs(r.unitPrice - l.unitPrice) < 1e-9,
       ),
     ),
   ).toBe(true);
@@ -265,8 +267,8 @@ it("isolates object prefixes and uploads, signs and deletes content", async () =
 });
 it("filters buckets by region and validates lifecycle bounds", async () => {
   expect(
-    (await request("/buckets?region=th")).data.every(
-      (b: { region: string }) => b.region === "th",
+    (await request("/buckets?region=sg")).data.every(
+      (b: { region: string }) => b.region === "sg",
     ),
   ).toBe(true);
   const ok = await fetch("http://localhost/api/buckets/bucket-jp/lifecycle", {
@@ -416,17 +418,17 @@ it("creates pipeline runs and rejects cyclic DAG changes", async () => {
 });
 
 it("replays password orders without storing credentials or allocating twice", async () => {
-  const spec = defaultSpec("gpu_vm", poolsFor("th")[0]);
+  const spec = defaultSpec("gpu_vm", poolsFor("sg")[0]);
   if (!("authMethod" in spec)) throw new Error("Expected server spec");
   spec.authMethod = "password";
   spec.sshPubkey = "";
-  spec.subnet = "th-default";
+  spec.subnet = "sg-default";
   const secret = "Temporary-Secret-42";
   const body = {
     kind: "gpu_vm",
     name: "password-order",
     projectId: "default",
-    region: "th",
+    region: "sg",
     nodePool: "H100_SXM",
     mode: "on_demand",
     labels: [],

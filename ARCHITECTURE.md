@@ -4,7 +4,7 @@
 > 版本：**v0.11 · 当前架构基线**
 > 关联文档：`PRD.md`（产品需求，业务规则唯一来源）、`DESIGN-SYSTEM.md`（UI 规范）、`MOCK-DATA.md`（数据约束）
 
-> 本文定义前端模块、路由、状态和接口边界。业务行为以 PRD 当前版本为准：总览跨 JP / TH / SG / US 展示，账号菜单不承载项目，四类资源完整详情使用右侧 Drawer；平台节点运维数据不作为租户导航或总览健康预览。
+> 本文定义前端模块、路由、状态和接口边界。业务行为以 PRD 当前版本为准：总览跨 JP / SG / US 展示，账号菜单不承载项目，四类资源完整详情使用右侧 Drawer；平台节点运维数据不作为租户导航或总览健康预览。
 
 ---
 
@@ -104,7 +104,7 @@ vitest.config.ts              # 测试配置（environment: node，含 @/ 别名
 
 ### 4.1 路由表（节选，详情路由参数统一为 `resourceUuid`）
 
-> 路由与 PRD §2 一致：总览同屏展示 JP / TH / SG / US；区域筛选只用于适用页面；账号菜单不承载项目；四类资源完整详情由列表路由的 Drawer 参数承载。
+> 路由与 PRD §2 一致：总览同屏展示 JP / SG / US；区域筛选只用于适用页面；账号菜单不承载项目；四类资源完整详情由列表路由的 Drawer 参数承载。
 
 ```
 /overview
@@ -184,7 +184,7 @@ GET    /api/node-pools?region                    # 部署目录的可选规格/�
   - 分组标签一律 **getter 化**（`() => t('nav.xxx')`），禁止模块级常量捕获 `t()` 结果，否则语言切换后侧边栏文案不更新；
   - 分组结构在**渲染期计算**（`buildGroups()`），避免模块加载期固化；
   - 角色过滤后的空分组不渲染；命令面板不得另写一套过滤（PRD §3.6 第 5 条）。
-- **服务端状态（TanStack Query）**：区域维度页面的 key 含 `region` + `routeKey` + `project`，多维度缓存隔离；切换区域/项目必须触发真实重取。总览不使用当前 `region` 过滤，按一个聚合请求取得四区域数据（PRD §4.1）。
+- **服务端状态（TanStack Query）**：区域维度页面的 key 含 `region` + `routeKey` + `project`，多维度缓存隔离；切换区域/项目必须触发真实重取。总览不使用当前 `region` 过滤，按一个聚合请求取得三区域数据（PRD §4.1）。
 - **资源生命周期**：`provisioning → running | stopped | error → terminating → deleted_at`（PRD §5.4），与计量严格挂钩（PRD §7.4）；**删除走 `DELETE /api/resources/:uuid`，后端置 `deleted_at` 软删并释放配额（§12.10）**。
 - **节点状态机**：见 §9，完整节点状态仅用于平台内部供给/故障数据派生；vGPU 资源 Drawer 可按 `resource_placements` 展示该资源范围内的工作负载节点状态，租户总览不提供节点健康预览或全平台节点状态图。
 
@@ -919,7 +919,6 @@ CREATE INDEX idx_notifications_org_user ON notifications(org_id, user_id, read_a
 | `region_code` | 显示名 | ISO |
 | ------------- | --- | --- |
 | `jp`          | 日本  | JP  |
-| `th`          | 泰国  | TH  |
 | `sg`          | 新加坡 | SG  |
 | `us`          | 美国  | US  |
 
@@ -1200,8 +1199,8 @@ GET /api/resources/:uuid
 - 计费三表另有三接口（PRD §7.8）：`GET /api/billing/usage`、`/api/billing/transactions`、`/api/billing/rates`。
 - **字段可空性**：上表中 `?` 标记字段为可选，前端一律 `?.` 读取并缺省"—"（PRD §13.3 空指针约束）。
 
-- **总览分布**：`GET /api/overview` 返回 `distribution:[{region,kind,gpuCount,unitCount,nodeCount}]`，含四区域 × 四类型共 16 格。`unitCount` 分别按 VM quantity、裸金属 machineCount、vGPU 集群数、推理 replicas 统计，不混合求和；`nodeCount` 用于 vGPU 节点数。取消独立 `regions` 数据块。
-- **配额内存**：API `metric='memory'` 对应 DDL `memory_gb`，另有 gpu/vcpu/storage/ip，共四区域 × 五项。VM 内存为 `memoryGb×quantity`；裸金属为 `memoryGb×machineCount`；vGPU 按各池 `memorySystemGb×nodeCount` 累加；推理按所分配 GPU 对应的主机内存份额计算。内存随停止/释放归零，下单与伸缩预检按 max 档检查。云存储与本地 NVMe 不是主机内存，分开计量。
+- **总览分布**：`GET /api/overview` 返回 `distribution:[{region,kind,gpuCount,unitCount,nodeCount}]`，含三区域 × 四类型共 12 格。`unitCount` 分别按 VM quantity、裸金属 machineCount、vGPU 集群数、推理 replicas 统计，不混合求和；`nodeCount` 用于 vGPU 节点数。取消独立 `regions` 数据块。
+- **配额内存**：API `metric='memory'` 对应 DDL `memory_gb`，另有 gpu/vcpu/storage/ip，共三区域 × 五项。VM 内存为 `memoryGb×quantity`；裸金属为 `memoryGb×machineCount`；vGPU 按各池 `memorySystemGb×nodeCount` 累加；推理按所分配 GPU 对应的主机内存份额计算。内存随停止/释放归零，下单与伸缩预检按 max 档检查。云存储与本地 NVMe 不是主机内存，分开计量。
 - **裸金属逐台信息**：`GET /api/resources/:uuid/machines` 返回 `machineCount` 行，含 `index,nodeUuid,name,hostname,status,gpuModel,gpuCount,cpuModel,vcpu,memoryGb,localNvmeGb,privateIp,bmcIp,rack,network`；稳定设备 ID 与 placement.nodes 对齐。硬件 `GET /api/metrics/gpu_baremetal/:uuid/hardware?node=N` 及设备监控 `GET /api/metrics/gpu_baremetal/:uuid?node=N` 验证索引，越界返回 422。已释放设备可只读查询历史配置。
 
 #### 12.11.5 推理服务治理接口（PRD §4.3.4）
@@ -1311,7 +1310,7 @@ plans/orgs/users/projects                      身份与计费主体
 | 详情页事件时间线                 | `resource_events`                                      | `resource_id`, `created_at DESC`                    |
 | 来源（镜像/模型/模板）             | `images`/`models`/`app_templates`  ← orders            | `orders.source_type` + `source_ref_id`              |
 | 拓扑视图（**vGPU 详情内嵌**）       | `resource_placements` → `gpu_nodes` → `node_pools`     | `node_id`, `rack_id`, `gpu_indices`                 |
-| **总览·关键指标条 / 区域与类型矩阵**   | 当前用户可见资源 → `Σ gpu_count`（按 `region`，`deleted_at IS NULL`） | **四区域已分配 GPU 总卡数合计 = 1040**；不使用 `quotas.used_value` 或平台节点池容量（MOCK-DATA §1 G11） |
+| **总览·关键指标条 / 区域与类型矩阵**   | 当前用户可见资源 → `Σ gpu_count`（按 `region`，`deleted_at IS NULL`） | **三区域已分配 GPU 总卡数合计 = 1040**；不使用 `quotas.used_value` 或平台节点池容量（MOCK-DATA §1 G11） |
 | 顶部状态栏（服务状态/余额/花费/运行中）      | 服务事件聚合、`orgs`, `billing_usage`, `resources`      | 语义化服务状态、`credit_balance`、`billing_period`；不展示健康百分比或节点明细 |
 | 成本分析（按项目/资源/区域）          | `billing_usage` → `projects`/`resources`               | `project_id`, `resource_id`, `region`               |
 | 配额水位                    | `quotas`                                               | `metric`, `limit_value`, `used_value`               |

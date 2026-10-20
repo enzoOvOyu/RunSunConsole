@@ -76,8 +76,7 @@ export const GPU_SPECS: Record<
 };
 // Public catalog exposes available allocation only; platform totals stay internal.
 const supply: Record<Region, Partial<Record<PoolCode, number>>> = {
-  jp: { H100_SXM: 208, H200_NVL: 96, B200_NVL72: 72 },
-  th: { H100_SXM: 128 },
+  jp: { H100_SXM: 336, H200_NVL: 96, B200_NVL72: 72 },
   sg: { H100_SXM: 192, H200_NVL: 64, B300: 48 },
   us: {
     H100_SXM: 512,

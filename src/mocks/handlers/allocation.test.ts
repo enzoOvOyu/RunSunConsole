@@ -21,7 +21,7 @@ async function request(path: string, method = "GET", body?: unknown) {
 }
 it("distributes allocations by region and type with comparable GPU totals and typed quantities", async () => {
   const overview = (await request("/overview")).data;
-  expect(overview.distribution).toHaveLength(16);
+  expect(overview.distribution).toHaveLength(12);
   expect(
     overview.distribution.reduce(
       (n: number, c: { gpuCount: number }) => n + c.gpuCount,
@@ -54,7 +54,7 @@ it("distributes allocations by region and type with comparable GPU totals and ty
       (c: { region: string; kind: string }) =>
         c.region === "jp" && c.kind === "gpu_baremetal",
     ).unitCount,
-  ).toBe(8);
+  ).toBe(14);
 });
 it("computes host RAM from VM, physical machine, node pool and replica allocations", async () => {
   const quotas = (await request("/quotas")).data;
@@ -202,18 +202,18 @@ it("keeps configured cloud storage consistent with VM disks and cluster PVCs", (
 });
 
 it("checks peak RAM allocation before admitting an elastic deployment", async () => {
-  const spec = defaultSpec("gpu_vm", poolsFor("th")[0]);
+  const spec = defaultSpec("gpu_vm", poolsFor("sg")[0]);
   if (!("memoryGb" in spec && "quantity" in spec))
     throw new Error("Expected VM");
-  spec.memoryGb = 2048;
-  spec.subnet = "th-default";
+  spec.memoryGb = 8192;
+  spec.subnet = "sg-default";
   spec.sshPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFOO";
-  spec.scaling = { ...defaultScaling("gpu_vm"), max_size: 8 };
+  spec.scaling = { ...defaultScaling("gpu_vm"), max_size: 16 };
   const body = {
     kind: "gpu_vm",
     name: "memory-contract",
     projectId: "default",
-    region: "th",
+    region: "sg",
     nodePool: "H100_SXM",
     mode: "on_demand",
     labels: [],

@@ -159,7 +159,7 @@ export function resolveNetwork(n: NetworkState, r: Resource) {
   const vpc = n.vpcs.find((v) => v.id === vpcId && !v.deletedAt);
   if (!vpc || vpc.projectId !== r.projectId || vpc.region !== r.region)
     networkFail(409, "NETWORK_SCOPE_MISMATCH");
-  const alias = r.spec.subnet?.match(/^(jp|th|sg|us)-(default|private)$/);
+  const alias = r.spec.subnet?.match(/^(jp|sg|us)-(default|private)$/);
   if (alias && alias[1] !== r.region)
     networkFail(409, "NETWORK_SCOPE_MISMATCH");
   const subnetId =
