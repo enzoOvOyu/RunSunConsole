@@ -743,6 +743,114 @@ tr.clickable {
   font-weight: 600;
 }
 
+.overview-insights > .panel {
+  min-width: 0;
+}
+
+.overview-insights .panel-body {
+  padding-top: 16px;
+  padding-bottom: 16px;
+}
+
+.overview-budget-main,
+.overview-budget-details,
+.overview-project-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.overview-budget-main {
+  align-items: end;
+  margin-bottom: 14px;
+}
+
+.overview-budget-value {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.overview-budget-total,
+.overview-budget-details > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.overview-budget-total {
+  text-align: right;
+}
+
+.overview-budget-details {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rs-border);
+}
+
+.overview-project-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 8px;
+  color: var(--rs-text-muted);
+  font-size: 12px;
+}
+
+.overview-project-heading span:first-child {
+  flex: 1 1 30%;
+}
+
+.overview-project-heading span:nth-child(2) {
+  flex: 1 1 35%;
+  text-align: right;
+}
+
+.overview-project-heading span:last-child {
+  flex: 0 0 105px;
+  text-align: right;
+}
+
+.overview-project-row {
+  padding: 11px 0;
+  border-bottom: 1px solid var(--rs-border);
+  color: var(--rs-text);
+  text-decoration: none;
+}
+
+.overview-project-row:first-child {
+  padding-top: 0;
+}
+
+.overview-project-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.overview-project-name {
+  flex: 1 1 30%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overview-project-row:hover .overview-project-name {
+  color: var(--rs-brand-strong);
+}
+
+.overview-project-row .muted {
+  flex: 1 1 35%;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.overview-project-row strong {
+  flex: 0 0 105px;
+  text-align: right;
+}
+
 .overview-stats {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
@@ -986,6 +1094,10 @@ button.catalog-card {
 }
 
 @media (width <= 1000px) {
+  .overview-insights {
+    grid-template-columns: 1fr;
+  }
+
   .grid-4,
   .quota-grid,
   .grid-3,
@@ -1024,6 +1136,29 @@ button.catalog-card {
 }
 
 @media (width <= 720px) {
+  .overview-project-heading span:nth-child(2) {
+    display: none;
+  }
+
+  .overview-project-row {
+    flex-wrap: wrap;
+    gap: 4px 10px;
+  }
+
+  .overview-project-name {
+    flex: 1 1 50%;
+  }
+
+  .overview-project-row .muted {
+    order: 3;
+    flex-basis: 100%;
+    text-align: left;
+  }
+
+  .overview-project-row strong {
+    flex: 0 0 auto;
+  }
+
   .page {
     padding: 20px 16px;
   }

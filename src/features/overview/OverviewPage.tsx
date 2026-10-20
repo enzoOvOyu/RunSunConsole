@@ -41,6 +41,7 @@ interface Overview {
   allocated: number;
   month: number;
   today: number;
+  hourly: number;
   balance: number;
   remainingHours: number | null;
   resources: Resource[];
@@ -58,7 +59,7 @@ interface Overview {
   account: Account;
   projects: { id: string; name: string }[];
 }
-const modules = ["matrix", "quotas", "trend", "alerts", "activity"];
+const modules = ["insights", "matrix", "quotas", "trend", "alerts", "activity"];
 function initialHidden(): string[] {
   try {
     return JSON.parse(localStorage.getItem("rs.overview.modules") || "[]");
@@ -78,6 +79,24 @@ export default function OverviewPage() {
     return <ErrorState error={q.error} retry={() => void q.refetch()} />;
   const data = q.data;
   const show = (id: string) => !hidden.includes(id);
+  const budget = data.account.budget;
+  const budgetUsed = budget > 0 ? (data.month / budget) * 100 : 0;
+  const projects = data.projects
+    .map((project) => {
+      const resources = data.resources.filter(
+        (r) => r.projectId === project.id,
+      );
+      return {
+        ...project,
+        resourceCount: resources.length,
+        gpuCount: resources.reduce((total, r) => total + r.spec.gpuCount, 0),
+        spend30d: data.trend.reduce(
+          (total, day) => total + Number(day[project.id] || 0),
+          0,
+        ),
+      };
+    })
+    .sort((a, b) => b.spend30d - a.spend30d);
   return (
     <>
       <PageHeader
@@ -153,6 +172,85 @@ export default function OverviewPage() {
         ))}
       </div>
       <div className="stack section-gap">
+        {show("insights") && (
+          <div className="grid grid-2 overview-insights">
+            <Panel
+              title={t("overview.budgetHealth")}
+              action={<Link to="/billing/cost">{t("overview.viewCost")}</Link>}
+            >
+              <div className="overview-budget-main">
+                <div>
+                  <small className="muted">{t("overview.budgetUsed")}</small>
+                  <div className="overview-budget-value">
+                    {number(budgetUsed, 1)}%
+                  </div>
+                </div>
+                <div className="overview-budget-total">
+                  <small className="muted">{t("common.budget")}</small>
+                  <strong className="mono">{money(budget)}</strong>
+                </div>
+              </div>
+              <Progress value={budgetUsed} />
+              <div className="overview-budget-details">
+                <div>
+                  <small className="muted">
+                    {t("overview.budgetRemaining")}
+                  </small>
+                  <strong className="mono">
+                    {money(Math.max(0, budget - data.month))}
+                  </strong>
+                </div>
+                <div>
+                  <small className="muted">{t("overview.currentHourly")}</small>
+                  <strong className="mono">
+                    {money(data.hourly)}
+                    {t("common.perHour")}
+                  </strong>
+                </div>
+              </div>
+            </Panel>
+            <Panel
+              title={t("overview.projectLoad")}
+              hint={t("overview.projectLoadScope")}
+              action={
+                <Link to="/ops/projects">{t("overview.viewProjects")}</Link>
+              }
+            >
+              {projects.length ? (
+                <div className="overview-project-list">
+                  <div className="overview-project-heading">
+                    <span>{t("common.project")}</span>
+                    <span>{t("overview.currentAllocation")}</span>
+                    <span>{t("overview.spend30d")}</span>
+                  </div>
+                  {projects.slice(0, 4).map((project) => (
+                    <Link
+                      className="overview-project-row"
+                      key={project.id}
+                      to={`/ops/projects/${project.id}`}
+                    >
+                      <span className="overview-project-name">
+                        {dt(project.name)}
+                      </span>
+                      <span className="muted">
+                        {t("overview.projectResources", {
+                          count: number(project.resourceCount),
+                        })}
+                        {" · "}
+                        {number(project.gpuCount)} GPU
+                      </span>
+                      <strong className="mono">
+                        {money(project.spend30d)}
+                      </strong>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <Empty text={t("overview.noProjects")} />
+              )}
+            </Panel>
+          </div>
+        )}
         {show("matrix") && (
           <Panel title={t("overview.matrix")} hint={t("overview.matrixScope")}>
             <div className="table-wrap overview-distribution">
@@ -268,9 +366,11 @@ export default function OverviewPage() {
                               key={`${quota.metric}-${storage.kind}`}
                             >
                               <div className="between">
-                                <small>{t(`quota.storage.${storage.kind}`)}</small>
+                                <small>
+                                  {t(`quota.storage.${storage.kind}`)}
+                                </small>
                                 <small className="mono">
-                                  {number(storage.usedGb / 1000)} / {" "}
+                                  {number(storage.usedGb / 1000)} /{" "}
                                   {number(storage.limitGb / 1000)} TB
                                 </small>
                               </div>
