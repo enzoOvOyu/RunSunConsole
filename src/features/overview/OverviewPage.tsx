@@ -260,20 +260,42 @@ export default function OverviewPage() {
                   </h3>
                   {data.quotas
                     .filter((q) => q.region === region)
-                    .map((quota) => (
-                      <div className="quota-line" key={quota.metric}>
-                        <div className="between">
-                          <small>{t(`quota.${quota.metric}`)}</small>
-                          <small className="mono">
-                            {number(quota.usedValue)} /{" "}
-                            {number(quota.limitValue)}
-                          </small>
-                        </div>
-                        <Progress
-                          value={(quota.usedValue / quota.limitValue) * 100}
-                        />
-                      </div>
-                    ))}
+                    .flatMap((quota) =>
+                      quota.metric === "storage"
+                        ? (quota.storageBreakdown || []).map((storage) => (
+                            <div
+                              className="quota-line"
+                              key={`${quota.metric}-${storage.kind}`}
+                            >
+                              <div className="between">
+                                <small>{t(`quota.storage.${storage.kind}`)}</small>
+                                <small className="mono">
+                                  {number(storage.usedGb / 1000)} / {" "}
+                                  {number(storage.limitGb / 1000)} TB
+                                </small>
+                              </div>
+                              <Progress
+                                value={(storage.usedGb / storage.limitGb) * 100}
+                              />
+                            </div>
+                          ))
+                        : [
+                            <div className="quota-line" key={quota.metric}>
+                              <div className="between">
+                                <small>{t(`quota.${quota.metric}`)}</small>
+                                <small className="mono">
+                                  {number(quota.usedValue)} /{" "}
+                                  {number(quota.limitValue)}
+                                </small>
+                              </div>
+                              <Progress
+                                value={
+                                  (quota.usedValue / quota.limitValue) * 100
+                                }
+                              />
+                            </div>,
+                          ],
+                    )}
                 </div>
               ))}
             </div>

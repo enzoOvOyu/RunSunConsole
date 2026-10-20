@@ -56,6 +56,48 @@ it("distributes allocations by region and type with comparable GPU totals and ty
     ).unitCount,
   ).toBe(14);
 });
+it("shares one quota snapshot between overview and regional quota pages", async () => {
+  const overview = (await request("/overview")).data;
+  const allQuotas = (await request("/quotas")).data;
+  expect(overview.quotas).toEqual(allQuotas);
+  for (const region of REGIONS) {
+    const regional = (await request(`/quotas?region=${region}`)).data;
+    expect(regional).toEqual(
+      overview.quotas.filter((quota: { region: string }) => quota.region === region),
+    );
+  }
+  const storage = allQuotas.filter(
+    (quota: { metric: string }) => quota.metric === "storage",
+  );
+  expect(storage.reduce((sum: number, quota: { usedValue: number }) => sum + quota.usedValue, 0)).toBe(2_000_000);
+  expect(storage.every((quota: { usedValue: number; limitValue: number; storageBreakdown: { usedGb: number; limitGb: number }[] }) =>
+    quota.usedValue === quota.storageBreakdown.reduce((sum, item) => sum + item.usedGb, 0) &&
+    quota.limitValue === quota.storageBreakdown.reduce((sum, item) => sum + item.limitGb, 0),
+  )).toBe(true);
+});
+it("keeps resources and their billing, storage, network and workbench references linked", async () => {
+  const overview = (await request("/overview")).data;
+  const resources = (await request("/resources?size=1000")).data.items;
+  const ids = new Set(resources.map((resource: { resourceUuid: string }) => resource.resourceUuid));
+  expect(overview.resources.map((resource: { resourceUuid: string }) => resource.resourceUuid).sort()).toEqual(
+    resources.map((resource: { resourceUuid: string }) => resource.resourceUuid).sort(),
+  );
+  for (const row of [
+    ...db.volumes,
+    ...db.usage,
+    ...db.orders,
+    ...db.events,
+    ...db.policies,
+    ...db.scalingEvents,
+    ...db.notebooks,
+    ...db.network.interfaces,
+  ]) expect(ids.has(row.resourceUuid)).toBe(true);
+  for (const transaction of db.transactions)
+    if (transaction.resourceUuid) expect(ids.has(transaction.resourceUuid)).toBe(true);
+  for (const bucket of db.buckets)
+    if (bucket.attachedResourceUuid)
+      expect(ids.has(bucket.attachedResourceUuid)).toBe(true);
+});
 it("computes host RAM from VM, physical machine, node pool and replica allocations", async () => {
   const quotas = (await request("/quotas")).data;
   expect(quotas).toHaveLength(REGIONS.length * QUOTA_METRICS.length);
@@ -75,7 +117,7 @@ it("computes host RAM from VM, physical machine, node pool and replica allocatio
       (sum: number, item: { usedGb: number }) => sum + item.usedGb,
       0,
     );
-    expect(regionStorageGb).toBeGreaterThan(storage.usedValue);
+    expect(regionStorageGb).toBe(storage.usedValue);
     allocatedStorageGb += regionStorageGb;
     const memory = quotas.find(
       (q: { region: string; metric: string }) =>

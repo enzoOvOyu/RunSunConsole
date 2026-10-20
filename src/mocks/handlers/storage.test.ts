@@ -78,6 +78,9 @@ it("validates storage tiers and prices allocated block and file capacity", () =>
   expect(lines.some((line) => line.key === "storage:object-1")).toBe(false);
 });
 it("creates multiple volumes and an attached bucket with one deployment order", async () => {
+  const before = (await request("/quotas?region=jp")).data.find(
+    (quota: { metric: string }) => quota.metric === "storage",
+  );
   const pool = poolsFor("jp")[0];
   const spec = normalizeSpec({
     ...defaultSpec("gpu_vm", pool),
@@ -111,4 +114,22 @@ it("creates multiple volumes and an attached bucket with one deployment order", 
   expect(bucket?.quotaGb).toBe(500);
   expect(bucket?.region).toBe("jp");
   expect((await request("/storage/products")).data.length).toBeGreaterThan(5);
+  const after = (await request("/quotas?region=jp")).data.find(
+    (quota: { metric: string }) => quota.metric === "storage",
+  );
+  expect(after.usedValue - before.usedValue).toBe(1000);
+  expect(after.storageBreakdown).toEqual(
+    before.storageBreakdown.map((item: { kind: string; usedGb: number; limitGb: number }) => ({
+      ...item,
+      usedGb:
+        item.usedGb +
+        (item.kind === "block"
+          ? 300
+          : item.kind === "file"
+            ? 200
+            : item.kind === "object"
+              ? 500
+              : 0),
+    })),
+  );
 });

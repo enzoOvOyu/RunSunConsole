@@ -50,7 +50,7 @@ import {
 } from "../../types/domain";
 import { db, persist, addEvent } from "../lib/database";
 import { RATES } from "../fixtures/pricing";
-import { IMAGES, PIPELINES } from "../fixtures/content";
+import { BUCKETS, IMAGES, PIPELINES } from "../fixtures/content";
 import { poolsFor, GPU_SPECS } from "../fixtures/gpu-specs";
 import {
   provisioningSeconds,
@@ -96,22 +96,6 @@ function fail(
 const resource = (id: string) =>
   db.resources.find((r) => r.resourceUuid === id) || fail(404, "NOT_FOUND");
 const live = () => db.resources.filter((r) => !r.deletedAt);
-const used = (region: Region, metric: Quota["metric"], exclude?: string) =>
-  metric === "ip"
-    ? db.network.eips.filter((e) => e.region === region && !e.releasedAt).length
-    : live()
-        .filter((r) => r.region === region && r.resourceUuid !== exclude)
-        .reduce((a, r) => a + quotaUse(r, metric), 0) +
-      (metric === "storage"
-        ? db.buckets
-            .filter((b) => b.region === region)
-            .reduce(
-              (total, b) =>
-                total +
-                b.objects.reduce((sum, object) => sum + object.size, 0) / 1e9,
-              0,
-            )
-        : 0);
 const limits: Record<Region, Record<Quota["metric"], number>> = {
   jp: { gpu: 528, vcpu: 8448, memory: 135168, storage: 1_000_000, ip: 24 },
   sg: { gpu: 320, vcpu: 5120, memory: 90112, storage: 500_000, ip: 12 },
@@ -137,6 +121,47 @@ const storageQuotas: Record<
     { kind: "object", usedGb: 180_000, limitGb: 225_000 },
   ],
 };
+const initialAllocations = seedResources();
+const initialResourceIds = new Set(
+  initialAllocations.map((resource) => resource.resourceUuid),
+);
+const initialBucketIds = new Set(BUCKETS.map((bucket) => bucket.id));
+function storageQuotaBreakdown(region: Region, exclude?: string) {
+  return storageQuotas[region].map((allocation) => {
+    const additionalGb =
+      allocation.kind === "object"
+        ? db.buckets
+            .filter(
+              (bucket) =>
+                bucket.region === region &&
+                !initialBucketIds.has(bucket.id) &&
+                bucket.attachedResourceUuid !== exclude,
+            )
+            .reduce((total, bucket) => total + bucket.quotaGb, 0)
+        : db.volumes
+            .filter(
+              (volume) =>
+                volume.region === region &&
+                volume.kind === allocation.kind &&
+                volume.resourceUuid !== exclude &&
+                !volume.deletedAt &&
+                !initialResourceIds.has(volume.resourceUuid),
+            )
+            .reduce((total, volume) => total + volume.sizeGb, 0);
+    return { ...allocation, usedGb: allocation.usedGb + additionalGb };
+  });
+}
+const used = (region: Region, metric: Quota["metric"], exclude?: string) =>
+  metric === "ip"
+    ? db.network.eips.filter((e) => e.region === region && !e.releasedAt).length
+    : metric === "storage"
+      ? storageQuotaBreakdown(region, exclude).reduce(
+          (total, allocation) => total + allocation.usedGb,
+          0,
+        )
+      : live()
+          .filter((r) => r.region === region && r.resourceUuid !== exclude)
+          .reduce((total, r) => total + quotaUse(r, metric), 0);
 const networkLimits = {
   jp: { vpc: 30, subnet: 150, security_group: 150, tunnel: 30 },
   sg: { vpc: 20, subnet: 100, security_group: 100, tunnel: 20 },
@@ -169,15 +194,17 @@ export const quotas = (): Quota[] =>
     QUOTA_METRICS.map((metric) => ({
       region,
       metric,
-      limitValue: limits[region][metric],
+      limitValue:
+        metric === "storage"
+          ? storageQuotas[region].reduce((total, item) => total + item.limitGb, 0)
+          : limits[region][metric],
       usedValue: used(region, metric),
       ...(metric === "storage"
-        ? { storageBreakdown: storageQuotas[region] }
+        ? { storageBreakdown: storageQuotaBreakdown(region) }
         : {}),
     })),
   );
 const period = (u: Usage, p: string) => u.usageHour.startsWith(p);
-const initialAllocations = seedResources();
 function assigned(r: Resource, pool: string) {
   if (r.deletedAt || !["running", "provisioning"].includes(r.status)) return 0;
   return r.kind === "vgpu"

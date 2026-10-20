@@ -724,6 +724,22 @@ test("network console creates firewall rules and configures IPsec without exposi
   });
 });
 
+test("overview and quota page render the same regional quota records", async ({
+  page,
+}) => {
+  const values = ["360 / 450 TB", "280 / 350 TB", "160 / 200 TB"];
+  await page.goto("/overview");
+  const overview = page.locator(".panel").filter({
+    has: page.getByRole("heading", { name: "配额用量", exact: true }),
+  });
+  const japan = overview.locator(".grid-4 > div").filter({ hasText: "日本 JP" });
+  for (const value of values)
+    await expect(japan.getByText(value, { exact: true })).toBeVisible();
+  await page.goto("/ops/quotas?region=jp");
+  const quotas = page.locator(".grid-4");
+  for (const value of values)
+    await expect(quotas.getByText(value, { exact: true })).toBeVisible();
+});
 test("network allocations update regional quotas and prefill a quota request", async ({
   page,
 }) => {
