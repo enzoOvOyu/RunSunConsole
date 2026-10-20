@@ -851,6 +851,91 @@ tr.clickable {
   text-align: right;
 }
 
+.overview-operations > .panel {
+  min-width: 0;
+}
+
+.overview-health-row {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--rs-border);
+}
+
+.overview-health-row:first-child {
+  padding-top: 0;
+}
+
+.overview-health-row:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.overview-health-track,
+.overview-spend-track {
+  display: flex;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--rs-r-pill);
+  background: var(--rs-surface-2);
+}
+
+.overview-health-track {
+  margin: 9px 0 7px;
+}
+
+.overview-health-statuses {
+  display: flex;
+  gap: 4px 12px;
+  flex-wrap: wrap;
+  color: var(--rs-text-secondary);
+}
+
+.overview-health-statuses small {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.overview-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.overview-spend-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 48px;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--rs-border);
+}
+
+.overview-spend-row:first-child {
+  padding-top: 0;
+}
+
+.overview-spend-row:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.overview-spend-row .between {
+  grid-column: 1 / -1;
+}
+
+.overview-spend-row > small {
+  text-align: right;
+}
+
+.overview-recent-table table {
+  min-width: 860px;
+}
+
+.overview-recent-id {
+  display: block;
+  margin-top: 3px;
+}
+
 .overview-stats {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
@@ -1233,6 +1318,10 @@ button.catalog-card {
 }
 
 @media (width <= 1000px) {
+  .overview-operations {
+    grid-template-columns: 1fr;
+  }
+
   .ticket-detail-layout,
   .project-detail-grid {
     grid-template-columns: 1fr;

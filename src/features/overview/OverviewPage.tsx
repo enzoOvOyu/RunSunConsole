@@ -17,6 +17,7 @@ import {
   type Account,
 } from "../../types/domain";
 import { KIND_META, resourceLink } from "../../lib/ids";
+import { date } from "../../lib/date";
 import { useAuth } from "../../stores/auth";
 import { canWrite } from "../../lib/rbac";
 import { EP } from "../../lib/api-client";
@@ -34,6 +35,7 @@ import {
   Modal,
   Check,
   EventTimeline,
+  Badge,
 } from "../../components/ui";
 const TrendChart = lazy(() => import("../../components/charts/TrendChart"));
 interface Overview {
@@ -59,7 +61,31 @@ interface Overview {
   account: Account;
   projects: { id: string; name: string }[];
 }
-const modules = ["insights", "matrix", "quotas", "trend", "alerts", "activity"];
+const modules = [
+  "insights",
+  "health",
+  "matrix",
+  "quotas",
+  "spendMix",
+  "trend",
+  "recentDeployments",
+  "alerts",
+  "activity",
+];
+const resourceStatuses = [
+  "running",
+  "stopped",
+  "provisioning",
+  "error",
+  "terminating",
+] as const;
+const statusColors = {
+  running: "var(--rs-success)",
+  stopped: "var(--rs-text-muted)",
+  provisioning: "var(--rs-info)",
+  error: "var(--rs-danger)",
+  terminating: "var(--rs-warning)",
+};
 function initialHidden(): string[] {
   try {
     return JSON.parse(localStorage.getItem("rs.overview.modules") || "[]");
@@ -97,6 +123,36 @@ export default function OverviewPage() {
       };
     })
     .sort((a, b) => b.spend30d - a.spend30d);
+  const health = KINDS.map((kind) => {
+    const resources = data.resources.filter(
+      (resource) => resource.kind === kind,
+    );
+    return {
+      kind,
+      total: resources.length,
+      counts: Object.fromEntries(
+        resourceStatuses.map((status) => [
+          status,
+          resources.filter((resource) => resource.status === status).length,
+        ]),
+      ) as Record<(typeof resourceStatuses)[number], number>,
+    };
+  });
+  const spendMix = ([...KINDS, "eip"] as const)
+    .map((kind) => ({
+      kind,
+      amount: data.trend.reduce(
+        (total, day) => total + Number(day[kind] || 0),
+        0,
+      ),
+    }))
+    .filter((row) => row.amount > 0)
+    .sort((a, b) => b.amount - a.amount);
+  const spendTotal = spendMix.reduce((total, row) => total + row.amount, 0);
+  const recentResources = data.resources
+    .slice()
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 5);
   return (
     <>
       <PageHeader
@@ -249,6 +305,116 @@ export default function OverviewPage() {
                 <Empty text={t("overview.noProjects")} />
               )}
             </Panel>
+          </div>
+        )}
+        {(show("health") || show("spendMix")) && (
+          <div
+            className={
+              show("health") && show("spendMix")
+                ? "grid grid-2 overview-operations"
+                : "grid overview-operations"
+            }
+          >
+            {show("health") && (
+              <Panel
+                title={t("overview.health")}
+                hint={t("overview.healthScope")}
+              >
+                <div className="overview-health-list">
+                  {health.map((item) => {
+                    const Icon = KIND_META[item.kind].icon;
+                    return (
+                      <div className="overview-health-row" key={item.kind}>
+                        <div className="between">
+                          <span className="row">
+                            <Icon
+                              size={16}
+                              style={{ color: KIND_META[item.kind].color }}
+                            />
+                            <strong>{t("common." + item.kind)}</strong>
+                          </span>
+                          <span className="mono">
+                            {t("overview.healthCount", {
+                              running: number(item.counts.running),
+                              total: number(item.total),
+                            })}
+                          </span>
+                        </div>
+                        <div
+                          className="overview-health-track"
+                          aria-hidden="true"
+                        >
+                          {resourceStatuses.map((status) =>
+                            item.counts[status] ? (
+                              <span
+                                key={status}
+                                style={{
+                                  width: `${(item.counts[status] / item.total) * 100}%`,
+                                  background: statusColors[status],
+                                }}
+                              />
+                            ) : null,
+                          )}
+                        </div>
+                        <div className="overview-health-statuses">
+                          {resourceStatuses.map((status) =>
+                            item.counts[status] ? (
+                              <small key={status}>
+                                <span
+                                  className="overview-status-dot"
+                                  style={{ background: statusColors[status] }}
+                                />
+                                {t("common." + status)}{" "}
+                                {number(item.counts[status])}
+                              </small>
+                            ) : null,
+                          )}
+                          {!item.total && <small className="muted">—</small>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Panel>
+            )}
+            {show("spendMix") && (
+              <Panel
+                title={t("overview.spendMix")}
+                hint={t("overview.spendMixScope")}
+                action={
+                  <Link to="/billing/cost">{t("overview.viewCost")}</Link>
+                }
+              >
+                {spendTotal > 0 ? (
+                  <div className="overview-spend-list">
+                    {spendMix.map((item) => (
+                      <div className="overview-spend-row" key={item.kind}>
+                        <div className="between">
+                          <span>{t("common." + item.kind)}</span>
+                          <strong className="mono">{money(item.amount)}</strong>
+                        </div>
+                        <div className="overview-spend-track">
+                          <span
+                            style={{
+                              width: `${(item.amount / spendTotal) * 100}%`,
+                              background:
+                                item.kind === "eip"
+                                  ? "var(--rs-info)"
+                                  : KIND_META[item.kind].color,
+                            }}
+                          />
+                        </div>
+                        <small className="muted mono">
+                          {number((item.amount / spendTotal) * 100, 1)}%
+                        </small>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <Empty text={t("overview.noSpend")} />
+                )}
+              </Panel>
+            )}
           </div>
         )}
         {show("matrix") && (
@@ -432,6 +598,62 @@ export default function OverviewPage() {
                 )}
               />
             </Suspense>
+          </Panel>
+        )}
+        {show("recentDeployments") && (
+          <Panel
+            title={t("overview.recentDeployments")}
+            hint={t("overview.recentDeploymentsScope")}
+          >
+            {recentResources.length ? (
+              <div className="table-wrap overview-recent-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>{t("common.name")}</th>
+                      <th>{t("common.type")}</th>
+                      <th>{t("common.project")}</th>
+                      <th>{t("common.region")}</th>
+                      <th>GPU</th>
+                      <th>{t("common.status")}</th>
+                      <th>{t("common.createdAt")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recentResources.map((resource) => (
+                      <tr key={resource.resourceUuid}>
+                        <td>
+                          <Link to={resourceLink(resource)}>
+                            {dt(resource.name)}
+                          </Link>
+                          <small className="muted mono overview-recent-id">
+                            {resource.displayId}
+                          </small>
+                        </td>
+                        <td>{t("common." + resource.kind)}</td>
+                        <td>
+                          {dt(
+                            data.projects.find(
+                              (project) => project.id === resource.projectId,
+                            )?.name || resource.projectId,
+                          )}
+                        </td>
+                        <td>{t("common." + resource.region)}</td>
+                        <td className="mono">
+                          {number(resource.spec.gpuCount)}
+                        </td>
+                        <td>
+                          <Badge status={resource.status} />
+                        </td>
+                        <td>{date(resource.createdAt)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <Empty text={t("overview.noResources")} />
+            )}
           </Panel>
         )}
         <div className="grid grid-2">

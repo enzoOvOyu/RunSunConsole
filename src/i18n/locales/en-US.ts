@@ -222,6 +222,17 @@ export default {
   "overview.subtitle": "Your compute, usage and spend at a glance",
   "overview.customize": "Customize modules",
   "overview.insights": "Cost and projects",
+  "overview.health": "Resource status by type",
+  "overview.healthScope":
+    "Status counts are per resource type; they are not device, node or replica counts.",
+  "overview.healthCount": "{running} / {total} running",
+  "overview.spendMix": "30-day cost breakdown",
+  "overview.spendMixScope":
+    "Usage charges by resource type and Elastic IP over the last 30 days · USD.",
+  "overview.noSpend": "No usage charges in the last 30 days",
+  "overview.recentDeployments": "Recently created resources",
+  "overview.recentDeploymentsScope":
+    "Five most recently created resources that have not been released.",
   "overview.budgetHealth": "Budget usage",
   "overview.budgetUsed": "Monthly budget used",
   "overview.budgetRemaining": "Budget remaining",

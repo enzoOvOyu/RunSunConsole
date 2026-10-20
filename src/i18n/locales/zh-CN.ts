@@ -220,6 +220,16 @@ export default {
   "overview.subtitle": "您的算力、用量与费用，一目了然",
   "overview.customize": "自定义模块",
   "overview.insights": "费用与项目",
+  "overview.health": "资源运行状态",
+  "overview.healthScope":
+    "按四类资源对象分别统计状态；运行中与总数均不代表设备、节点或副本数量。",
+  "overview.healthCount": "{running} / {total} 运行中",
+  "overview.spendMix": "近 30 日费用构成",
+  "overview.spendMixScope":
+    "按资源类型与弹性公网 IP 汇总近 30 日用量费用 · USD。",
+  "overview.noSpend": "近 30 日暂无用量费用",
+  "overview.recentDeployments": "最近创建的资源",
+  "overview.recentDeploymentsScope": "按创建时间展示最近 5 项当前未释放资源。",
   "overview.budgetHealth": "预算执行",
   "overview.budgetUsed": "本月预算使用率",
   "overview.budgetRemaining": "预算剩余额度",
