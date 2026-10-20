@@ -55,7 +55,7 @@ export function query(
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const base =
     import.meta.env.VITE_ENABLE_MOCK === "false"
-      ? import.meta.env.VITE_API_BASE_URL || "http://localhost:8080"
+      ? import.meta.env.VITE_API_BASE_URL || ""
       : "";
   let res: Response;
   try {

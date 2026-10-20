@@ -974,8 +974,8 @@ CREATE INDEX idx_notifications_org_user ON notifications(org_id, user_id, read_a
 | 变量                         | 类型      | 默认值                       | 消费位置                                | 说明             |
 | -------------------------- | ------- | ------------------------- | ----------------------------------- | -------------- |
 | `VITE_ENABLE_MOCK`         | boolean | `true`                    | `app/providers.tsx`（MSW 初始化开关）       | `false` 时不再拦截请求 |
-| `VITE_API_BASE_URL`        | string  | `http://localhost:8080`   | `lib/api-client`（baseURL）           | Mock 关闭时的网关地址  |
-| `VITE_DEFAULT_REGION`      | enum    | `jp`                      | `stores/region` 初始值                  | ∈ jp/th/sg/us  |
+| `VITE_API_BASE_URL`        | string  | 空值（同源）              | `lib/api-client`（baseURL）           | Mock 关闭时的网关地址  |
+| `VITE_DEFAULT_REGION`      | enum    | `jp`                      | `stores/region` 初始值                  | ∈ jp/sg/us  |
 | `VITE_WS_URL`              | string  | 空                         | `lib/api-client`（实时通道）              | 为空则退化为轮询       |
 | `VITE_POLL_INTERVAL_MS`    | number  | `3000`                    | 轮询降级路径                              | 仅在无 WS 时生效     |
 | `VITE_FEATURE_STATUS_BAR`  | boolean | `true`                    | `layouts`（StatusBar 渲染开关）           | 紧急下线状态栏时用      |
@@ -1432,3 +1432,7 @@ Mock `Database.network` 保存实体、历史接口、审计和地址池序号�
 - `/api/storage/products` 返回规格与价格；`/api/storage/volumes` 及 `/:id` 返回有效卷、关联计算资源名称和类型。对象桶沿用 `/api/buckets`，增加 `projectId`、`storageClass`、`attachedResourceUuid`。
 - Mock `Database.volumes` 从既有系统盘、数据盘、PVC、基础卷和新订单行派生；旧浏览器快照缺少该字段时自动补建。创建订单时卷和桶与资源一起写入；删除资源时卷软删除、桶解除绑定。
 - 导航新入口为 `/storage/block`、`/storage/file`、`/storage/object`；`/data/storage` 重定向至对象存储。安全组规范入口为 `/network/security-groups`，旧 `/network/firewalls` 重定向。
+
+### 公网 HTTP 开发访问与 Mock
+
+浏览器 Service Worker 只在安全上下文可用；HTTP 公网 IP 不满足该条件。`VITE_ENABLE_MOCK=true` 时优先由 MSW Service Worker 拦截 `/api/*`；不可用时由浏览器内同源 `fetch` Mock 回退调用同一 `handleMockRequest`，保持接口与持久化逻辑一致。非安全上下文也可能没有 `crypto.randomUUID()`，初始化时使用 `crypto.getRandomValues()` 生成符合 UUID v4 位布局的标识。`VITE_API_BASE_URL` 默认为空，仅在关闭 Mock 时使用；真实后端需通过同源网关或明确配置公网可达地址，不能使用访客电脑的 `localhost`。

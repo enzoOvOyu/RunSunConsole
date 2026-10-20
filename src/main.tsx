@@ -13,6 +13,8 @@ initialize()
       </Providers>,
     ),
   )
-  .catch(() => {
+  .catch((error) => {
+    if (import.meta.env.DEV)
+      console.error("RunSun initialization failed", error);
     document.getElementById("root")!.textContent = t("error.INTERNAL");
   });

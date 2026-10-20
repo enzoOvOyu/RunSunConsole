@@ -155,7 +155,7 @@ src/
 | **命令面板** | `components/command/` | ⌘K/Ctrl+K；四组 = 资源搜索 / 新建 / 导航 / 快捷操作 |
 | **指标时序** | `mocks/metrics.ts` | 独立 `/api/metrics/*`，不落 PG |
 
-**环境变量默认**：`VITE_ENABLE_MOCK=true`、`VITE_API_BASE_URL=http://localhost:8080`、`VITE_DEFAULT_REGION=jp`、`VITE_POLL_INTERVAL_MS=3000`、`VITE_THEME_DEFAULT=light`、`VITE_I18N_DEFAULT_LOCALE=zh-CN`、`VITE_LOW_BALANCE_THRESHOLD_USD=50`。完整表见 ARCH §12.7。
+**环境变量默认**：`VITE_ENABLE_MOCK=true`、`VITE_API_BASE_URL=`（同源）、`VITE_DEFAULT_REGION=jp`、`VITE_POLL_INTERVAL_MS=3000`、`VITE_THEME_DEFAULT=light`、`VITE_I18N_DEFAULT_LOCALE=zh-CN`、`VITE_LOW_BALANCE_THRESHOLD_USD=50`。完整表见 ARCH §12.7。
 
 ---
 

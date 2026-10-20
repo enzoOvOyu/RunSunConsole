@@ -2892,25 +2892,26 @@ async function dispatch(request: Request) {
   }
   fail(404, "NOT_FOUND");
 }
+export async function handleMockRequest(request: Request): Promise<Response> {
+  await delay(import.meta.env.MODE === "test" ? 0 : 100);
+  try {
+    return await dispatch(request);
+  } catch (error) {
+    if (error instanceof Failure || error instanceof NetworkFailure)
+      return HttpResponse.json(
+        { code: error.code, ...error.details },
+        { status: error.status },
+      );
+    if (error instanceof z.ZodError)
+      return HttpResponse.json(
+        { code: "VALIDATION_ERROR", issues: error.issues },
+        { status: 422 },
+      );
+    if (import.meta.env.DEV || import.meta.env.MODE === "test")
+      console.error(error);
+    return HttpResponse.json({ code: "INTERNAL" }, { status: 500 });
+  }
+}
 export const handlers = [
-  http.all("*/api/*", async ({ request }) => {
-    await delay(import.meta.env.MODE === "test" ? 0 : 100);
-    try {
-      return await dispatch(request);
-    } catch (error) {
-      if (error instanceof Failure || error instanceof NetworkFailure)
-        return HttpResponse.json(
-          { code: error.code, ...error.details },
-          { status: error.status },
-        );
-      if (error instanceof z.ZodError)
-        return HttpResponse.json(
-          { code: "VALIDATION_ERROR", issues: error.issues },
-          { status: 422 },
-        );
-      if (import.meta.env.DEV || import.meta.env.MODE === "test")
-        console.error(error);
-      return HttpResponse.json({ code: "INTERNAL" }, { status: 500 });
-    }
-  }),
+  http.all("*/api/*", ({ request }) => handleMockRequest(request)),
 ];
