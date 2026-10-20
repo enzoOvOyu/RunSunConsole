@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { useUrlState } from "../shared/useUrlState";
 import { confirmAction } from "../../components/ui/ConfirmAction";
 import { useState, type DragEvent } from "react";
-import type { Bucket, StorageObject } from "../../types/domain";
+import type { Bucket, StorageObject, Project, Quota } from "../../types/domain";
 import { EP, query, post, remove, api } from "../../lib/api-client";
 import { useRegion } from "../../stores/region";
 import { useAuth } from "../../stores/auth";
@@ -10,7 +10,7 @@ import { canWrite } from "../../lib/rbac";
 import { useAction, useData } from "../shared/hooks";
 import { useDrawer } from "../shared/useDrawer";
 import { RegionFilter } from "../shared/RegionFilter";
-import { t } from "../../i18n";
+import { t, dt } from "../../i18n";
 import { date } from "../../lib/date";
 import { size } from "../../lib/money";
 import {
@@ -41,6 +41,7 @@ export default function StoragePage() {
     "STANDARD",
   );
   const [quotaGb, setQuotaGb] = useState(2000);
+  const [bucketProject, setBucketProject] = useState(projectId);
   const [search, setSearch] = useUrlState("q");
   const [prefix, setPrefix] = useState("");
   const [tab, setTab] = useState("objects");
@@ -54,6 +55,14 @@ export default function StoragePage() {
     ["buckets", region],
     EP.buckets + query({ region }),
   );
+  const projects = useData<Project[]>(["projects"], EP.projects);
+  const quotas = useData<Quota[]>(
+    ["storage-quotas", region],
+    EP.quotas + query({ region }),
+  );
+  const objectQuota = quotas.data
+    ?.find((item) => item.metric === "storage")
+    ?.storageBreakdown?.find((item) => item.kind === "object");
   const overview = useData<{
     bucket: Bucket;
     objectCount: number;
@@ -70,6 +79,12 @@ export default function StoragePage() {
   );
   const { run, busy } = useAction();
   const bucket = overview.data?.bucket;
+  const projectName = (value?: string) =>
+    dt(
+      projects.data?.find((project) => project.id === value)?.name ||
+        value ||
+        "—",
+    );
   const upload = async (files: FileList | null) => {
     if (!files || !id) return;
     for (const file of Array.from(files)) {
@@ -109,16 +124,36 @@ export default function StoragePage() {
     <>
       <PageHeader
         title={t("nav.object")}
+        subtitle={t("storage.objectSubtitle")}
         actions={
           <Button
             variant="primary"
             disabled={!canWrite(role)}
-            onClick={() => setNewOpen(true)}
+            onClick={() => {
+              setBucketProject(projectId);
+              setNewOpen(true);
+            }}
           >
             {t("storage.new")}
           </Button>
         }
       />
+      <div className="grid grid-3">
+        <Panel title={t("storage.bucketCount")}>
+          <strong>{q.data?.length ?? "—"}</strong>
+        </Panel>
+        <Panel title={t("storage.allocatedCapacity")}>
+          <strong>{objectQuota?.usedGb.toLocaleString() || "—"} GB</strong>
+        </Panel>
+        <Panel title={t("storage.availableCapacity")}>
+          <strong>
+            {objectQuota
+              ? (objectQuota.limitGb - objectQuota.usedGb).toLocaleString()
+              : "—"}{" "}
+            GB
+          </strong>
+        </Panel>
+      </div>
       <div className="toolbar">
         <RegionFilter />
         <input
@@ -147,6 +182,11 @@ export default function StoragePage() {
                 accessorKey: "region",
                 header: t("common.region"),
                 cell: ({ row }) => t("common." + row.original.region),
+              },
+              {
+                accessorKey: "projectId",
+                header: t("common.project"),
+                cell: ({ row }) => projectName(row.original.projectId),
               },
               {
                 accessorKey: "storageClass",
@@ -195,14 +235,43 @@ export default function StoragePage() {
           <ErrorState error={overview.error} />
         ) : bucket ? (
           <div className="stack">
-            <Panel title={t("storage.volumeDetails")}>
+            <Panel title={t("storage.bucketDetails")}>
               <KeyValues
                 items={[
+                  ["ID", bucket.id],
+                  [t("common.name"), bucket.name],
                   [t("common.region"), t("common." + bucket.region)],
                   [t("storage.tier"), bucket.storageClass || "STANDARD"],
-                  [t("common.project"), bucket.projectId || "—"],
-                  [t("storage.attached"), bucket.references[0]?.name || "—"],
+                  [t("common.project"), projectName(bucket.projectId)],
+                  [t("common.status"), t("common." + bucket.access)],
+                  [
+                    t("storage.source"),
+                    t(
+                      bucket.attachedResourceUuid
+                        ? "storage.deploymentSource"
+                        : "storage.standaloneSource",
+                    ),
+                  ],
                   [t("common.createdAt"), date(bucket.createdAt)],
+                ]}
+              />
+            </Panel>
+            <Panel title={t("storage.accessDetails")}>
+              <KeyValues
+                items={[
+                  [
+                    t("storage.endpoint"),
+                    `https://s3.${bucket.region}.runsun.cloud`,
+                  ],
+                  [
+                    t("storage.bucketUrl"),
+                    `https://s3.${bucket.region}.runsun.cloud/${bucket.name}`,
+                  ],
+                  [
+                    t("storage.attached"),
+                    bucket.references[0]?.name || t("storage.unattached"),
+                  ],
+                  [t("storage.lifecycle"), String(bucket.lifecycle.length)],
                 ]}
               />
             </Panel>
@@ -216,7 +285,12 @@ export default function StoragePage() {
               action={
                 <Button
                   variant="danger"
-                  disabled={!canWrite(role) || busy}
+                  disabled={
+                    !canWrite(role) ||
+                    busy ||
+                    bucket.objects.length > 0 ||
+                    bucket.references.length > 0
+                  }
                   onClick={async () => {
                     if (
                       !(await confirmAction(
@@ -235,6 +309,9 @@ export default function StoragePage() {
                 </Button>
               }
             >
+              {(bucket.objects.length > 0 || bucket.references.length > 0) && (
+                <small>{t("storage.bucketDeleteHint")}</small>
+              )}
               <div className="between">
                 <strong>
                   {size(overview.data.usedGb)} / {size(overview.data.quotaGb)}
@@ -357,11 +434,17 @@ export default function StoragePage() {
               </div>
             ) : (
               <div className="stack">
+                <small>{t("storage.lifecycleHint")}</small>
                 <DataTable
                   data={bucket.lifecycle}
                   columns={[
                     { accessorKey: "prefix", header: t("storage.prefix") },
-                    { accessorKey: "action", header: t("common.action") },
+                    {
+                      accessorKey: "action",
+                      header: t("common.action"),
+                      cell: ({ row }) =>
+                        t(`storage.lifecycleAction.${row.original.action}`),
+                    },
                     {
                       accessorKey: "after_days",
                       header: t("storage.afterDays"),
@@ -370,6 +453,31 @@ export default function StoragePage() {
                       accessorKey: "nextRun",
                       header: t("common.time"),
                       cell: ({ row }) => date(row.original.nextRun),
+                    },
+                    {
+                      id: "remove",
+                      header: t("common.action"),
+                      cell: ({ row }) => (
+                        <Button
+                          variant="danger"
+                          disabled={!canWrite(role) || busy}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void run(() =>
+                              api(`${EP.buckets}/${id}/lifecycle`, {
+                                method: "PUT",
+                                body: JSON.stringify({
+                                  rules: bucket.lifecycle.filter(
+                                    (_, index) => index !== row.index,
+                                  ),
+                                }),
+                              }),
+                            );
+                          }}
+                        >
+                          {t("common.delete")}
+                        </Button>
+                      ),
                     },
                   ]}
                 />
@@ -444,6 +552,23 @@ export default function StoragePage() {
             />
           </Field>
           <div className="form-grid">
+            <Field label={t("common.project")}>
+              <select
+                value={bucketProject}
+                onChange={(event) => setBucketProject(event.target.value)}
+              >
+                {projects.data
+                  ?.filter((project) => !project.deletedAt)
+                  .map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {dt(project.name)}
+                    </option>
+                  ))}
+              </select>
+            </Field>
+            <Field label={t("common.region")}>
+              <strong>{t(`common.${region}`)}</strong>
+            </Field>
             <Field label={t("storage.tier")}>
               <select
                 value={storageClass}
@@ -473,7 +598,10 @@ export default function StoragePage() {
               busy ||
               quotaGb < 100 ||
               quotaGb > 1048500 ||
-              quotaGb % 100 !== 0
+              quotaGb % 100 !== 0 ||
+              !bucketProject ||
+              (!!objectQuota &&
+                quotaGb > objectQuota.limitGb - objectQuota.usedGb)
             }
             onClick={async () => {
               const b = await run(
@@ -481,7 +609,7 @@ export default function StoragePage() {
                   post<Bucket>(EP.buckets, {
                     name,
                     region,
-                    projectId,
+                    projectId: bucketProject,
                     storageClass,
                     quotaGb,
                   }),

@@ -119,17 +119,177 @@ it("creates multiple volumes and an attached bucket with one deployment order", 
   );
   expect(after.usedValue - before.usedValue).toBe(1000);
   expect(after.storageBreakdown).toEqual(
-    before.storageBreakdown.map((item: { kind: string; usedGb: number; limitGb: number }) => ({
-      ...item,
-      usedGb:
-        item.usedGb +
-        (item.kind === "block"
-          ? 300
-          : item.kind === "file"
-            ? 200
-            : item.kind === "object"
-              ? 500
-              : 0),
-    })),
+    before.storageBreakdown.map(
+      (item: { kind: string; usedGb: number; limitGb: number }) => ({
+        ...item,
+        usedGb:
+          item.usedGb +
+          (item.kind === "block"
+            ? 300
+            : item.kind === "file"
+              ? 200
+              : item.kind === "object"
+                ? 500
+                : 0),
+      }),
+    ),
+  );
+});
+
+it("creates and deletes standalone block and file volumes with regional quota updates", async () => {
+  const before = (await request("/quotas?region=jp")).data.find(
+    (quota: { metric: string }) => quota.metric === "storage",
+  );
+  for (const [kind, tier, sizeGb] of [
+    ["block", "essd_pl1", 100],
+    ["file", "nas_capacity", 200],
+  ] as const) {
+    const created = await request("/storage/volumes", "POST", {
+      name: `${kind}-standalone`,
+      kind,
+      tier,
+      sizeGb,
+      projectId: db.projects[0].id,
+      region: "jp",
+    });
+    expect(created.status).toBe(201);
+    expect(created.data.resourceUuid).toBeNull();
+    expect(created.data.role).toBe("custom");
+    expect((await request(`/storage/volumes/${created.data.id}`)).status).toBe(
+      200,
+    );
+    const current = (await request("/quotas?region=jp")).data.find(
+      (quota: { metric: string }) => quota.metric === "storage",
+    );
+    expect(
+      current.storageBreakdown.find(
+        (item: { kind: string }) => item.kind === kind,
+      ).usedGb,
+    ).toBe(
+      before.storageBreakdown.find(
+        (item: { kind: string }) => item.kind === kind,
+      ).usedGb + sizeGb,
+    );
+    const deleted = await fetch(
+      `http://localhost/api/storage/volumes/${created.data.id}`,
+      {
+        method: "DELETE",
+        headers: { "X-Role": "owner" },
+      },
+    );
+    expect(deleted.status).toBe(204);
+  }
+  const after = (await request("/quotas?region=jp")).data.find(
+    (quota: { metric: string }) => quota.metric === "storage",
+  );
+  expect(after.usedValue).toBe(before.usedValue);
+  const attached = db.volumes.find((volume) => volume.resourceUuid);
+  expect(attached).toBeDefined();
+  const blocked = await fetch(
+    `http://localhost/api/storage/volumes/${attached?.id}`,
+    {
+      method: "DELETE",
+      headers: { "X-Role": "owner" },
+    },
+  );
+  expect(blocked.status).toBe(409);
+});
+
+it("rejects invalid standalone storage sizes and object capacity above the regional quota", async () => {
+  const invalid = await request("/storage/volumes", "POST", {
+    name: "invalid-size",
+    kind: "block",
+    tier: "essd_pl1",
+    sizeGb: 45,
+    projectId: db.projects[0].id,
+    region: "jp",
+  });
+  expect(invalid.status).toBe(422);
+  const object = await request("/buckets", "POST", {
+    name: "capacity-overflow-test",
+    region: "jp",
+    projectId: db.projects[0].id,
+    storageClass: "STANDARD",
+    quotaGb: 100000,
+  });
+  expect(object.status).toBe(409);
+});
+
+it("creates an object bucket, manages lifecycle rules, and releases quota on deletion", async () => {
+  const before = (await request("/quotas?region=jp")).data.find(
+    (quota: { metric: string }) => quota.metric === "storage",
+  );
+  const created = await request("/buckets", "POST", {
+    name: "lifecycle-demo-bucket",
+    region: "jp",
+    projectId: db.projects[0].id,
+    storageClass: "STANDARD",
+    quotaGb: 1000,
+  });
+  expect(created.status).toBe(201);
+  expect(created.data.projectId).toBe(db.projects[0].id);
+  expect(
+    (await request("/buckets/lifecycle-demo-bucket/lifecycle")).status,
+  ).toBe(404);
+  const rule = await request(`/buckets/${created.data.id}/lifecycle`, "PUT", {
+    rules: [{ prefix: "archive/", action: "infrequent", after_days: 30 }],
+  });
+  expect(rule.status).toBe(200);
+  expect(rule.data).toHaveLength(1);
+  const cleared = await request(
+    `/buckets/${created.data.id}/lifecycle`,
+    "PUT",
+    { rules: [] },
+  );
+  expect(cleared.data).toHaveLength(0);
+  const afterCreate = (await request("/quotas?region=jp")).data.find(
+    (quota: { metric: string }) => quota.metric === "storage",
+  );
+  expect(afterCreate.usedValue).toBe(before.usedValue + 1000);
+  const deleted = await fetch(
+    `http://localhost/api/buckets/${created.data.id}`,
+    {
+      method: "DELETE",
+      headers: { "X-Role": "owner" },
+    },
+  );
+  expect(deleted.status).toBe(204);
+  const afterDelete = (await request("/quotas?region=jp")).data.find(
+    (quota: { metric: string }) => quota.metric === "storage",
+  );
+  expect(afterDelete.usedValue).toBe(before.usedValue);
+});
+
+it("applies due object lifecycle rules to matching objects", async () => {
+  const bucket = db.buckets.find(
+    (item) => item.region === "jp" && item.objects.length > 0,
+  );
+  expect(bucket).toBeDefined();
+  if (!bucket) return;
+  const object = bucket.objects[0];
+  object.key = "archive/old-item";
+  object.updatedAt = new Date(Date.now() - 40 * 86400000).toISOString();
+  bucket.lifecycle = [
+    {
+      prefix: "archive/",
+      action: "infrequent",
+      after_days: 30,
+      nextRun: new Date(Date.now() - 86400000).toISOString(),
+    },
+  ];
+  await request(`/buckets/${bucket.id}/overview`);
+  expect(object.storageClass).toBe("IA");
+  bucket.lifecycle = [
+    {
+      prefix: "archive/",
+      action: "delete",
+      after_days: 30,
+      nextRun: new Date(Date.now() - 86400000).toISOString(),
+    },
+  ];
+  const result = await request(`/buckets/${bucket.id}/overview`);
+  expect(result.data.objectCount).toBe(bucket.objects.length);
+  expect(bucket.objects.some((item) => item.key === "archive/old-item")).toBe(
+    false,
   );
 });

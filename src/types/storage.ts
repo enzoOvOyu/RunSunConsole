@@ -30,7 +30,7 @@ export interface StorageVolume {
   sizeGb: number;
   projectId: string;
   region: Region;
-  resourceUuid: ResourceUuid;
+  resourceUuid: ResourceUuid | null;
   mountPath: string;
   createdAt: string;
   deletedAt: string | null;

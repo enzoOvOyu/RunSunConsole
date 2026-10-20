@@ -145,7 +145,8 @@ function storageQuotaBreakdown(region: Region, exclude?: string) {
                 volume.kind === allocation.kind &&
                 volume.resourceUuid !== exclude &&
                 !volume.deletedAt &&
-                !initialResourceIds.has(volume.resourceUuid),
+                (!volume.resourceUuid ||
+                  !initialResourceIds.has(volume.resourceUuid)),
             )
             .reduce((total, volume) => total + volume.sizeGb, 0);
     return { ...allocation, usedGb: allocation.usedGb + additionalGb };
@@ -196,7 +197,10 @@ export const quotas = (): Quota[] =>
       metric,
       limitValue:
         metric === "storage"
-          ? storageQuotas[region].reduce((total, item) => total + item.limitGb, 0)
+          ? storageQuotas[region].reduce(
+              (total, item) => total + item.limitGb,
+              0,
+            )
           : limits[region][metric],
       usedValue: used(region, metric),
       ...(metric === "storage"
@@ -1439,39 +1443,111 @@ async function dispatch(request: Request) {
     });
   }
   if (path === "/api/storage/products") return json(STORAGE_PRODUCTS);
-  if (path === "/api/storage/volumes" && method === "GET")
-    return json(
-      db.volumes
-        .filter(
+  if (path === "/api/storage/volumes") {
+    if (method === "GET")
+      return json(
+        db.volumes
+          .filter(
+            (volume) =>
+              !volume.deletedAt &&
+              (!region || volume.region === region) &&
+              (!qs.get("project_id") ||
+                volume.projectId === qs.get("project_id")),
+          )
+          .map((volume) => {
+            const attached = db.resources.find(
+              (r) => r.resourceUuid === volume.resourceUuid,
+            );
+            return {
+              ...volume,
+              resourceName: attached?.name || "",
+              resourceKind: attached?.kind || null,
+            };
+          }),
+      );
+    if (method === "POST") {
+      const kind = z.enum(["block", "file"]).parse(body.kind);
+      const tier = z.string().parse(body.tier);
+      const product = STORAGE_PRODUCTS.find(
+        (item) => item.kind === kind && item.tier === tier,
+      );
+      if (!product) fail(422, "VALIDATION_ERROR");
+      const sizeGb = z.number().int().parse(body.sizeGb);
+      if (
+        sizeGb < product.minGb ||
+        sizeGb > product.maxGb ||
+        sizeGb % product.stepGb !== 0
+      )
+        fail(422, "VALIDATION_ERROR");
+      const code = z.enum(REGIONS).parse(body.region);
+      const projectId = z.string().min(1).parse(body.projectId);
+      if (
+        !db.projects.some(
+          (project) => project.id === projectId && !project.deletedAt,
+        )
+      )
+        fail(422, "VALIDATION_ERROR");
+      const name = z.string().trim().min(2).max(64).parse(body.name);
+      if (
+        db.volumes.some(
           (volume) =>
             !volume.deletedAt &&
-            (!region || volume.region === region) &&
-            (!qs.get("project_id") ||
-              volume.projectId === qs.get("project_id")),
+            volume.region === code &&
+            volume.projectId === projectId &&
+            volume.name === name,
         )
-        .map((volume) => ({
-          ...volume,
-          resourceName:
-            db.resources.find((r) => r.resourceUuid === volume.resourceUuid)
-              ?.name || "",
-          resourceKind:
-            db.resources.find((r) => r.resourceUuid === volume.resourceUuid)
-              ?.kind || "gpu_vm",
-        })),
-    );
+      )
+        fail(422, "VALIDATION_ERROR");
+      const allocation = storageQuotaBreakdown(code).find(
+        (item) => item.kind === kind,
+      );
+      if (allocation && allocation.usedGb + sizeGb > allocation.limitGb)
+        fail(409, "QUOTA_EXCEEDED", {
+          metric: "storage",
+          limit: allocation.limitGb,
+          used: allocation.usedGb,
+          requested: sizeGb,
+        });
+      const volume = {
+        id: crypto.randomUUID(),
+        name,
+        kind,
+        tier,
+        role: "custom" as const,
+        sizeGb,
+        projectId,
+        region: code,
+        resourceUuid: null,
+        mountPath: "",
+        createdAt: new Date().toISOString(),
+        deletedAt: null,
+      };
+      db.volumes.push(volume);
+      persist();
+      return json(volume, 201);
+    }
+  }
   const volumeMatch = path.match(/^\/api\/storage\/volumes\/([^/]+)$/);
-  if (volumeMatch && method === "GET") {
+  if (volumeMatch) {
     const volume =
       db.volumes.find((v) => v.id === volumeMatch[1] && !v.deletedAt) ||
       fail(404, "NOT_FOUND");
-    const attached = db.resources.find(
-      (r) => r.resourceUuid === volume.resourceUuid,
-    );
-    return json({
-      ...volume,
-      resourceName: attached?.name || "",
-      resourceKind: attached?.kind || "gpu_vm",
-    });
+    if (method === "DELETE") {
+      if (volume.resourceUuid || volume.role !== "custom")
+        fail(409, "HAS_DEPENDENCIES");
+      volume.deletedAt = new Date().toISOString();
+      return done();
+    }
+    if (method === "GET") {
+      const attached = db.resources.find(
+        (r) => r.resourceUuid === volume.resourceUuid,
+      );
+      return json({
+        ...volume,
+        resourceName: attached?.name || "",
+        resourceKind: attached?.kind || null,
+      });
+    }
   }
   if (path === "/api/account") {
     if (method === "PATCH") {
@@ -2649,24 +2725,42 @@ async function dispatch(request: Request) {
         .parse(body.name);
       if (db.buckets.some((b) => b.name === name))
         fail(422, "VALIDATION_ERROR");
+      const code = z.enum(REGIONS).parse(body.region);
+      const projectId = z.string().min(1).parse(body.projectId);
+      if (
+        !db.projects.some(
+          (project) => project.id === projectId && !project.deletedAt,
+        )
+      )
+        fail(422, "VALIDATION_ERROR");
+      const quotaGb = z
+        .number()
+        .int()
+        .min(100)
+        .max(1048500)
+        .parse(body.quotaGb);
+      const allocation = storageQuotaBreakdown(code).find(
+        (item) => item.kind === "object",
+      );
+      if (allocation && allocation.usedGb + quotaGb > allocation.limitGb)
+        fail(409, "QUOTA_EXCEEDED", {
+          metric: "storage",
+          limit: allocation.limitGb,
+          used: allocation.usedGb,
+          requested: quotaGb,
+        });
       const b = {
         id: crypto.randomUUID(),
         name,
-        region: z.enum(REGIONS).parse(body.region),
-        projectId: z.string().optional().parse(body.projectId),
+        region: code,
+        projectId,
         storageClass: z
           .enum(["STANDARD", "IA"])
           .default("STANDARD")
           .parse(body.storageClass),
         attachedResourceUuid: null,
         access: "private" as const,
-        quotaGb: z
-          .number()
-          .int()
-          .min(100)
-          .max(1048500)
-          .default(2000)
-          .parse(body.quotaGb),
+        quotaGb,
         createdAt: new Date().toISOString(),
         objects: [],
         lifecycle: [],
@@ -2682,6 +2776,29 @@ async function dispatch(request: Request) {
   );
   if (bm) {
     const b = db.buckets.find((b) => b.id === bm[1]) || fail(404, "NOT_FOUND");
+    const now = Date.now();
+    let lifecycleChanged = false;
+    for (const rule of b.lifecycle) {
+      if (new Date(rule.nextRun).getTime() > now) continue;
+      for (const object of [...b.objects]) {
+        if (
+          !object.key.startsWith(rule.prefix) ||
+          new Date(object.updatedAt).getTime() + rule.after_days * 86400000 >
+            now
+        )
+          continue;
+        if (rule.action === "delete") {
+          await deleteObject(`${b.id}:${object.key}`);
+          b.objects = b.objects.filter((item) => item.key !== object.key);
+        } else if (object.storageClass !== "IA") {
+          object.storageClass = "IA";
+        }
+        lifecycleChanged = true;
+      }
+      rule.nextRun = new Date(now + 86400000).toISOString();
+      lifecycleChanged = true;
+    }
+    if (lifecycleChanged) persist();
     const part = bm[2];
     if (method === "DELETE" && !part) {
       if (b.references.length)
@@ -2745,11 +2862,6 @@ async function dispatch(request: Request) {
         if (
           b.objects.reduce((a, o) => a + o.size, 0) - previous + o.size >
           b.quotaGb * 1e9
-        )
-          fail(409, "QUOTA_EXCEEDED");
-        if (
-          used(b.region, "storage") + (o.size - previous) / 1e9 >
-          limits[b.region].storage
         )
           fail(409, "QUOTA_EXCEEDED");
         try {
