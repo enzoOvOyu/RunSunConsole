@@ -43,7 +43,7 @@ export default {
   "pageDescription.notebooks":
     "在已运行的计算资源上创建并管理 Notebook 与 IDE 连接。",
   "pageDescription.images":
-    "浏览可用于部署的模型和系统镜像，按模态、许可与规格筛选。",
+    "浏览模型目录与系统镜像，按发布方、参数量、模态和可部署状态筛选。",
   "pageDescription.apps":
     "浏览预置 AI 应用模板，查看所需资源并进入对应部署流程。",
   "pageDescription.scaling":
@@ -513,6 +513,158 @@ export default {
   "notebook.idle": "闲置自动停止 · 分钟",
   "notebook.open": "打开开发环境",
   "notebook.hostHint": "GPU 继承宿主资源，删除开发环境不删除宿主",
+  "images.description.catalog-1":
+    "Qwen3.8 旗舰语言模型，面向复杂推理、编码和长文档任务。",
+  "images.description.catalog-2":
+    "Kimi 原生多模态智能体模型，支持视觉理解与超长上下文。",
+  "images.description.catalog-3":
+    "基于 GLM-5.2 底座强化后训练，侧重复杂编码与长程任务。",
+  "images.description.catalog-4":
+    "DeepSeek V4 Pro 正式版，针对生产环境中的智能体任务优化。",
+  "images.description.catalog-5":
+    "Meta 的多模态 MoE 模型，面向编码、工具调用和音视频理解。",
+  "images.description.catalog-6":
+    "Mistral Large 3 指令模型，支持图像理解、工具调用和多语言任务。",
+  "images.description.catalog-7":
+    "NVIDIA Nemotron 大型混合架构模型，面向推理和智能体工作负载。",
+  "images.description.catalog-8":
+    "LG AI Research 多语言 MoE 模型，面向推理与智能体任务。",
+  "images.description.catalog-9":
+    "Trinity Large 的推理增强版，面向多步推理与智能体工作流。",
+  "images.description.catalog-10":
+    "DeepSeek V4 Pro 预览模型，面向推理、编码与百万级上下文。",
+  "images.description.catalog-11":
+    "Kimi K2.6 的编码专项版本，侧重长程软件工程任务。",
+  "images.description.catalog-12":
+    "小米 MiMo 强化学习旗舰检查点，面向推理与智能体任务。",
+  "images.description.catalog-13":
+    "Qwen3.5 多模态 MoE 模型，结合图像理解与复杂推理。",
+  "images.description.catalog-14":
+    "MiniMax 原生多模态模型，支持长上下文和智能体任务。",
+  "images.description.catalog-15":
+    "GLM 旗舰语言模型，面向长程任务与百万级上下文。",
+  "images.description.catalog-16":
+    "StepFun 智能体旗舰预览模型，侧重软件工程和专业知识工作。",
+  "images.description.catalog-17":
+    "腾讯混合专家语言模型，面向通用推理和复杂任务。",
+  "images.description.catalog-18":
+    "DeepSeek Flash 更新版，强化推理、编码、智能体及视觉任务。",
+  "images.description.catalog-19":
+    "Ling Flash 语言模型，面向搜索、办公和软件工程智能体。",
+  "images.description.catalog-20":
+    "Kimi 原生多模态智能体模型，侧重长程编码与协作执行。",
+  "images.description.catalog-21":
+    "Qwen3 Coder 大型代码模型，面向智能体式软件开发。",
+  "images.description.catalog-22":
+    "Cohere Command A+ 多语言模型，支持视觉输入和企业智能体任务。",
+  "images.description.catalog-23":
+    "LG AI Research 多语言 MoE 模型，面向推理与工具协作。",
+  "images.description.catalog-24":
+    "DeepSeek V3.2 推理模型，强调计算效率和智能体能力。",
+  "images.description.catalog-25": "GLM 代码模型，面向编程与智能体式开发任务。",
+  "images.description.catalog-26":
+    "Llama 4 Maverick 多模态 MoE 模型，支持文本与图像理解。",
+  "images.description.catalog-27":
+    "Hermes 4 基于 Llama 3.1 405B，支持对话和推理模式。",
+  "images.description.catalog-28":
+    "Meta Llama 3.1 大型指令模型，面向多语言文本任务。",
+  "images.description.catalog-29":
+    "AI21 Jamba 混合 SSM 与 Transformer 模型，侧重长上下文和有依据的回答。",
+  "images.description.catalog-30":
+    "Trinity Large 预览版，面向长上下文理解与通用推理。",
+  "images.description.catalog-31":
+    "DeepSeek R1 更新版，面向强化学习驱动的推理任务。",
+  "images.description.catalog-32":
+    "DeepSeek 第一代 R1 推理模型，擅长多步逻辑分析。",
+  "images.description.catalog-33":
+    "Kimi K2 Thinking 推理智能体，支持多步思考和工具调用。",
+  "images.description.catalog-34":
+    "Kimi K2.5 原生多模态模型，结合视觉理解与智能体能力。",
+  "images.description.catalog-35":
+    "小米 MiMo 混合专家语言模型，支持百万级上下文。",
+  "images.description.catalog-36":
+    "Qwen3 VL 思考版本，面向视觉理解与多步推理。",
+  "images.description.catalog-37":
+    "GLM-5 系列多模态 Flash 模型，面向编码与智能体任务。",
+  "images.description.catalog-38":
+    "Qwen3.8 Flash 实验架构模型，侧重高效多模态推理。",
+  "images.description.catalog-39":
+    "DeepSeek V4 Flash 正式版，针对智能体任务优化。",
+  "images.description.catalog-40":
+    "MiniMax M2.7 面向复杂智能体流程和生产力任务。",
+  "images.description.catalog-41":
+    "百度 ERNIE 4.5 视觉语言 MoE 模型，支持图像理解。",
+  "images.description.catalog-42":
+    "百度 ERNIE 4.5 文本 MoE 模型，面向通用语言任务。",
+  "images.description.catalog-43":
+    "NVIDIA Nemotron 视觉语言模型，适合本地智能体场景与定制。",
+  "images.description.catalog-44":
+    "Mistral Small 4 融合指令、推理与编码能力，支持视觉输入。",
+  "images.description.catalog-45":
+    "Leanstral 专注 Lean 4 形式化证明与代码推理，也支持图像输入。",
+  "images.description.catalog-46":
+    "Devstral 2 指令模型，面向软件工程智能体工作流。",
+  "images.description.catalog-47":
+    "NVIDIA Nemotron Super 混合架构模型，面向推理与工具使用。",
+  "images.description.catalog-48":
+    "NVIDIA Nemotron Super VL 支持文档、视频理解与编码任务。",
+  "images.description.catalog-49":
+    "OpenAI 开放权重推理模型，面向开发者与智能体任务。",
+  "images.description.catalog-50":
+    "Cohere Command A 多语言文本模型，面向企业对话和长上下文。",
+  "images.modality.multimodal": "多模态",
+  "images.architecture": "模型架构",
+  "images.access": "模型获取",
+  "images.access.public": "公开可获取",
+  "images.access.terms": "需同意使用条款",
+  "images.access.manual": "需申请访问",
+  "images.weightFormat": "权重格式",
+  "images.notConfigured": "平台尚未配置",
+  "images.source": "资料来源",
+  "images.officialCard": "官方模型卡",
+  "images.verifiedAt": "资料核对日期",
+  "images.description.ready":
+    "已完成平台适配，可在部署中心选择 GPU 资源创建服务。",
+  "images.context": "上下文窗口",
+  "images.catalogCount": "目录模型",
+  "images.deployableCount": "可部署",
+  "images.catalogNotice":
+    "模型资料已按官方模型卡核对；新收录模型仍待本平台完成部署适配。",
+  "images.searchPlaceholder": "搜索模型、发布方或模型 ID",
+  "images.publisher": "发布方",
+  "images.allPublishers": "全部发布方",
+  "images.availability": "可用状态",
+  "images.allAvailability": "全部状态",
+  "images.deployable": "可部署",
+  "images.catalogOnly": "待部署适配",
+  "images.allModalities": "全部模态",
+  "images.modality.text": "文本",
+  "images.modality.image": "图像",
+  "images.modalityUnknown": "模态待确认",
+  "images.allLicenses": "全部许可",
+  "images.allSizes": "全部参数量",
+  "images.sort": "排序",
+  "images.sortFeatured": "推荐排序",
+  "images.sortParameters": "参数量从大到小",
+  "images.sortPublisher": "按发布方",
+  "images.sortName": "按名称",
+  "images.noMatches": "没有符合条件的模型。",
+  "images.totalParams": "总参数量",
+  "images.activeParams": "激活参数量",
+  "images.modelIdentity": "模型标识与状态",
+  "images.modelRef": "模型 ID",
+  "images.modelSpecifications": "模型规格",
+  "images.country": "来源国家或地区",
+  "images.country.CN": "中国",
+  "images.country.US": "美国",
+  "images.country.FR": "法国",
+  "images.country.KR": "韩国",
+  "images.country.CA": "加拿大",
+  "images.country.IL": "以色列",
+  "images.unknown": "待确认",
+  "images.verified": "已就绪模型",
+  "images.billingNote":
+    "此处展示模型规格；实际费用由部署时选择的 GPU 资源决定。",
   "images.models": "模型目录",
   "images.images": "镜像商城",
   "images.favorite": "收藏",

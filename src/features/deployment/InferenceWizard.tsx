@@ -77,29 +77,31 @@ function InferenceForm({ step, pools, models }: FormContext) {
   return step === 1 ? (
     <div className="stack">
       <div className="grid grid-2">
-        {models.map((m) => (
-          <button
-            type="button"
-            className={`catalog-card ${spec.modelRef === m.id ? "selected" : ""}`}
-            key={m.id}
-            onClick={() =>
-              update({
-                modelRef: m.id,
-                quantization: compatiblePrecisions(
-                  m,
-                  selectedPool,
-                  spec.engine,
-                )[0],
-                maxModelLen: Math.min(spec.maxModelLen, m.context),
-              })
-            }
-          >
-            <strong>{m.name}</strong>
-            <small>
-              {m.paramsB}B · {m.license} · {m.modality}
-            </small>
-          </button>
-        ))}
+        {models
+          .filter((m) => !m.catalogOnly)
+          .map((m) => (
+            <button
+              type="button"
+              className={`catalog-card ${spec.modelRef === m.id ? "selected" : ""}`}
+              key={m.id}
+              onClick={() =>
+                update({
+                  modelRef: m.id,
+                  quantization: compatiblePrecisions(
+                    m,
+                    selectedPool,
+                    spec.engine,
+                  )[0],
+                  maxModelLen: Math.min(spec.maxModelLen, m.context),
+                })
+              }
+            >
+              <strong>{m.name}</strong>
+              <small>
+                {m.paramsB}B · {m.license} · {m.modality}
+              </small>
+            </button>
+          ))}
       </div>
       <div className="form-grid">
         <SpecSelect

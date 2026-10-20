@@ -10,11 +10,13 @@ import type {
   Voucher,
   Notebook,
 } from "../../types/domain";
+import { CATALOG_MODELS } from "./model-catalog";
 const iso = (days: number) =>
   new Date(Date.now() - days * 86400000).toISOString();
 export const MODELS: Model[] = [
   {
     id: "llama8",
+    publisher: "Meta",
     name: "Llama 3.1 8B Instruct",
     paramsB: 8,
     quantizations: ["bf16", "fp8", "awq", "fp4"],
@@ -28,6 +30,7 @@ export const MODELS: Model[] = [
   },
   {
     id: "llama70",
+    publisher: "Meta",
     name: "Llama 3.1 70B Instruct",
     paramsB: 70,
     quantizations: ["bf16", "fp8", "awq", "fp4"],
@@ -41,6 +44,7 @@ export const MODELS: Model[] = [
   },
   {
     id: "qwen32",
+    publisher: "Qwen",
     name: "Qwen 2.5 32B Instruct",
     paramsB: 32,
     quantizations: ["bf16", "fp8", "awq"],
@@ -54,6 +58,7 @@ export const MODELS: Model[] = [
   },
   {
     id: "flux",
+    publisher: "Black Forest Labs",
     name: "FLUX.1 schnell",
     paramsB: 12,
     quantizations: ["bf16", "fp8"],
@@ -65,6 +70,7 @@ export const MODELS: Model[] = [
     context: 4096,
     favorite: false,
   },
+  ...CATALOG_MODELS,
 ];
 export const IMAGES: Image[] = [
   {

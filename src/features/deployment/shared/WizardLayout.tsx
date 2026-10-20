@@ -242,7 +242,13 @@ function WizardForm({
         mode: clone.mode,
         spec: structuredClone(clone.spec),
       };
-    if (source.model && "modelRef" in base.spec)
+    if (
+      source.model &&
+      "modelRef" in base.spec &&
+      context.models.some(
+        (model) => model.id === source.model && !model.catalogOnly,
+      )
+    )
       base.spec.modelRef = source.model;
     if (source.image && "imageRef" in base.spec)
       base.spec.imageRef = source.image;

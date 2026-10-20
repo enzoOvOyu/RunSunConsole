@@ -44,19 +44,43 @@ test("submenu pages describe their own resource and billing functions", async ({
   page,
 }) => {
   const pages = [
-    ["resources/servers", "查看云服务器实例的状态、规格和网络配置，并进行启停与资源管理。"],
+    [
+      "resources/servers",
+      "查看云服务器实例的状态、规格和网络配置，并进行启停与资源管理。",
+    ],
     ["resources/baremetal", "按集群查看裸金属设备明细、运行状态和分配情况。"],
-    ["resources/vgpu", "查看 GPU 集群、节点池和共享资源状态，管理集群生命周期。"],
-    ["resources/inference", "查看推理服务部署、模型副本与服务状态，管理服务运行配置。"],
+    [
+      "resources/vgpu",
+      "查看 GPU 集群、节点池和共享资源状态，管理集群生命周期。",
+    ],
+    [
+      "resources/inference",
+      "查看推理服务部署、模型副本与服务状态，管理服务运行配置。",
+    ],
     ["ops/projects", "查看项目资源、成员权限、配额与费用归属"],
     ["ops/quotas", "查看当前区域的算力、内存、存储和网络配额用量及可用额度。"],
     ["ops/tickets", "提交资源与平台问题，跟踪工单处理状态并补充沟通记录。"],
-    ["workbench/notebooks", "在已运行的计算资源上创建并管理 Notebook 与 IDE 连接。"],
-    ["workbench/images", "浏览可用于部署的模型和系统镜像，按模态、许可与规格筛选。"],
-    ["workbench/apps", "浏览预置 AI 应用模板，查看所需资源并进入对应部署流程。"],
-    ["workbench/scaling", "为计算资源配置自动伸缩规则，查看策略状态和伸缩事件。"],
+    [
+      "workbench/notebooks",
+      "在已运行的计算资源上创建并管理 Notebook 与 IDE 连接。",
+    ],
+    [
+      "workbench/images",
+      "浏览模型目录与系统镜像，按发布方、参数量、模态和可部署状态筛选。",
+    ],
+    [
+      "workbench/apps",
+      "浏览预置 AI 应用模板，查看所需资源并进入对应部署流程。",
+    ],
+    [
+      "workbench/scaling",
+      "为计算资源配置自动伸缩规则，查看策略状态和伸缩事件。",
+    ],
     ["billing/cost", "按项目、资源、区域或资源类型分析用量费用，并设置预算。"],
-    ["billing/bills", "查看账单用量、交易流水、发票和账户余额，按账期核对费用。"],
+    [
+      "billing/bills",
+      "查看账单用量、交易流水、发票和账户余额，按账期核对费用。",
+    ],
     ["billing/vouchers", "查看代金券面值、余额、适用范围、有效期与使用状态。"],
   ];
   for (const [route, description] of pages) {
@@ -732,7 +756,9 @@ test("overview and quota page render the same regional quota records", async ({
   const overview = page.locator(".panel").filter({
     has: page.getByRole("heading", { name: "配额用量", exact: true }),
   });
-  const japan = overview.locator(".grid-4 > div").filter({ hasText: "日本 JP" });
+  const japan = overview
+    .locator(".grid-4 > div")
+    .filter({ hasText: "日本 JP" });
   for (const value of values)
     await expect(japan.getByText(value, { exact: true })).toBeVisible();
   await page.goto("/ops/quotas?region=jp");
@@ -902,20 +928,34 @@ test("cost analysis belongs to Billing while the old route redirects", async ({
   await expect(page).toHaveURL(/billing\/cost$/);
 });
 
-test("deployment storage rows create linked file and object resources", async ({ page }) => {
+test("deployment storage rows create linked file and object resources", async ({
+  page,
+}) => {
   await page.goto("/deployment/server");
   await page.getByRole("button", { name: "下一步", exact: true }).click();
   await page.getByRole("button", { name: "下一步", exact: true }).click();
   await page.getByRole("button", { name: "添加存储", exact: true }).click();
   const fileRow = page.getByText("存储项 1", { exact: true }).locator("../..");
-  await fileRow.getByRole("combobox", { name: "类型", exact: true }).selectOption("file");
-  await fileRow.getByRole("textbox", { name: "名称", exact: true }).fill("shared-models");
+  await fileRow
+    .getByRole("combobox", { name: "类型", exact: true })
+    .selectOption("file");
+  await fileRow
+    .getByRole("textbox", { name: "名称", exact: true })
+    .fill("shared-models");
   await page.getByRole("button", { name: "添加存储", exact: true }).click();
-  const objectRow = page.getByText("存储项 2", { exact: true }).locator("../..");
-  await objectRow.getByRole("combobox", { name: "类型", exact: true }).selectOption("object");
-  await objectRow.getByRole("textbox", { name: "存储桶名称", exact: true }).fill("runsun-browser-storage-test");
+  const objectRow = page
+    .getByText("存储项 2", { exact: true })
+    .locator("../..");
+  await objectRow
+    .getByRole("combobox", { name: "类型", exact: true })
+    .selectOption("object");
+  await objectRow
+    .getByRole("textbox", { name: "存储桶名称", exact: true })
+    .fill("runsun-browser-storage-test");
   await page.getByRole("button", { name: "下一步", exact: true }).click();
-  await page.getByRole("textbox", { name: "SSH 公钥", exact: true }).fill("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFOO");
+  await page
+    .getByRole("textbox", { name: "SSH 公钥", exact: true })
+    .fill("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFOO");
   await page.getByRole("button", { name: "下一步", exact: true }).click();
   await page.getByLabel("我已阅读并确认配置与计费方式").check();
   await page.getByRole("button", { name: "新建", exact: true }).click();
@@ -923,5 +963,42 @@ test("deployment storage rows create linked file and object resources", async ({
   await page.goto("/storage/file?region=jp");
   await expect(page.locator("tbody")).toContainText("shared-models");
   await page.goto("/storage/object?region=jp");
-  await expect(page.locator("tbody")).toContainText("runsun-browser-storage-test");
+  await expect(page.locator("tbody")).toContainText(
+    "runsun-browser-storage-test",
+  );
+});
+
+test("model catalog features NVIDIA and Meta while keeping pending models out of deployment", async ({
+  page,
+}) => {
+  await page.goto("/workbench/images");
+  await expect(page.locator(".model-catalog-card")).toHaveCount(54);
+  await expect(
+    page.locator(".model-catalog-card").first().locator("h3"),
+  ).toContainText("NVIDIA Nemotron 3 Ultra");
+  await expect(
+    page.locator(".model-catalog-card").nth(1).locator("h3"),
+  ).toContainText("Muse Spark Open");
+  await page.getByRole("combobox", { name: "可用状态" }).selectOption("ready");
+  await expect(page.locator(".model-catalog-card")).toHaveCount(4);
+  await page
+    .getByRole("combobox", { name: "可用状态" })
+    .selectOption("catalog");
+  await expect(page.locator(".model-catalog-card")).toHaveCount(50);
+  await page.getByRole("textbox", { name: "搜索" }).fill("Nemotron-3-Ultra");
+  await expect(page.locator(".model-catalog-card")).toHaveCount(1);
+  await page
+    .locator(".model-catalog-card")
+    .getByRole("button", { name: "详情" })
+    .click();
+  await expect(page.locator(".model-catalog-note")).toBeVisible();
+  await expect(page.getByRole("dialog")).toContainText("openmdw-1.1");
+  await expect(page.getByRole("dialog")).toContainText("262,144");
+  await expect(page.getByRole("link", { name: /官方模型卡/ })).toHaveAttribute(
+    "href",
+    "https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16",
+  );
+  await expect(page.getByRole("button", { name: "基于此项部署" })).toHaveCount(
+    0,
+  );
 });

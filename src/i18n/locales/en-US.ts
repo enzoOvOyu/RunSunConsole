@@ -45,7 +45,7 @@ export default {
   "pageDescription.notebooks":
     "Create and manage Notebook and IDE sessions on running compute resources.",
   "pageDescription.images":
-    "Browse deployment models and system images, with filters for modality, license and size.",
+    "Browse the model catalog and system images; filter by publisher, size, modality, and deployment readiness.",
   "pageDescription.apps":
     "Browse AI application templates, review their resource needs and open the matching deployment flow.",
   "pageDescription.scaling":
@@ -533,6 +533,159 @@ export default {
   "notebook.open": "Open environment",
   "notebook.hostHint":
     "GPUs are inherited from the host. Deleting this environment keeps the host.",
+  "images.description.catalog-1":
+    "Qwen3.8 flagship language model for complex reasoning, coding, and long documents.",
+  "images.description.catalog-2":
+    "Native multimodal Kimi agent model with vision and a very long context window.",
+  "images.description.catalog-3":
+    "Post-trained from GLM-5.2 for complex coding and long-horizon tasks.",
+  "images.description.catalog-4":
+    "Production release of DeepSeek V4 Pro optimized for agentic workflows.",
+  "images.description.catalog-5":
+    "Meta multimodal MoE model for coding, tool use, and audio-video understanding.",
+  "images.description.catalog-6":
+    "Mistral Large 3 instruct model for vision, tool use, and multilingual tasks.",
+  "images.description.catalog-7":
+    "Large NVIDIA Nemotron hybrid model for reasoning and agent workloads.",
+  "images.description.catalog-8":
+    "LG AI Research multilingual MoE model for reasoning and agent tasks.",
+  "images.description.catalog-9":
+    "Reasoning-focused Trinity Large variant for multi-step agent workflows.",
+  "images.description.catalog-10":
+    "DeepSeek V4 Pro preview for reasoning, coding, and million-token context.",
+  "images.description.catalog-11":
+    "Coding-focused Kimi K2.6 variant for long-horizon software engineering.",
+  "images.description.catalog-12":
+    "Xiaomi MiMo reinforcement-learning flagship for reasoning and agents.",
+  "images.description.catalog-13":
+    "Multimodal Qwen3.5 MoE model for vision and complex reasoning.",
+  "images.description.catalog-14":
+    "Native multimodal MiniMax model for long-context agent tasks.",
+  "images.description.catalog-15":
+    "Flagship GLM language model for long-horizon, million-token tasks.",
+  "images.description.catalog-16":
+    "StepFun agent preview focused on software engineering and knowledge work.",
+  "images.description.catalog-17":
+    "Tencent mixture-of-experts language model for general reasoning.",
+  "images.description.catalog-18":
+    "DeepSeek Flash update improving reasoning, coding, agents, and vision.",
+  "images.description.catalog-19":
+    "Ling Flash language model for search, office work, and coding agents.",
+  "images.description.catalog-20":
+    "Native multimodal Kimi agent for long-horizon coding and collaboration.",
+  "images.description.catalog-21":
+    "Large Qwen3 Coder model for agentic software development.",
+  "images.description.catalog-22":
+    "Multilingual Cohere Command A+ with vision and enterprise agent features.",
+  "images.description.catalog-23":
+    "LG AI Research multilingual MoE model for reasoning and tool use.",
+  "images.description.catalog-24":
+    "DeepSeek V3.2 emphasizes efficient reasoning and agent capability.",
+  "images.description.catalog-25":
+    "GLM coding model for programming and agentic development.",
+  "images.description.catalog-26":
+    "Multimodal Llama 4 Maverick MoE model for text and image understanding.",
+  "images.description.catalog-27":
+    "Hermes 4 builds on Llama 3.1 405B with chat and reasoning modes.",
+  "images.description.catalog-28":
+    "Large Meta Llama 3.1 instruct model for multilingual text tasks.",
+  "images.description.catalog-29":
+    "AI21 Jamba hybrid SSM-Transformer for long context and grounded answers.",
+  "images.description.catalog-30":
+    "Trinity Large preview for long-context understanding and reasoning.",
+  "images.description.catalog-31":
+    "DeepSeek R1 update focused on reinforcement-learning-based reasoning.",
+  "images.description.catalog-32":
+    "First-generation DeepSeek R1 for multi-step reasoning.",
+  "images.description.catalog-33":
+    "Kimi K2 Thinking agent supports step-by-step reasoning and tool use.",
+  "images.description.catalog-34":
+    "Native multimodal Kimi K2.5 combines vision with agent capability.",
+  "images.description.catalog-35":
+    "Xiaomi MiMo mixture-of-experts model with million-token context.",
+  "images.description.catalog-36":
+    "Qwen3 VL Thinking for vision understanding and multi-step reasoning.",
+  "images.description.catalog-37":
+    "Multimodal GLM-5 Flash model for coding and agent tasks.",
+  "images.description.catalog-38":
+    "Experimental Qwen3.8 Flash architecture for efficient multimodal reasoning.",
+  "images.description.catalog-39":
+    "Official DeepSeek V4 Flash release optimized for agentic tasks.",
+  "images.description.catalog-40":
+    "MiniMax M2.7 for complex agent workflows and productivity tasks.",
+  "images.description.catalog-41":
+    "Baidu ERNIE 4.5 vision-language MoE for image understanding.",
+  "images.description.catalog-42":
+    "Baidu ERNIE 4.5 text MoE for general language tasks.",
+  "images.description.catalog-43":
+    "NVIDIA Nemotron vision-language model for local agents and customization.",
+  "images.description.catalog-44":
+    "Mistral Small 4 unifies instruction, reasoning, coding, and vision.",
+  "images.description.catalog-45":
+    "Leanstral focuses on Lean 4 formal proofs and code reasoning, with image input.",
+  "images.description.catalog-46":
+    "Devstral 2 instruct model for software-engineering agent workflows.",
+  "images.description.catalog-47":
+    "NVIDIA Nemotron Super hybrid model for reasoning and tool use.",
+  "images.description.catalog-48":
+    "NVIDIA Nemotron Super VL for documents, video, and coding tasks.",
+  "images.description.catalog-49":
+    "OpenAI open-weight reasoning model for developers and agents.",
+  "images.description.catalog-50":
+    "Cohere Command A multilingual text model for enterprise chat and long context.",
+  "images.modality.multimodal": "Multimodal",
+  "images.architecture": "Architecture",
+  "images.access": "Model access",
+  "images.access.public": "Publicly accessible",
+  "images.access.terms": "Accept terms to access",
+  "images.access.manual": "Request access",
+  "images.weightFormat": "Weight format",
+  "images.notConfigured": "Not configured on this platform",
+  "images.source": "Source",
+  "images.officialCard": "Official model card",
+  "images.verifiedAt": "Details checked",
+  "images.description.ready":
+    "Integrated with this platform; select GPU resources in Deployment Center to create a service.",
+  "images.context": "Context window",
+  "images.catalogCount": "Catalog models",
+  "images.deployableCount": "Deployable",
+  "images.catalogNotice":
+    "Model details were checked against official model cards. Newly listed models still need deployment integration on this platform.",
+  "images.searchPlaceholder": "Search models, publishers, or model IDs",
+  "images.publisher": "Publisher",
+  "images.allPublishers": "All publishers",
+  "images.availability": "Availability",
+  "images.allAvailability": "All states",
+  "images.deployable": "Deployable",
+  "images.catalogOnly": "Deployment pending",
+  "images.allModalities": "All modalities",
+  "images.modality.text": "Text",
+  "images.modality.image": "Image",
+  "images.modalityUnknown": "Modality unverified",
+  "images.allLicenses": "All licenses",
+  "images.allSizes": "All parameter sizes",
+  "images.sort": "Sort",
+  "images.sortFeatured": "Featured first",
+  "images.sortParameters": "Largest parameters",
+  "images.sortPublisher": "By publisher",
+  "images.sortName": "By name",
+  "images.noMatches": "No models match these filters.",
+  "images.totalParams": "Total parameters",
+  "images.activeParams": "Active parameters",
+  "images.modelIdentity": "Model identity and status",
+  "images.modelRef": "Model ID",
+  "images.modelSpecifications": "Model specifications",
+  "images.country": "Origin country or region",
+  "images.country.CN": "China",
+  "images.country.US": "United States",
+  "images.country.FR": "France",
+  "images.country.KR": "South Korea",
+  "images.country.CA": "Canada",
+  "images.country.IL": "Israel",
+  "images.unknown": "Unverified",
+  "images.verified": "Ready model",
+  "images.billingNote":
+    "These are model specifications. Deployment cost depends on the selected GPU resources.",
   "images.models": "Model catalog",
   "images.images": "Image marketplace",
   "images.favorite": "Favorite",

@@ -323,6 +323,17 @@ export interface Model {
   headDim: number;
   context: number;
   favorite: boolean;
+  modelRef?: string;
+  publisher?: string;
+  countryCode?: string;
+  activeParamsB?: number;
+  parameterEstimate?: boolean;
+  catalogOnly?: boolean;
+  featuredRank?: number;
+  architecture?: string;
+  access?: "public" | "terms" | "manual";
+  weightFormat?: string;
+  sourceUrl?: string;
 }
 export interface Image {
   id: string;
