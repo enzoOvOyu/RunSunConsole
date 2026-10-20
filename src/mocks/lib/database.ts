@@ -437,6 +437,13 @@ export function restoreDatabase() {
           ),
         ];
       data.volumes ??= seedStorageVolumes(data.resources);
+      const savedFavorites = new Map(
+        (data.models || []).map((model) => [model.id, model.favorite]),
+      );
+      data.models = MODELS.map((model) => ({
+        ...model,
+        favorite: savedFavorites.get(model.id) ?? model.favorite,
+      }));
       data.usageMeters ??= {};
       data.replicaRestarts ??= {};
       data.voucherPending ??= {};
