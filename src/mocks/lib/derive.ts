@@ -92,7 +92,13 @@ export function estimate(
       false,
     );
   if (spec.publicIp)
-    add("ip", "per_ip_hour", find("per_ip_hour", null), 1, false);
+    add(
+      "ip",
+      "per_ip_hour",
+      find("per_ip_hour", null),
+      "quantity" in spec ? spec.quantity : 1,
+      true,
+    );
   const hourly = round(
     lines.reduce((a, l) => a + l.hourly, 0),
     6,
@@ -133,7 +139,11 @@ export function costPerHour(resource: Resource, rates: Rate[]) {
   const e = estimate(resource, rates);
   return round(
     e.lines
-      .filter((l) => resource.status === "running" || l.key === "storage")
+      .filter(
+        (l) =>
+          l.key !== "ip" &&
+          (resource.status === "running" || l.key === "storage"),
+      )
       .reduce((a, l) => a + l.hourly, 0),
     6,
   );

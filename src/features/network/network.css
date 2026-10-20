@@ -1,0 +1,69 @@
+.network-scope {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.network-scope a {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.network-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 18px 0 10px;
+}
+
+.network-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  align-items: flex-start;
+}
+
+.network-identity small {
+  max-width: 230px;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+}
+
+.network-actions {
+  flex-wrap: wrap;
+}
+
+.network-topology {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 28px;
+  border: 1px dashed var(--rs-border);
+  border-radius: 10px;
+  background: var(--rs-bg);
+}
+
+.network-topology .row {
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.network-form .dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 12px;
+}
+
+@media (width <= 720px) {
+  .network-scope {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .network-scope a {
+    margin-left: 0;
+  }
+}

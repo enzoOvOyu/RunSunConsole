@@ -1,5 +1,7 @@
 import { useAuth } from "../stores/auth";
 export const EP = {
+  network: "/api/network",
+  resourceNetwork: (uuid: string) => `/api/resources/${uuid}/network`,
   machines: (uuid: string) => `/api/resources/${uuid}/machines`,
   governance: (uuid: string) => `/api/resources/${uuid}/governance`,
   options: "/api/deployment-options",

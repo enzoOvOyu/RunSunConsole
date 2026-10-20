@@ -19,6 +19,10 @@ import {
   Workflow,
   ReceiptText,
   TicketPercent,
+  Network,
+  Globe2,
+  ShieldCheck,
+  Cable,
 } from "lucide-react";
 import { KINDS, type Role } from "../../types/domain";
 import { KIND_META } from "../../lib/ids";
@@ -39,6 +43,10 @@ export interface NavGroup {
   direct?: boolean;
 }
 const itemIcons: Record<string, typeof LayoutDashboard> = {
+  vpcs: Network,
+  eips: Globe2,
+  firewalls: ShieldCheck,
+  tunnels: Cable,
   projects: FolderKanban,
   quotas: Gauge,
   cost: ChartNoAxesCombined,
@@ -94,6 +102,11 @@ export function buildGroups(role: Role): NavGroup[] {
       })),
     },
     ...[
+      {
+        id: "network",
+        icon: Network,
+        items: ["vpcs", "eips", "firewalls", "tunnels"],
+      },
       {
         id: "ops",
         icon: Briefcase,

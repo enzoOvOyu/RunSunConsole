@@ -115,6 +115,15 @@ export function BillingUsageTable({
         <div className="stack">
           <Button
             onClick={() => {
+              const eip = usage.find(
+                (u) => u.resourceUuid === id && u.kind === "eip",
+              );
+              if (eip) {
+                navigate(
+                  `/network/eips?drawer=${id}&region=${eip.region}&project_id=${eip.projectId}`,
+                );
+                return;
+              }
               const r = resources.data?.items.find(
                 (r) => r.resourceUuid === id,
               );

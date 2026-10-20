@@ -22,6 +22,9 @@ export const defaultScaling = (kind: Kind): ScalingConfig => ({
 });
 export function defaultSpec(kind: Kind, pool: Pool): Resource["spec"] {
   const common = {
+    vpc: "default-vpc",
+    subnet: "jp-default",
+    securityGroups: ["default"],
     gpuCount: 1,
     storageGb: 100,
     publicIp: false,

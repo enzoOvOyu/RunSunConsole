@@ -1,3 +1,4 @@
+import { ResourceNetwork } from "../../network/ResourceNetwork";
 import { useState } from "react";
 import type { ResourceOf } from "../../../types/domain";
 import { t } from "../../../i18n";
@@ -24,6 +25,7 @@ export function ServerDetail({
     "monitoring",
     "console",
     "configuration",
+    "network",
     "events",
     "billing",
     "scaling",
@@ -62,6 +64,8 @@ export function ServerDetail({
         <MonitorPanel resource={r} />
       ) : tab === "console" ? (
         <AccessPanel resource={r} />
+      ) : tab === "network" ? (
+        <ResourceNetwork resource={r} />
       ) : tab === "configuration" ? (
         <SpecPanel resource={r} />
       ) : tab === "events" ? (

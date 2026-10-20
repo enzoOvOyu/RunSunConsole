@@ -86,6 +86,39 @@ export const router = createBrowserRouter([
         }),
       },
       {
+        path: "network/vpcs",
+        lazy: async () => ({
+          Component: withLocale(
+            (await import("../features/network/NetworkPages")).VpcsPage,
+          ),
+        }),
+      },
+      {
+        path: "network/eips",
+        lazy: async () => ({
+          Component: withLocale(
+            (await import("../features/network/NetworkPages")).EipsPage,
+          ),
+        }),
+      },
+      {
+        path: "network/firewalls",
+        lazy: async () => ({
+          Component: withLocale(
+            (await import("../features/network/NetworkPages"))
+              .SecurityGroupsPage,
+          ),
+        }),
+      },
+      {
+        path: "network/tunnels",
+        lazy: async () => ({
+          Component: withLocale(
+            (await import("../features/network/NetworkPages")).TunnelsPage,
+          ),
+        }),
+      },
+      {
         path: "ops/projects",
         lazy: async () => ({
           Component: withLocale(

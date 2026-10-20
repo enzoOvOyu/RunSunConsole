@@ -8,6 +8,7 @@ import { inferenceSchema } from "../../lib/schema";
 import { WizardLayout, PoolCards } from "./shared/WizardLayout";
 import {
   useSpec,
+  NetworkFields,
   SpecNumber,
   SpecText,
   SpecCheck,
@@ -164,6 +165,7 @@ function InferenceForm({ step, pools, models }: FormContext) {
     </div>
   ) : step === 3 ? (
     <div className="stack">
+      <NetworkFields />
       <div className="form-grid">
         <SpecSelect
           name="engine"

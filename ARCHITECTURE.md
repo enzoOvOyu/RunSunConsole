@@ -1,7 +1,7 @@
 # ARCHITECTURE — RunSun GPU Cloud 控制台（前端架构）
 
 > 文档类型：架构说明（前端为主；后端为蓝图，不在本次实现）
-> 版本：**v0.10 · 当前架构基线**
+> 版本：**v0.11 · 当前架构基线**
 > 关联文档：`PRD.md`（产品需求，业务规则唯一来源）、`DESIGN-SYSTEM.md`（UI 规范）、`MOCK-DATA.md`（数据约束）
 
 > 本文定义前端模块、路由、状态和接口边界。业务行为以 PRD 当前版本为准：总览跨 JP / TH / SG / US 展示，账号菜单不承载项目，四类资源完整详情使用右侧 Drawer；平台节点运维数据不作为租户导航或总览健康预览。
@@ -1390,3 +1390,37 @@ plans/orgs/users/projects                      身份与计费主体
 - `sb.runningTotal` 英文版缺少 `{v0}` 占位符 → 补齐，并由 i18n 契约测试守护（PRD §10.1）。
 - 伸缩事件反向生成时出现"扩容后规模反而变小"的越界样本 → 生成器中翻转方向并 clamp 到 `[min, max]`，末值强制等于资源实际规格。
 - 生产包静态打入 MSW 与全部 fixture → 改动态导入 + `manualChunks`（§11.2）。
+
+## 16. 网络模块增补（M7）
+
+业务唯一口径见 PRD §14。路由 `/network/vpcs`、`/network/eips`、`/network/firewalls`、`/network/tunnels` 懒加载 `features/network/NetworkPages.tsx`；共享导航和命令面板读取 `navModel`。`NetworkEditor` 为二层 Modal，`ResourceNetwork` 为四类资源逐设备接口明细。部署 API options 按项目和区域提供真实 VPC、交换机容量、安全组、空闲 EIP。
+
+### 16.1 类型与状态
+
+`types/network.ts` 定义 Vpc / Subnet / SecurityGroup / SecurityRule / NetworkInterface / ElasticIp / IpsecTunnel / NetworkAudit；统一带 projectId、region。网络实体 ID 独立于展示 ID；EIP 使用 ResourceUuid/DisplayId，Usage.kind 增补 `eip`，不将 EIP 加入四类算力 Resource 联合。
+
+Mock `Database.network` 保存实体、历史接口、审计和地址池序号。`lib/network.ts` 提供 IPv4/CIDR 与安全组规则匹配纯函数，`mocks/lib/network.ts` 提供隔离校验、IPAM 和生命周期。HTTP 只在 `mocks/handlers/index.ts` 注册，UI 只读取 API。
+
+浏览器 compact v2 快照沿用原 key，缺少 network 的旧快照自动生成分项目分区域默认网络、逐接口地址和现有公网地址，保留原资源与历史费用。Usage 归属引用兼容旧算力数组索引和新 EIP UUID，避免刷新丢账单。PSK 不进入数据库模型；只保留 pskConfigured 标记。
+
+### 16.2 接口契约
+
+基础路径 `/api/network`：
+
+| 路径 | 方法 | 行为 |
+| --- | --- | --- |
+| `/quotas` | GET | 区域网络配额，含已用/总量/剩余/管理链接 |
+| `/vpcs`、`/vpcs/:id` | GET/POST；GET/PATCH/DELETE | 列表/创建；详情/改名/依赖检查删除 |
+| `/subnets`、`/subnets/:id` | GET/POST；PATCH/DELETE | 地址池列表/创建；改名/使用检查删除 |
+| `/security-groups`、`/security-groups/:id` | GET/POST；GET/PATCH/DELETE | 安全组与入出站规则详情 |
+| `/security-groups/:id/rules[/:ruleId]` | POST/PATCH/DELETE | 规则创建、完整更新与删除 |
+| `/security-groups/:id/associate` | POST | `{resourceUuid, remove?}`，逻辑 VM 组全实例关联 |
+| `/interfaces` | GET | 按 region/project_id/resource_id/vpc_id/group_id 过滤有效接口 |
+| `/eips`、`/eips/:id` | GET/POST；GET/PATCH/DELETE | 独立分配及账单；DELETE 需 `confirm=displayId` |
+| `/eips/:id/bind`、`/unbind` | POST | `{interfaceId}` 绑定或解绑但保留分配 |
+| `/tunnels`、`/tunnels/:id` | GET/POST；GET/PATCH/DELETE | IPsec 配置与路由；PATCH 改名/启停/密钥轮换 |
+| `/api/resources/:uuid/network` | GET | `{interfaces:[...]}`，含历史接口与 VPC/交换机/安全组/EIP 引用 |
+
+列表统一支持 region/project_id/q；EIP 支持 includeReleased。网络作用域错误 409 NETWORK_SCOPE_MISMATCH；依赖错误 NETWORK_HAS_DEPENDENCIES；子网耗尽 SUBNET_EXHAUSTED；路由重叠 CIDR_OVERLAP；EIP 冲突 EIP_IN_USE/EIP_NOT_AVAILABLE；默认删除 DEFAULT_NETWORK。参数校验 422，角色写入 403，已删除对象修改 410。
+
+真实后端接入时，在同一事务内执行配额/地址池预检与分配；数据库需对有效 `(subnet_id, private_ip)`、有效 `(interface_id)` 的 EIP 绑定建立唯一约束。浏览器角色切换仅为展示；实际权限必须由服务端租户会话落实。当前未新增后端或 PostgreSQL 业务表。

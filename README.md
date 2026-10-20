@@ -24,6 +24,7 @@ The development endpoint is bound to `127.0.0.1:5173`. PostgreSQL and Adminer st
 - M4: Resource runtime diagnostics, secure password drafts, idempotent deployment, billing and historical data consistency.
 - M5: Inference service governance, weighted release traffic, gateway settings and review before saving.
 - M6: Regional allocation overview, host memory quotas, per-machine bare metal inventory, semantic navigation icons and responsive deployment estimates.
+- M7: Project/region-scoped VPCs, subnets, independent EIP lifecycle and metering, stateful security-group configuration, IPsec tunnel configuration, and per-device deployment network allocation.
 
 M1 validated with `pnpm typecheck`, `pnpm test` (7 files, 13 assertions), and `pnpm build`.
 
@@ -57,3 +58,11 @@ sh scripts/test-browser.sh
 The browser runner reads the Playwright version from the development container, uses temporary host tooling, and copies the committed tests/config unchanged. `PLAYWRIGHT_CHROMIUM_EXECUTABLE` can select an existing Chromium executable. The Alpine development container is used for compilation, unit tests and the Vite server; browser execution takes place on the Ubuntu host.
 
 Business data and mutations are served by MSW. Compact billing state is saved in browser storage and uploaded object content in IndexedDB. Real GPU provisioning, SSH/Jupyter/BMC sessions, external object endpoints and invoice issuance require backend services; this repository implements the frontend and its Mock contracts as scoped by the design.
+
+### M7 network management and quotas
+
+Network Management adds regional, project-isolated VPCs and vSwitches, per-device private addresses, independent EIP allocation/binding/release and retention metering, VM security-group rules and associations, and IPsec tunnel configuration. All four deployment wizards consume scoped network options; compute Drawers expose effective per-device network information. The Quotas page includes regional network counts, limits, remaining capacity, utilization, EIP allocation breakdown, subnet address pools and quota request links with region/metric context.
+
+Existing browser snapshots migrate without dropping compute resources or historical bills. EIP fees and quota remain allocated after unbind, VM stop or VM deletion, and end on EIP release. PSKs are validated only and never stored or returned. Network actions follow existing roles and dependency checks. This remains a frontend/MSW implementation: no actual firewall rules, routes or VPN connections are applied. Product and API contracts are in PRD §14 and ARCHITECTURE §16, with official Alibaba Cloud references in the PRD.
+
+Validation: 68 Vitest assertions in 13 files; all 21 Chromium scenarios, followed by 5 network scenarios after the final quota layout and input-limit adjustments. TypeScript, ESLint, Stylelint, `git diff --check` and production build pass. Entry JavaScript is 173.49 kB, below the 250 kB budget. Remote screenshots were inspected for network details and the expanded quota page.

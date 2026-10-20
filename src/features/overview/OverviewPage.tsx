@@ -300,7 +300,7 @@ export default function OverviewPage() {
                 data={data.trend}
                 keys={
                   grouping === "kind"
-                    ? [...KINDS]
+                    ? [...KINDS, "eip"]
                     : grouping === "project"
                       ? (data.projects || []).map((p) => p.id)
                       : ["amount"]

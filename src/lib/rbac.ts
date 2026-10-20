@@ -9,6 +9,7 @@ export function canSeePath(role: Role, path: string) {
     return (
       path.startsWith("/resources/") ||
       path.startsWith("/billing/") ||
+      path === "/network/eips" ||
       path === "/ops/cost" ||
       path === "/overview"
     );

@@ -1,3 +1,4 @@
+import { ResourceNetwork } from "../../network/ResourceNetwork";
 import {
   ControlPlanePanel,
   NodePoolsPanel,
@@ -62,7 +63,10 @@ export function VgpuDetail({ resource: r }: { resource: ResourceOf<"vgpu"> }) {
       ) : tab === "workloads" ? (
         <WorkloadsPanel resource={r} />
       ) : tab === "network" ? (
-        <ClusterNetworkPanel resource={r} />
+        <div className="stack">
+          <ResourceNetwork resource={r} />
+          <ClusterNetworkPanel resource={r} />
+        </div>
       ) : tab === "topology" ? (
         <Panel title={t("tab.topology")}>
           <Suspense fallback={<Loading />}>

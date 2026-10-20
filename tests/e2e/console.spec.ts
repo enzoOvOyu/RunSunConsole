@@ -9,6 +9,10 @@ const routes = [
   "deployment/baremetal",
   "deployment/vgpu",
   "deployment/inference",
+  "network/vpcs",
+  "network/eips",
+  "network/firewalls",
+  "network/tunnels",
   "ops/projects",
   "ops/quotas",
   "ops/cost",
@@ -569,4 +573,188 @@ test("restored mock state repairs PVC capacity without discarding saved resource
     async () => await (await fetch("/api/projects")).json(),
   );
   expect(projects.some((p: { id: string }) => p.id === project.id)).toBe(true);
+});
+
+test("network console manages isolated VPCs and dependent subnets", async ({
+  page,
+}) => {
+  await page.goto("/network/vpcs");
+  await expect(
+    page.getByRole("heading", { name: "专有网络 VPC", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "新建", exact: true }).click();
+  const form = page.getByRole("dialog");
+  await form
+    .getByRole("textbox", { name: "名称", exact: true })
+    .fill("e2e-vpc");
+  await form
+    .getByRole("textbox", { name: "IPv4 网段", exact: true })
+    .fill("10.110.0.0/16");
+  await form.getByRole("button", { name: "确认", exact: true }).click();
+  await expect(form).not.toBeVisible();
+  await page.getByRole("button", { name: "e2e-vpc", exact: true }).click();
+  const drawer = page.getByRole("dialog");
+  await drawer.getByRole("button", { name: "创建交换机", exact: true }).click();
+  const modal = page.getByRole("dialog").last();
+  await modal
+    .getByRole("textbox", { name: "名称", exact: true })
+    .fill("e2e-subnet");
+  await modal
+    .getByRole("textbox", { name: "IPv4 网段", exact: true })
+    .fill("10.110.1.0/24");
+  await modal.getByRole("button", { name: "确认", exact: true }).click();
+  await drawer.getByRole("tab", { name: "交换机", exact: true }).click();
+  await expect(drawer).toContainText("e2e-subnet");
+  await expect(drawer).toContainText("252");
+  await page.reload();
+  await expect(page.getByRole("dialog")).toContainText("e2e-vpc");
+});
+test("network console allocates and releases EIPs without a VM", async ({
+  page,
+}) => {
+  await page.goto("/network/eips");
+  await page.getByRole("button", { name: "分配公网 IP", exact: true }).click();
+  const form = page.getByRole("dialog");
+  await form
+    .getByRole("textbox", { name: "名称", exact: true })
+    .fill("e2e-idle-ip");
+  await form.getByRole("button", { name: "确认", exact: true }).click();
+  await expect(form).not.toBeVisible();
+  await page.getByRole("button", { name: "e2e-idle-ip", exact: true }).click();
+  const drawer = page.getByRole("dialog");
+  await expect(drawer).toContainText("未绑定");
+  await drawer
+    .getByRole("button", { name: "释放公网 IP", exact: true })
+    .click();
+  const modal = page.getByRole("dialog").last();
+  const text = await modal.locator(".field > span").first().textContent();
+  const displayId = text!.match(/eip-[a-f0-9]+/)![0];
+  await modal.getByRole("textbox").fill(displayId);
+  await modal.getByRole("button", { name: "释放公网 IP", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByLabel("包含已释放地址").check();
+  await page.getByRole("button", { name: "e2e-idle-ip", exact: true }).click();
+  await expect(page.getByRole("dialog")).toContainText("已释放");
+});
+test("network console creates firewall rules and configures IPsec without exposing a secret", async ({
+  page,
+}) => {
+  await page.goto("/network/firewalls");
+  await page.getByRole("button", { name: "新建", exact: true }).click();
+  let form = page.getByRole("dialog");
+  await form
+    .getByRole("textbox", { name: "名称", exact: true })
+    .fill("e2e-firewall");
+  await form.getByRole("button", { name: "确认", exact: true }).click();
+  await expect(form).not.toBeVisible();
+  await page.getByRole("button", { name: "e2e-firewall", exact: true }).click();
+  await page.getByRole("button", { name: "添加规则", exact: true }).click();
+  form = page.getByRole("dialog").last();
+  await form.getByRole("button", { name: "确认", exact: true }).click();
+  await page.getByRole("tab", { name: "入方向", exact: true }).click();
+  await expect(page.getByRole("dialog")).toContainText("443–443");
+  await page.keyboard.press("Escape");
+  await page.goto("/network/eips");
+  await page.getByRole("button", { name: "分配公网 IP", exact: true }).click();
+  form = page.getByRole("dialog");
+  await form
+    .getByRole("textbox", { name: "名称", exact: true })
+    .fill("e2e-vpn-gateway");
+  await form.getByRole("button", { name: "确认", exact: true }).click();
+  await expect(form).not.toBeVisible();
+  await page.goto("/network/tunnels");
+  await page.getByRole("button", { name: "新建", exact: true }).click();
+  form = page.getByRole("dialog");
+  await form
+    .getByRole("textbox", { name: "名称", exact: true })
+    .fill("e2e-office-tunnel");
+  const select = form.getByLabel("弹性公网 IP", { exact: true });
+  await expect(select.locator("option")).toHaveCount(2);
+  await select.selectOption({ index: 1 });
+  await form
+    .getByRole("textbox", { name: "对端公网 IP", exact: true })
+    .fill("203.0.113.250");
+  await form
+    .getByLabel("预共享密钥", { exact: true })
+    .fill("e2e-top-secret-key-123456");
+  await form.getByRole("button", { name: "确认", exact: true }).click();
+  await expect(form).not.toBeVisible();
+  await page
+    .getByRole("button", { name: "e2e-office-tunnel", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toContainText("配置已停用");
+  await expect(page.getByRole("dialog")).toContainText("IKEv2");
+  const stored = await page.evaluate(() =>
+    localStorage.getItem("rs.mock.database.v2"),
+  );
+  expect(stored).not.toContain("e2e-top-secret-key-123456");
+  await page.screenshot({
+    path: "/tmp/runsuncos-network-tunnel.png",
+    fullPage: true,
+  });
+});
+
+test("network allocations update regional quotas and prefill a quota request", async ({
+  page,
+}) => {
+  await page.goto("/ops/quotas?region=jp");
+  const panel = page.locator(".panel").filter({
+    has: page.getByRole("heading", { name: "网络资源配额", exact: true }),
+  });
+  const row = panel.getByRole("row").filter({
+    has: page.getByRole("link", { name: "专有网络 VPC 数", exact: true }),
+  });
+  await expect(row).toBeVisible();
+  const before = Number(await row.locator("td").nth(1).textContent());
+  await page.goto("/network/vpcs?region=jp");
+  await page.getByRole("button", { name: "新建", exact: true }).click();
+  const form = page.getByRole("dialog");
+  await form
+    .getByRole("textbox", { name: "名称", exact: true })
+    .fill("quota-linked-vpc");
+  await form
+    .getByRole("textbox", { name: "IPv4 网段", exact: true })
+    .fill("10.120.0.0/16");
+  await form.getByRole("button", { name: "确认", exact: true }).click();
+  await expect(form).not.toBeVisible();
+  await page.goto("/ops/quotas?region=jp");
+  await expect(row.locator("td").nth(1)).toHaveText(String(before + 1));
+  await expect(
+    page.getByRole("heading", { name: "交换机地址用量", exact: true }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: "/tmp/runsuncos-network-quotas.png",
+    fullPage: true,
+  });
+  await row.getByRole("link", { name: "申请配额", exact: true }).click();
+  await expect(
+    page.getByRole("dialog").getByRole("textbox").first(),
+  ).toHaveValue(/专有网络 VPC 数/);
+});
+test("resource network tabs show per-device private addresses and deployment choices are scoped", async ({
+  page,
+}) => {
+  for (const route of ["servers", "baremetal", "vgpu", "inference"]) {
+    await page.goto(`/resources/${route}`);
+    await page.locator("tbody tr").first().click();
+    await page.getByRole("tab", { name: "网络与存储", exact: true }).click();
+    const panel = page.locator(".panel").filter({
+      has: page.getByRole("heading", { name: "网络管理", exact: true }),
+    });
+    await expect(panel.locator("tbody tr").first()).toBeVisible();
+    await expect(panel.locator("tbody")).toContainText(/10\.(16|32|48|64)\./);
+    await page.keyboard.press("Escape");
+  }
+  await page.goto("/deployment/server");
+  for (let i = 0; i < 3; i++)
+    await page.getByRole("button", { name: "下一步", exact: true }).click();
+  await expect(page.getByLabel("VPC", { exact: true })).toHaveValue(/^vpc-/);
+  const values = await page
+    .getByLabel("安全组", { exact: true })
+    .locator("option")
+    .evaluateAll((options) =>
+      options.map((o) => (o as HTMLOptionElement).value),
+    );
+  expect(values.length).toBeGreaterThan(0);
+  expect(values.every((v) => v.startsWith("sg-"))).toBe(true);
 });

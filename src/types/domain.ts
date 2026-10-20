@@ -1,3 +1,4 @@
+import type { DeploymentNetworkOptions } from "./network";
 import type { InferenceGatewaySettings } from "./inference";
 export const KINDS = ["gpu_vm", "gpu_baremetal", "vgpu", "inference"] as const;
 export const REGIONS = ["jp", "th", "sg", "us"] as const;
@@ -41,6 +42,10 @@ export interface ScalingConfig {
   maintenance_window: string;
 }
 export interface CommonSpec {
+  vpc?: string;
+  subnet?: string;
+  securityGroups?: string[];
+  eipId?: string;
   gpuCount: number;
   storageGb: number;
   publicIp: boolean;
@@ -247,7 +252,7 @@ export interface Usage {
   displayId: DisplayId;
   projectId: string;
   region: Region;
-  kind: Kind;
+  kind: Kind | "eip";
   usageHour: string;
   unit: BillingUnit;
   quantity: number;
@@ -443,12 +448,6 @@ export interface Account {
   lowBalanceThresholdUsd: number;
   budget: number;
 }
-export interface DeploymentOptions {
-  vpcs: {
-    id: string;
-    name: string;
-    subnets: { id: string; name: string; region: Region }[];
-  }[];
-  securityGroups: { id: string; name: string }[];
+export interface DeploymentOptions extends DeploymentNetworkOptions {
   k8sVersions: string[];
 }

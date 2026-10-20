@@ -1,3 +1,4 @@
+import { ResourceNetwork } from "../../network/ResourceNetwork";
 import { GovernancePanel } from "./GovernancePanel";
 import { ReplicaManagement } from "../shared/RuntimePanels";
 import { useState } from "react";
@@ -46,6 +47,7 @@ export function InferenceDetail({
           "governance",
           "logs",
           "configuration",
+          "network",
           "events",
           "billing",
           "scaling",
@@ -97,6 +99,8 @@ export function InferenceDetail({
             <Empty text={t("common.noData")} />
           )}
         </Panel>
+      ) : tab === "network" ? (
+        <ResourceNetwork resource={r} />
       ) : tab === "configuration" ? (
         <SpecPanel resource={r} />
       ) : tab === "events" ? (

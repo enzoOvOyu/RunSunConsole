@@ -1,3 +1,4 @@
+import { NetworkQuotas } from "./NetworkQuotas";
 import { useState, Fragment } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { Quota, Resource, Rate } from "../../types/domain";
@@ -58,18 +59,21 @@ export default function QuotasPage() {
       ) : q.error ? (
         <ErrorState error={q.error} />
       ) : (
-        <div className="grid quota-grid">
-          {q.data?.map((quota) => (
-            <Panel key={quota.metric} title={t("quota." + quota.metric)}>
-              <div className="stat-value">
-                {number(quota.usedValue)}
-                <small> / {number(quota.limitValue)}</small>
-              </div>
-              <Progress value={(quota.usedValue / quota.limitValue) * 100} />
-            </Panel>
-          ))}
+        <div className="grid grid-4">
+          {q.data
+            ?.filter((quota) => quota.metric !== "ip")
+            .map((quota) => (
+              <Panel key={quota.metric} title={t("quota." + quota.metric)}>
+                <div className="stat-value">
+                  {number(quota.usedValue)}
+                  <small> / {number(quota.limitValue)}</small>
+                </div>
+                <Progress value={(quota.usedValue / quota.limitValue) * 100} />
+              </Panel>
+            ))}
         </div>
       )}
+      <NetworkQuotas region={region} />
       <div className="section-gap">
         <Panel title={t("quota.allocated")}>
           {pools.length ? (

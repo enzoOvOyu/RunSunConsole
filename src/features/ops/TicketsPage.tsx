@@ -33,7 +33,19 @@ export default function TicketsPage() {
   const [params] = useSearchParams();
   const [open, setOpen] = useState(!!params.get("new"));
   const [title, setTitle] = useState(
-    params.get("new") === "quota" ? t("data.ticket.quota") : "",
+    params.get("new") === "quota"
+      ? [
+          t("data.ticket.quota"),
+          ...(["vpc", "subnet", "security_group", "tunnel", "ip"].includes(
+            params.get("metric") || "",
+          )
+            ? [
+                t("quota." + params.get("metric")),
+                t("common." + (params.get("region") || region)),
+              ]
+            : []),
+        ].join(" · ")
+      : "",
   );
   const [message, setMessage] = useState("");
   const [priority, setPriority] = useState("normal");

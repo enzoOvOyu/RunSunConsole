@@ -1,3 +1,4 @@
+import { ResourceNetwork } from "../../network/ResourceNetwork";
 import { MachineInventory, MachineAccess } from "./MachinePanels";
 import type { BaremetalMachine } from "../../../types/baremetal";
 import { EP } from "../../../lib/api-client";
@@ -147,7 +148,10 @@ export function BaremetalDetail({
           <Loading />
         )
       ) : tab === "network" ? (
-        <HardwareHealthPanel resource={r} nodeIndex={selected} networkOnly />
+        <div className="stack">
+          <ResourceNetwork resource={r} />
+          <HardwareHealthPanel resource={r} nodeIndex={selected} networkOnly />
+        </div>
       ) : tab === "events" ? (
         <EventsPanel resource={r} />
       ) : tab === "billing" ? (

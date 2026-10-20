@@ -1,3 +1,5 @@
+import type { NetworkState } from "../../types/network";
+import { makeNetwork } from "./network";
 import type {
   Resource,
   Project,
@@ -32,6 +34,7 @@ import { estimate, meteringLines, provisioningSeconds } from "./derive";
 import { round } from "../../lib/money";
 import { defaultScaling, normalizeSpec } from "../../lib/config";
 export interface Database {
+  network: NetworkState;
   usageMeters: Record<string, { quantity: number; amount: number }>;
   voucherPending: Record<string, number>;
   replicaRestarts: Record<string, Record<string, number>>;
@@ -55,6 +58,7 @@ export interface Database {
 }
 export function makeDatabase(): Database {
   const resources = seedResources();
+  const network = makeNetwork(resources, structuredClone(PROJECTS));
   for (const r of resources) {
     if (r.status === "running") {
       const since =
@@ -296,6 +300,7 @@ export function makeDatabase(): Database {
     createdAt: r.createdAt,
   }));
   return {
+    network,
     usageMeters: {},
     voucherPending: {},
     replicaRestarts: {},
@@ -330,7 +335,7 @@ export function makeDatabase(): Database {
 }
 const KEY = "rs.mock.database.v2";
 type StoredDatabase = Omit<Database, "usage"> & {
-  usage: [string, number, number, number, number, number, number][];
+  usage: [string, number | string, number, number, number, number, number][];
 };
 const unitNames = [
   "per_gpu_hour",
@@ -346,7 +351,7 @@ const statusNames = [
   "error",
   "terminating",
 ] as const;
-function restore() {
+export function restoreDatabase() {
   try {
     const stored =
       typeof localStorage !== "undefined" ? localStorage.getItem(KEY) : null;
@@ -355,6 +360,7 @@ function restore() {
       data.resources = data.resources.map(
         (r) => ({ ...r, spec: normalizeSpec(r.spec) }) as Resource,
       );
+      data.network ??= makeNetwork(data.resources, data.projects);
       data.usageMeters ??= {};
       data.replicaRestarts ??= {};
       data.voucherPending ??= {};
@@ -369,10 +375,13 @@ function restore() {
           unitPrice,
           statusIndex,
         ]) => {
-          const r = data.resources[resourceIndex];
+          const r =
+            typeof resourceIndex === "number"
+              ? data.resources[resourceIndex]
+              : data.network.eips.find((e) => e.id === resourceIndex)!;
           return {
             id,
-            resourceUuid: r.resourceUuid,
+            resourceUuid: "resourceUuid" in r ? r.resourceUuid : r.id,
             displayId: r.displayId,
             projectId: r.projectId,
             region: r.region,
@@ -399,7 +408,7 @@ function restore() {
   }
   return makeDatabase();
 }
-export const db = restore();
+export const db = restoreDatabase();
 export function persist() {
   if (typeof localStorage === "undefined") return;
   const indexes = new Map(db.resources.map((r, i) => [r.resourceUuid, i]));
@@ -408,7 +417,7 @@ export function persist() {
     transactions: db.transactions.slice(-3000),
     usage: db.usage.map((u) => [
       u.id,
-      indexes.get(u.resourceUuid)!,
+      indexes.get(u.resourceUuid) ?? u.resourceUuid,
       new Date(u.usageHour).getTime(),
       unitNames.indexOf(u.unit),
       u.quantity,

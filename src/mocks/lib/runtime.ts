@@ -1,5 +1,5 @@
 import type { BaremetalMachine } from "../../types/baremetal";
-import { REGIONS, type Resource } from "../../types/domain";
+import { type Resource } from "../../types/domain";
 import type {
   HardwareSnapshot,
   ClusterView,
@@ -59,7 +59,10 @@ export function baremetalMachines(
     vcpu: pool.gpusPerNode * 16,
     memoryGb: r.spec.memoryGb,
     localNvmeGb: r.spec.localNvmeGb,
-    privateIp: `10.${REGIONS.indexOf(r.region) + 20}.${segment}.${index + 10}`,
+    privateIp:
+      db.network.interfaces.find(
+        (i) => i.resourceUuid === r.resourceUuid && i.index === index,
+      )?.privateIp || "—",
     bmcIp: `10.255.${segment}.${index + 10}`,
     rack: `${r.region.toUpperCase()}-R${Math.floor(index / 8) + 1}`,
     network: pool.network,

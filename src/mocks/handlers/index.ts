@@ -1,3 +1,24 @@
+import type { ElasticIp, SecurityRule, IpsecTunnel } from "../../types/network";
+import {
+  NetworkFailure,
+  ensureScope,
+  networkAudit,
+  availableIps,
+  subnetUsed,
+  checkResourceNetwork,
+  syncResourceNetwork,
+  releaseResourceNetwork,
+  allocateEip,
+  nextPrivateIp,
+  validVpcCidr,
+  verifySubnet,
+} from "../lib/network";
+import {
+  cidrRange,
+  cidrContains,
+  cidrOverlaps,
+  isPublicIpv4,
+} from "../../lib/network";
 import type {
   InferenceGovernance,
   InferenceGovernanceSettings,
@@ -73,15 +94,45 @@ const resource = (id: string) =>
   db.resources.find((r) => r.resourceUuid === id) || fail(404, "NOT_FOUND");
 const live = () => db.resources.filter((r) => !r.deletedAt);
 const used = (region: Region, metric: Quota["metric"], exclude?: string) =>
-  live()
-    .filter((r) => r.region === region && r.resourceUuid !== exclude)
-    .reduce((a, r) => a + quotaUse(r, metric), 0);
+  metric === "ip"
+    ? db.network.eips.filter((e) => e.region === region && !e.releasedAt).length
+    : live()
+        .filter((r) => r.region === region && r.resourceUuid !== exclude)
+        .reduce((a, r) => a + quotaUse(r, metric), 0);
 const limits: Record<Region, Record<Quota["metric"], number>> = {
   jp: { gpu: 400, vcpu: 6400, memory: 102400, storage: 20480, ip: 16 },
   th: { gpu: 128, vcpu: 2048, memory: 32768, storage: 10240, ip: 8 },
   sg: { gpu: 320, vcpu: 5120, memory: 90112, storage: 16384, ip: 12 },
   us: { gpu: 640, vcpu: 10240, memory: 196608, storage: 32768, ip: 32 },
 };
+const networkLimits = {
+  jp: { vpc: 20, subnet: 100, security_group: 100, tunnel: 20 },
+  th: { vpc: 10, subnet: 50, security_group: 50, tunnel: 10 },
+  sg: { vpc: 20, subnet: 100, security_group: 100, tunnel: 20 },
+  us: { vpc: 30, subnet: 150, security_group: 150, tunnel: 30 },
+};
+type NetworkMetric = keyof typeof networkLimits.jp;
+function networkUsed(region: Region, metric: NetworkMetric) {
+  const list =
+    metric === "vpc"
+      ? db.network.vpcs
+      : metric === "subnet"
+        ? db.network.subnets
+        : metric === "security_group"
+          ? db.network.groups
+          : db.network.tunnels;
+  return list.filter((x) => x.region === region && !x.deletedAt).length;
+}
+function checkNetworkQuota(
+  region: Region,
+  metric: NetworkMetric,
+  requested = 1,
+) {
+  const usedValue = networkUsed(region, metric);
+  const limit = networkLimits[region][metric];
+  if (usedValue + requested > limit)
+    fail(409, "QUOTA_EXCEEDED", { metric, limit, used: usedValue, requested });
+}
 export const quotas = (): Quota[] =>
   REGIONS.flatMap((region) =>
     QUOTA_METRICS.map((metric) => ({
@@ -183,7 +234,21 @@ function precheck(r: Resource, exclude?: string) {
     )
       fail(409, "LICENSE_EXCEEDED");
   }
+  checkResourceNetwork(db.network, r, multiplier);
+  if (r.kind === "gpu_vm" && r.spec.publicIp && !r.spec.eipId) {
+    const existing = db.network.interfaces.filter(
+      (i) => i.resourceUuid === r.resourceUuid && !i.releasedAt,
+    ).length;
+    const requested = Math.max(
+      0,
+      Math.ceil(r.spec.quantity * multiplier) - existing,
+    );
+    if (used(r.region, "ip") + requested > limits[r.region].ip)
+      fail(409, "QUOTA_EXCEEDED", { metric: "ip" });
+    if (db.network.ipSerial + requested > 500) fail(409, "EIP_POOL_EXHAUSTED");
+  }
   for (const metric of QUOTA_METRICS) {
+    if (metric === "ip") continue;
     const amount =
       quotaUse({ ...r, status: "running" } as Resource, metric) *
       (["gpu", "vcpu", "memory"].includes(metric) ? multiplier : 1);
@@ -211,8 +276,6 @@ function precheck(r: Resource, exclude?: string) {
       fail(422, "MODEL_MEMORY_EXCEEDED");
   }
   if (r.kind === "gpu_vm" || r.kind === "gpu_baremetal") {
-    if (!r.spec.subnet.startsWith(r.region + "-"))
-      fail(422, "VALIDATION_ERROR");
     const image = IMAGES.find((i) => i.id === r.spec.imageRef);
     if (
       !image ||
@@ -263,7 +326,7 @@ function settle(r: Resource) {
     const hour = Math.floor(cursor / 3600000) * 3600000;
     const end = Math.min(now, hour + 3600000);
     const hours = (end - cursor) / 3600000;
-    for (const line of meteringLines(e)) {
+    for (const line of meteringLines(e).filter((l) => l.key !== "ip")) {
       const quantity =
         line.quantity *
         hours *
@@ -366,6 +429,89 @@ function settle(r: Resource) {
       db.account.depletedAt = new Date(now).toISOString();
   }
 }
+function ipHourly(region: Region) {
+  return RATES.find((r) => r.region === region && r.unit === "per_ip_hour")!
+    .unitPrice;
+}
+function settleEips() {
+  for (const e of db.network.eips) {
+    const deadline = db.account.depletedAt
+      ? new Date(db.account.depletedAt).getTime() + 8 * 86400000
+      : Infinity;
+    if (!e.releasedAt && Date.now() >= deadline) {
+      const tunnel = db.network.tunnels.find((t) => t.id === e.tunnelId);
+      if (tunnel) {
+        tunnel.enabled = false;
+        tunnel.deletedAt = new Date(deadline).toISOString();
+      }
+      e.interfaceId = null;
+      e.tunnelId = null;
+      e.releasedAt = new Date(deadline).toISOString();
+      networkAudit(db.network, e, e.id, "eipRelease");
+    }
+    const now = Math.min(
+      Date.now(),
+      e.releasedAt ? new Date(e.releasedAt).getTime() : Infinity,
+    );
+    let cursor = db.billingCursors[e.id] ?? new Date(e.createdAt).getTime();
+    if (cursor >= now) continue;
+    let delta = 0;
+    const rate = ipHourly(e.region);
+    while (cursor < now) {
+      const hour = Math.floor(cursor / 3600000) * 3600000;
+      const end = Math.min(now, hour + 3600000);
+      const hours = (end - cursor) / 3600000;
+      const at = new Date(hour).toISOString();
+      let u = findUsage(e.id, at, "per_ip_hour");
+      if (!u) {
+        u = {
+          id: `${e.id}-${hour}-per_ip_hour`,
+          resourceUuid: e.id,
+          displayId: e.displayId,
+          projectId: e.projectId,
+          region: e.region,
+          kind: "eip",
+          usageHour: at,
+          unit: "per_ip_hour",
+          quantity: 0,
+          unitPrice: rate,
+          amount: 0,
+          status: "running",
+        };
+        db.usage.push(u);
+        usageIndex.set(usageKey(e.id, at, "per_ip_hour"), u);
+      }
+      const old = u.amount;
+      const meter = db.usageMeters[u.id] ?? {
+        quantity: u.quantity,
+        amount: u.quantity * u.unitPrice,
+      };
+      meter.quantity += hours;
+      meter.amount += hours * rate;
+      db.usageMeters[u.id] = meter;
+      u.quantity = round(meter.quantity, 4);
+      u.unitPrice = meter.quantity ? meter.amount / meter.quantity : rate;
+      u.amount = round(u.quantity * u.unitPrice, 4);
+      delta += u.amount - old;
+      cursor = end;
+    }
+    db.billingCursors[e.id] = now;
+    if (delta > 0) {
+      db.account.creditBalance = round(db.account.creditBalance - delta, 4);
+      db.transactions.push({
+        id: crypto.randomUUID(),
+        resourceUuid: e.id,
+        at: new Date(now).toISOString(),
+        type: "charge",
+        amount: -round(delta, 4),
+        balanceAfter: db.account.creditBalance,
+        referenceId: `eip-${e.id}-${Math.floor(now / 3600000)}`,
+      });
+      if (db.account.creditBalance < 0 && !db.account.depletedAt)
+        db.account.depletedAt = new Date(now).toISOString();
+    }
+  }
+}
 function tick() {
   if (db.account.creditBalance >= 0) db.account.depletedAt = null;
   else db.account.depletedAt ??= new Date().toISOString();
@@ -383,6 +529,7 @@ function tick() {
         settle(r);
       }
       if (age >= 8 * 86400000) {
+        releaseResourceNetwork(db.network, r.resourceUuid);
         r.deletedAt = new Date(start + 8 * 86400000).toISOString();
         r.status = "terminating";
         r.runningSince = null;
@@ -410,6 +557,7 @@ function tick() {
       }
     }
   }
+  settleEips();
 }
 function summary(
   region: string | null,
@@ -438,7 +586,17 @@ function summary(
       )
       .reduce((a, u) => a + u.amount, 0),
   );
-  const hourly = rs.reduce((a, r) => a + costPerHour(r, RATES), 0);
+  const hourly =
+    rs.reduce((a, r) => a + costPerHour(r, RATES), 0) +
+    db.network.eips
+      .filter(
+        (e) =>
+          !e.releasedAt &&
+          (!region || e.region === region) &&
+          (!resourceId || e.id === resourceId) &&
+          (!projectId || e.projectId === projectId),
+      )
+      .reduce((n, e) => n + ipHourly(e.region), 0);
   const dates = Array.from({ length: 30 }, (_, i) =>
     new Date(Date.now() - (29 - i) * 86400000).toISOString().slice(0, 10),
   );
@@ -450,7 +608,7 @@ function summary(
         .reduce((a, u) => a + u.amount, 0),
     ),
     ...Object.fromEntries(
-      KINDS.map((kind) => [
+      [...KINDS, "eip"].map((kind) => [
         kind,
         round(
           usage
@@ -491,7 +649,11 @@ function summary(
         .filter((u) => !resourceId || u.resourceUuid === resourceId)
         .reduce((a, u) => a + u.amount, 0),
     ),
-    estimate: resourceId ? estimate(resource(resourceId), RATES) : null,
+    estimate: resourceId
+      ? db.resources.some((r) => r.resourceUuid === resourceId)
+        ? estimate(resource(resourceId), RATES)
+        : null
+      : null,
     remainingHours: hourly > 0 ? db.account.creditBalance / hourly : null,
     running: rs.filter((r) => r.status === "running").length,
     allocated: rs.reduce((a, r) => a + r.spec.gpuCount, 0),
@@ -523,7 +685,10 @@ function enrich(r: Resource): Resource {
         : Math.ceil(r.spec.gpuCount / GPU_SPECS[r.nodePool].gpusPerNode);
   return {
     ...r,
-    privateIp: `10.${REGIONS.indexOf(r.region) + 10}.0.${(parseInt(r.resourceUuid.slice(-4), 16) % 250) + 2}`,
+    privateIp:
+      db.network.interfaces.find(
+        (i) => i.resourceUuid === r.resourceUuid && !i.releasedAt,
+      )?.privateIp || "—",
     placement: {
       rackId: `${r.region.toUpperCase()}-R${(parseInt(r.resourceUuid.slice(-2), 16) % 8) + 1}`,
       switchGroup: `${r.region.toUpperCase()}-IB-A`,
@@ -555,6 +720,603 @@ function enrich(r: Resource): Resource {
     },
   };
 }
+async function dispatchNetwork(
+  path: string,
+  method: string,
+  qs: URLSearchParams,
+  body: Record<string, unknown>,
+  role: Role,
+) {
+  const n = db.network;
+  const base = "/api/network/";
+  const parts = path.slice(base.length).split("/");
+  const [kind, id, action, ruleId] = parts;
+  if (role === "billing" && kind !== "eips") fail(403, "FORBIDDEN");
+  const json = (data: unknown, status = 200) =>
+    HttpResponse.json(data as object, { status });
+  const done = () => {
+    persist();
+    return new HttpResponse(null, { status: 204 });
+  };
+  const scope = (input: Record<string, unknown>) => {
+    const value = z
+      .object({ projectId: z.string(), region: z.enum(REGIONS) })
+      .parse(input);
+    if (!db.projects.some((p) => p.id === value.projectId && !p.deletedAt))
+      fail(422, "VALIDATION_ERROR");
+    ensureScope(n, value);
+    return value;
+  };
+  const matches = (item: {
+    region: Region;
+    projectId: string;
+    name?: string;
+    deletedAt?: string | null;
+  }) =>
+    !item.deletedAt &&
+    (!qs.get("region") || item.region === qs.get("region")) &&
+    (!qs.get("project_id") || item.projectId === qs.get("project_id")) &&
+    (!qs.get("q") ||
+      (item.name || "").toLowerCase().includes(qs.get("q")!.toLowerCase()));
+  const named = z.string().trim().min(2).max(63);
+  const findVpc = (vpcId: string, s: { projectId: string; region: Region }) =>
+    n.vpcs.find(
+      (v) =>
+        v.id === vpcId &&
+        !v.deletedAt &&
+        v.projectId === s.projectId &&
+        v.region === s.region,
+    ) || fail(409, "NETWORK_SCOPE_MISMATCH");
+  const eipView = (e: ElasticIp) => ({
+    ...e,
+    hourly: e.releasedAt ? 0 : ipHourly(e.region),
+    boundName: e.interfaceId
+      ? n.interfaces.find((i) => i.id === e.interfaceId)?.name || null
+      : e.tunnelId
+        ? n.tunnels.find((t) => t.id === e.tunnelId)?.name || null
+        : null,
+  });
+  const interfaces = n.interfaces.filter((i) => !i.releasedAt);
+  if (kind === "quotas" && method === "GET") {
+    const links = {
+      vpc: "vpcs",
+      subnet: "vpcs",
+      security_group: "firewalls",
+      tunnel: "tunnels",
+      ip: "eips",
+    };
+    return json(
+      REGIONS.filter(
+        (region) => !qs.get("region") || region === qs.get("region"),
+      ).flatMap((region) =>
+        (["vpc", "subnet", "security_group", "tunnel", "ip"] as const).map(
+          (metric) => {
+            const usedValue =
+              metric === "ip"
+                ? used(region, "ip")
+                : networkUsed(region, metric);
+            const limitValue =
+              metric === "ip"
+                ? limits[region].ip
+                : networkLimits[region][metric];
+            return {
+              region,
+              metric,
+              usedValue,
+              limitValue,
+              remaining: Math.max(0, limitValue - usedValue),
+              href: `/network/${links[metric]}?region=${region}`,
+            };
+          },
+        ),
+      ),
+    );
+  }
+  if (kind === "interfaces") {
+    return json(
+      interfaces
+        .filter(
+          (i) =>
+            matches(i) &&
+            (!qs.get("resource_id") ||
+              i.resourceUuid === qs.get("resource_id")) &&
+            (!qs.get("vpc_id") || i.vpcId === qs.get("vpc_id")) &&
+            (!qs.get("group_id") ||
+              i.securityGroupIds.includes(qs.get("group_id")!)),
+        )
+        .map((i) => ({
+          ...i,
+          resource: db.resources.find((r) => r.resourceUuid === i.resourceUuid),
+          eip:
+            n.eips.find((e) => !e.releasedAt && e.interfaceId === i.id) || null,
+        })),
+    );
+  }
+  if (kind === "vpcs") {
+    if (!id) {
+      if (method === "GET")
+        return json(
+          n.vpcs.filter(matches).map((v) => ({
+            ...v,
+            subnetCount: n.subnets.filter(
+              (s) => !s.deletedAt && s.vpcId === v.id,
+            ).length,
+            interfaceCount: interfaces.filter((i) => i.vpcId === v.id).length,
+          })),
+        );
+      if (method === "POST") {
+        const s = scope(body);
+        checkNetworkQuota(s.region, "vpc");
+        const cidr = z.string().refine(validVpcCidr).parse(body.cidr);
+        const v = {
+          ...s,
+          id: `vpc-${crypto.randomUUID().slice(0, 12)}`,
+          name: named.parse(body.name),
+          cidr,
+          isDefault: false,
+          createdAt: new Date().toISOString(),
+        };
+        n.vpcs.push(v);
+        networkAudit(n, s, v.id, "vpcCreate");
+        persist();
+        return json(v, 201);
+      }
+    }
+    const v = n.vpcs.find((v) => v.id === id) || fail(404, "NOT_FOUND");
+    if (v.deletedAt && method !== "GET") fail(410, "GONE");
+    if (method === "GET")
+      return json({
+        ...v,
+        subnets: n.subnets
+          .filter((s) => s.vpcId === id && !s.deletedAt)
+          .map((s) => ({
+            ...s,
+            usedIps: subnetUsed(n, s.id),
+            availableIps: availableIps(n, s.id),
+          })),
+        groups: n.groups.filter((g) => g.vpcId === id && !g.deletedAt),
+        interfaces: interfaces.filter((i) => i.vpcId === id),
+        tunnels: n.tunnels.filter((t) => t.vpcId === id && !t.deletedAt),
+        audit: n.audit.filter((a) => a.entityId === id),
+      });
+    if (method === "PATCH") {
+      v.name = named.parse(body.name);
+      networkAudit(n, v, v.id, "rename");
+      persist();
+      return json(v);
+    }
+    if (method === "DELETE") {
+      if (v.isDefault) fail(409, "DEFAULT_NETWORK");
+      if (
+        n.subnets.some((s) => s.vpcId === id && !s.deletedAt) ||
+        n.groups.some((g) => g.vpcId === id && !g.deletedAt) ||
+        interfaces.some((i) => i.vpcId === id) ||
+        n.tunnels.some((t) => t.vpcId === id && !t.deletedAt)
+      )
+        fail(409, "NETWORK_HAS_DEPENDENCIES");
+      v.deletedAt = new Date().toISOString();
+      networkAudit(n, v, v.id, "vpcDelete");
+      return done();
+    }
+  }
+  if (kind === "subnets") {
+    if (!id) {
+      if (method === "GET")
+        return json(
+          n.subnets
+            .filter(
+              (s) =>
+                matches(s) &&
+                (!qs.get("vpc_id") || s.vpcId === qs.get("vpc_id")),
+            )
+            .map((s) => ({
+              ...s,
+              usedIps: subnetUsed(n, s.id),
+              availableIps: availableIps(n, s.id),
+            })),
+        );
+      if (method === "POST") {
+        const s = scope(body);
+        checkNetworkQuota(s.region, "subnet");
+        const vpc = findVpc(z.string().parse(body.vpcId), s);
+        const cidr = z
+          .string()
+          .refine((c) => verifySubnet(vpc.cidr, c))
+          .parse(body.cidr);
+        if (
+          n.subnets.some(
+            (x) =>
+              !x.deletedAt && x.vpcId === vpc.id && cidrOverlaps(x.cidr, cidr),
+          )
+        )
+          fail(409, "CIDR_OVERLAP");
+        const subnet = {
+          ...s,
+          id: `vsw-${crypto.randomUUID().slice(0, 12)}`,
+          vpcId: vpc.id,
+          name: named.parse(body.name),
+          cidr,
+          zone: z.enum([`${s.region}-a`, `${s.region}-b`]).parse(body.zone),
+          createdAt: new Date().toISOString(),
+        };
+        n.subnets.push(subnet);
+        networkAudit(n, s, vpc.id, "subnetCreate");
+        persist();
+        return json(subnet, 201);
+      }
+    }
+    const s = n.subnets.find((s) => s.id === id) || fail(404, "NOT_FOUND");
+    if (s.deletedAt && method !== "GET") fail(410, "GONE");
+    if (method === "PATCH") {
+      s.name = named.parse(body.name);
+      persist();
+      return json(s);
+    }
+    if (method === "DELETE") {
+      if (subnetUsed(n, s.id) > 0) fail(409, "NETWORK_HAS_DEPENDENCIES");
+      s.deletedAt = new Date().toISOString();
+      networkAudit(n, s, s.vpcId, "subnetDelete");
+      return done();
+    }
+  }
+  if (kind === "security-groups") {
+    if (!id) {
+      if (method === "GET")
+        return json(
+          n.groups
+            .filter(
+              (g) =>
+                matches(g) &&
+                (!qs.get("vpc_id") || g.vpcId === qs.get("vpc_id")),
+            )
+            .map((g) => ({
+              ...g,
+              interfaceCount: interfaces.filter((i) =>
+                i.securityGroupIds.includes(g.id),
+              ).length,
+            })),
+        );
+      if (method === "POST") {
+        const s = scope(body);
+        checkNetworkQuota(s.region, "security_group");
+        const v = findVpc(z.string().parse(body.vpcId), s);
+        const g = {
+          ...s,
+          id: `sg-${crypto.randomUUID().slice(0, 12)}`,
+          vpcId: v.id,
+          name: named.parse(body.name),
+          description: z
+            .string()
+            .max(256)
+            .parse(body.description || ""),
+          isDefault: false,
+          intraGroupPolicy: z
+            .enum(["allow", "deny"])
+            .parse(body.intraGroupPolicy || "allow"),
+          rules: [] as SecurityRule[],
+          createdAt: new Date().toISOString(),
+        };
+        n.groups.push(g);
+        networkAudit(n, s, g.id, "groupCreate");
+        persist();
+        return json(g, 201);
+      }
+    }
+    const g = n.groups.find((g) => g.id === id) || fail(404, "NOT_FOUND");
+    if (g.deletedAt && method !== "GET") fail(410, "GONE");
+    if (method === "GET")
+      return json({
+        ...g,
+        interfaces: interfaces.filter((i) => i.securityGroupIds.includes(id)),
+        audit: n.audit.filter((a) => a.entityId === id),
+      });
+    if (action === "rules") {
+      if (method === "DELETE") {
+        if (!g.rules.some((r) => r.id === ruleId)) fail(404, "NOT_FOUND");
+        g.rules = g.rules.filter((r) => r.id !== ruleId);
+        networkAudit(n, g, g.id, "ruleDelete");
+        return done();
+      }
+      const parsed = z
+        .object({
+          direction: z.enum(["inbound", "outbound"]),
+          action: z.enum(["allow", "deny"]),
+          protocol: z.enum(["all", "tcp", "udp", "icmp"]),
+          cidr: z.string().refine((c) => !!cidrRange(c)),
+          portFrom: z.number().int().min(1).max(65535).nullable(),
+          portTo: z.number().int().min(1).max(65535).nullable(),
+          priority: z.number().int().min(1).max(100),
+          description: z.string().max(256),
+        })
+        .parse(body);
+      if (
+        ["tcp", "udp"].includes(parsed.protocol)
+          ? parsed.portFrom === null ||
+            parsed.portTo === null ||
+            parsed.portFrom > parsed.portTo
+          : parsed.portFrom !== null || parsed.portTo !== null
+      )
+        fail(422, "VALIDATION_ERROR");
+      if (method === "POST") {
+        if (g.rules.length >= 100) fail(409, "NETWORK_LIMIT");
+        const r = { ...parsed, id: crypto.randomUUID() };
+        g.rules.push(r);
+        networkAudit(n, g, g.id, "ruleCreate");
+        persist();
+        return json(r, 201);
+      }
+      if (method === "PATCH") {
+        const old =
+          g.rules.find((r) => r.id === ruleId) || fail(404, "NOT_FOUND");
+        Object.assign(old, parsed);
+        networkAudit(n, g, g.id, "ruleEdit");
+        persist();
+        return json(old);
+      }
+    }
+    if (action === "associate" && method === "POST") {
+      const r = resource(z.string().parse(body.resourceUuid));
+      if (
+        r.kind !== "gpu_vm" ||
+        r.deletedAt ||
+        r.projectId !== g.projectId ||
+        r.region !== g.region ||
+        r.spec.vpc !== g.vpcId
+      )
+        fail(409, "NETWORK_SCOPE_MISMATCH");
+      const current = r.spec.securityGroups || [];
+      const remove = body.remove === true;
+      const ids = remove
+        ? current.filter((id) => id !== g.id)
+        : [...new Set([...current, g.id])];
+      if (!ids.length || ids.length > 5) fail(422, "VALIDATION_ERROR");
+      r.spec.securityGroups = ids;
+      for (const nic of interfaces.filter(
+        (i) => i.resourceUuid === r.resourceUuid,
+      ))
+        nic.securityGroupIds = ids;
+      networkAudit(n, g, g.id, remove ? "groupDetach" : "groupAssociate");
+      persist();
+      return json(g);
+    }
+    if (method === "PATCH") {
+      const parsed = z
+        .object({
+          name: named,
+          description: z.string().max(256),
+          intraGroupPolicy: z.enum(["allow", "deny"]),
+        })
+        .parse(body);
+      Object.assign(g, parsed);
+      networkAudit(n, g, g.id, "groupEdit");
+      persist();
+      return json(g);
+    }
+    if (method === "DELETE") {
+      if (g.isDefault) fail(409, "DEFAULT_NETWORK");
+      if (interfaces.some((i) => i.securityGroupIds.includes(g.id)))
+        fail(409, "NETWORK_HAS_DEPENDENCIES");
+      g.deletedAt = new Date().toISOString();
+      networkAudit(n, g, g.id, "groupDelete");
+      return done();
+    }
+  }
+  if (kind === "eips") {
+    if (!id) {
+      if (method === "GET")
+        return json(
+          n.eips
+            .filter(
+              (e) =>
+                matches(e) &&
+                (!e.releasedAt || qs.get("includeReleased") === "true"),
+            )
+            .map(eipView),
+        );
+      if (method === "POST") {
+        const s = scope(body);
+        if (db.account.creditBalance < 0) fail(409, "INSUFFICIENT_BALANCE");
+        if (used(s.region, "ip") >= limits[s.region].ip)
+          fail(409, "QUOTA_EXCEEDED", { metric: "ip" });
+        const e = allocateEip(
+          n,
+          s,
+          named.parse(body.name),
+          z.number().int().min(1).max(1000).parse(body.bandwidthMbps),
+        );
+        persist();
+        return json(eipView(e), 201);
+      }
+    }
+    const e = n.eips.find((e) => e.id === id) || fail(404, "NOT_FOUND");
+    if (method === "GET")
+      return json({
+        ...eipView(e),
+        audit: n.audit.filter((a) => a.entityId === id),
+        usage: db.usage.filter((u) => u.resourceUuid === id),
+      });
+    if (e.releasedAt) fail(410, "GONE");
+    if (action === "bind" && method === "POST") {
+      if (e.interfaceId || e.tunnelId) fail(409, "EIP_IN_USE");
+      const nic =
+        interfaces.find((i) => i.id === body.interfaceId) ||
+        fail(404, "NOT_FOUND");
+      const r = resource(nic.resourceUuid);
+      if (
+        r.kind !== "gpu_vm" ||
+        !["running", "stopped"].includes(r.status) ||
+        r.region !== e.region ||
+        r.projectId !== e.projectId
+      )
+        fail(409, "NETWORK_SCOPE_MISMATCH");
+      if (n.eips.some((x) => !x.releasedAt && x.interfaceId === nic.id))
+        fail(409, "EIP_IN_USE");
+      e.interfaceId = nic.id;
+      r.spec.publicIp = true;
+      networkAudit(n, e, e.id, "eipBind");
+      persist();
+      return json(eipView(e));
+    }
+    if (action === "unbind" && method === "POST") {
+      if (e.tunnelId) fail(409, "NETWORK_HAS_DEPENDENCIES");
+      const nic = n.interfaces.find((i) => i.id === e.interfaceId);
+      e.interfaceId = null;
+      if (nic) {
+        const r = resource(nic.resourceUuid);
+        r.spec.publicIp = n.eips.some(
+          (x) =>
+            !x.releasedAt &&
+            n.interfaces.some(
+              (i) =>
+                i.id === x.interfaceId && i.resourceUuid === r.resourceUuid,
+            ),
+        );
+        delete r.spec.eipId;
+      }
+      networkAudit(n, e, e.id, "eipUnbind");
+      persist();
+      return json(eipView(e));
+    }
+    if (method === "PATCH") {
+      const name = named.parse(body.name);
+      const bandwidthMbps = z
+        .number()
+        .int()
+        .min(1)
+        .max(1000)
+        .parse(body.bandwidthMbps);
+      Object.assign(e, { name, bandwidthMbps });
+      networkAudit(n, e, e.id, "eipEdit");
+      persist();
+      return json(eipView(e));
+    }
+    if (method === "DELETE") {
+      if (e.interfaceId || e.tunnelId) fail(409, "EIP_IN_USE");
+      if (qs.get("confirm") !== e.displayId) fail(422, "CONFIRM_MISMATCH");
+      e.releasedAt = new Date().toISOString();
+      networkAudit(n, e, e.id, "eipRelease");
+      persist();
+      return json(eipView(e));
+    }
+  }
+  if (kind === "tunnels") {
+    if (!id) {
+      if (method === "GET")
+        return json(
+          n.tunnels.filter(matches).map((t) => ({
+            ...t,
+            gatewayIp: n.eips.find((e) => e.id === t.eipId)?.address || null,
+          })),
+        );
+      if (method === "POST") {
+        const s = scope(body);
+        checkNetworkQuota(s.region, "tunnel");
+        const v = findVpc(z.string().parse(body.vpcId), s);
+        const subnet =
+          n.subnets.find(
+            (x) => x.id === body.subnetId && !x.deletedAt && x.vpcId === v.id,
+          ) || fail(409, "NETWORK_SCOPE_MISMATCH");
+        const e =
+          n.eips.find(
+            (e) =>
+              e.id === body.eipId &&
+              !e.releasedAt &&
+              e.region === s.region &&
+              e.projectId === s.projectId &&
+              !e.interfaceId &&
+              !e.tunnelId,
+          ) || fail(409, "EIP_NOT_AVAILABLE");
+        const peerIp = z.string().refine(isPublicIpv4).parse(body.peerIp);
+        if (peerIp === e.address) fail(422, "VALIDATION_ERROR");
+        const localCidr = z
+          .string()
+          .refine((c) => cidrContains(v.cidr, c))
+          .parse(body.localCidr);
+        const remoteCidr = z
+          .string()
+          .refine((c) => !!cidrRange(c))
+          .parse(body.remoteCidr);
+        if (
+          cidrOverlaps(v.cidr, remoteCidr) ||
+          n.tunnels.some(
+            (t) =>
+              !t.deletedAt &&
+              t.vpcId === v.id &&
+              cidrOverlaps(t.remoteCidr, remoteCidr),
+          )
+        )
+          fail(409, "CIDR_OVERLAP");
+        z.string().min(16).max(128).parse(body.psk);
+        if (availableIps(n, subnet.id) < 1) fail(409, "SUBNET_EXHAUSTED");
+        const t: IpsecTunnel = {
+          ...s,
+          id: `vpn-${crypto.randomUUID().slice(0, 12)}`,
+          name: named.parse(body.name),
+          vpcId: v.id,
+          subnetId: subnet.id,
+          eipId: e.id,
+          privateIp: nextPrivateIp(n, subnet.id),
+          peerIp,
+          localCidr,
+          remoteCidr,
+          ikeVersion: "ikev2",
+          encryption: "aes256",
+          integrity: "sha256",
+          pskConfigured: true,
+          enabled: false,
+          createdAt: new Date().toISOString(),
+        };
+        n.tunnels.push(t);
+        e.tunnelId = t.id;
+        networkAudit(n, s, t.id, "tunnelCreate");
+        persist();
+        return json(t, 201);
+      }
+    }
+    const t = n.tunnels.find((t) => t.id === id) || fail(404, "NOT_FOUND");
+    if (t.deletedAt && method !== "GET") fail(410, "GONE");
+    if (method === "GET")
+      return json({
+        ...t,
+        gatewayIp: n.eips.find((e) => e.id === t.eipId)?.address || null,
+        audit: n.audit.filter((a) => a.entityId === id),
+      });
+    if (method === "PATCH") {
+      const parsed = z
+        .object({
+          enabled: z.boolean().optional(),
+          name: named.optional(),
+          psk: z.string().min(16).max(128).optional(),
+        })
+        .parse(body);
+      if (parsed.enabled !== undefined) t.enabled = parsed.enabled;
+      if (parsed.name !== undefined) t.name = parsed.name;
+      if (parsed.psk !== undefined) t.pskConfigured = true;
+      networkAudit(
+        n,
+        t,
+        t.id,
+        parsed.enabled !== undefined
+          ? t.enabled
+            ? "tunnelEnable"
+            : "tunnelDisable"
+          : "tunnelEdit",
+      );
+      persist();
+      return json(t);
+    }
+    if (method === "DELETE") {
+      if (t.enabled) fail(409, "INVALID_STATE");
+      const e = n.eips.find((e) => e.id === t.eipId);
+      if (e) e.tunnelId = null;
+      t.deletedAt = new Date().toISOString();
+      networkAudit(n, t, t.id, "tunnelDelete");
+      return done();
+    }
+  }
+  fail(404, "NOT_FOUND");
+}
+
 async function dispatch(request: Request) {
   const url = new URL(request.url);
   const path = url.pathname;
@@ -577,25 +1339,39 @@ async function dispatch(request: Request) {
   if (region && !REGIONS.includes(region as Region))
     fail(422, "VALIDATION_ERROR");
   tick();
+  if (path.startsWith("/api/network/"))
+    return dispatchNetwork(path, method, qs, body, role);
   if (path === "/api/deployment-options") {
     const code = (region || "jp") as Region;
+    const projectId = qs.get("project_id") || "default";
+    if (!db.projects.some((p) => p.id === projectId && !p.deletedAt))
+      fail(422, "VALIDATION_ERROR");
+    ensureScope(db.network, { projectId, region: code });
     return json({
-      vpcs: [
-        {
-          id: "default-vpc",
-          name: "默认私有网络",
-          subnets: [
-            { id: `${code}-default`, name: "默认子网", region: code },
-            { id: `${code}-private`, name: "私有子网", region: code },
-          ],
-        },
-      ],
-      securityGroups: [
-        { id: "default", name: "默认安全组" },
-        { id: "ssh-only", name: "仅 SSH" },
-        { id: "web", name: "Web 访问" },
-        { id: "restricted", name: "受限访问" },
-      ],
+      vpcs: db.network.vpcs
+        .filter(
+          (v) => !v.deletedAt && v.projectId === projectId && v.region === code,
+        )
+        .map((v) => ({
+          ...v,
+          subnets: db.network.subnets
+            .filter((s) => !s.deletedAt && s.vpcId === v.id)
+            .map((s) => ({
+              ...s,
+              availableIps: availableIps(db.network, s.id),
+            })),
+        })),
+      securityGroups: db.network.groups.filter(
+        (g) => !g.deletedAt && g.projectId === projectId && g.region === code,
+      ),
+      eips: db.network.eips.filter(
+        (e) =>
+          e.projectId === projectId &&
+          e.region === code &&
+          !e.releasedAt &&
+          !e.interfaceId &&
+          !e.tunnelId,
+      ),
       k8sVersions: ["1.28", "1.29", "1.30", "1.31"],
     });
   }
@@ -766,6 +1542,23 @@ async function dispatch(request: Request) {
           );
         return json(data);
       }
+      if (action === "network")
+        return json({
+          interfaces: db.network.interfaces
+            .filter((i) => i.resourceUuid === r.resourceUuid)
+            .map((i) => ({
+              ...i,
+              vpc: db.network.vpcs.find((v) => v.id === i.vpcId),
+              subnet: db.network.subnets.find((s) => s.id === i.subnetId),
+              groups: db.network.groups.filter((g) =>
+                i.securityGroupIds.includes(g.id),
+              ),
+              eip:
+                db.network.eips.find(
+                  (e) => !e.releasedAt && e.interfaceId === i.id,
+                ) || null,
+            })),
+        });
       if (action === "machines") {
         if (r.kind !== "gpu_baremetal") fail(404, "NOT_FOUND");
         return json(baremetalMachines(r));
@@ -827,9 +1620,22 @@ async function dispatch(request: Request) {
       if (action === "access") {
         if (r.status !== "running") fail(409, "INVALID_STATE");
         return json({
-          privateIp: `10.${REGIONS.indexOf(r.region) + 10}.0.${(parseInt(r.resourceUuid.slice(-4), 16) % 250) + 2}`,
-          publicIp: null,
-          ssh: `ssh ubuntu@10.${REGIONS.indexOf(r.region) + 10}.0.${(parseInt(r.resourceUuid.slice(-4), 16) % 250) + 2}`,
+          privateIp:
+            db.network.interfaces.find(
+              (i) => i.resourceUuid === r.resourceUuid && !i.releasedAt,
+            )?.privateIp || "—",
+          publicIp:
+            db.network.eips.find(
+              (e) =>
+                !e.releasedAt &&
+                db.network.interfaces.some(
+                  (i) =>
+                    i.id === e.interfaceId &&
+                    i.resourceUuid === r.resourceUuid &&
+                    !i.releasedAt,
+                ),
+            )?.address || null,
+          ssh: `ssh ubuntu@${db.network.interfaces.find((i) => i.resourceUuid === r.resourceUuid && !i.releasedAt)?.privateIp || "—"}`,
           endpoint: `https://${r.displayId}.${r.region}.runsun.cloud`,
           bmc: { ip: "10.255.0.10", firmware: "2.14.0", reachable: true },
           ...hardwareSnapshot(r).firmware,
@@ -893,6 +1699,7 @@ async function dispatch(request: Request) {
         });
       const before = r.status;
       settle(r);
+      releaseResourceNetwork(db.network, r.resourceUuid);
       r.deletedAt = new Date().toISOString();
       r.status = "terminating";
       r.runningSince = null;
@@ -1006,6 +1813,7 @@ async function dispatch(request: Request) {
           r.spec = next.spec;
         } else fail(422, "VALIDATION_ERROR");
       } else fail(404, "NOT_FOUND");
+      if (action === "resize") syncResourceNetwork(db.network, r);
       addEvent(r, action === "stop" ? "stopped" : action, before, r.status);
       if (
         r.kind === "inference" &&
@@ -1091,6 +1899,7 @@ async function dispatch(request: Request) {
       orderUuid: crypto.randomUUID(),
     } as Resource;
     precheck(r);
+    syncResourceNetwork(db.network, r);
     db.resources.push(r);
     const order = {
       idempotencyKey,
@@ -1248,7 +2057,14 @@ async function dispatch(request: Request) {
         createdAt: new Date().toISOString(),
         members: [{ userId: "enzoOvOyu", name: "enzoOvOyu", role }],
       };
+      for (const region of REGIONS) {
+        checkNetworkQuota(region, "vpc");
+        checkNetworkQuota(region, "subnet", 2);
+        checkNetworkQuota(region, "security_group", 4);
+      }
       db.projects.push(p);
+      for (const region of REGIONS)
+        ensureScope(db.network, { projectId: p.id, region });
       persist();
       return json(p, 201);
     }
@@ -1299,6 +2115,33 @@ async function dispatch(request: Request) {
       if (p.isDefault) fail(409, "DEFAULT_PROJECT");
       const count = live().filter((r) => r.projectId === p.id).length;
       if (count) fail(409, "PROJECT_HAS_RESOURCES", { resourceCount: count });
+      if (
+        db.network.eips.some((e) => e.projectId === p.id && !e.releasedAt) ||
+        db.network.tunnels.some((t) => t.projectId === p.id && !t.deletedAt) ||
+        db.network.vpcs.some(
+          (v) => v.projectId === p.id && !v.deletedAt && !v.isDefault,
+        ) ||
+        db.network.groups.some(
+          (g) =>
+            g.projectId === p.id &&
+            !g.deletedAt &&
+            !g.id.startsWith(`sg-${p.id}-`),
+        ) ||
+        db.network.subnets.some(
+          (s) =>
+            s.projectId === p.id &&
+            !s.deletedAt &&
+            !s.id.startsWith(`vsw-${p.id}-`),
+        )
+      )
+        fail(409, "NETWORK_HAS_DEPENDENCIES");
+      for (const list of [
+        db.network.vpcs,
+        db.network.subnets,
+        db.network.groups,
+      ])
+        for (const item of list.filter((i) => i.projectId === p.id))
+          item.deletedAt = new Date().toISOString();
       p.deletedAt = new Date().toISOString();
       return done();
     }
@@ -1955,7 +2798,7 @@ export const handlers = [
     try {
       return await dispatch(request);
     } catch (error) {
-      if (error instanceof Failure)
+      if (error instanceof Failure || error instanceof NetworkFailure)
         return HttpResponse.json(
           { code: error.code, ...error.details },
           { status: error.status },

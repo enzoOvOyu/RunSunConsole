@@ -1,7 +1,7 @@
 # DESIGN-SYSTEM — RunSun GPU Cloud 控制台 UI 规范
 
 > 文档类型：UI 设计规范（Token + 组件 + 可视化）
-> 版本：**v0.10 · 当前 UI 设计基线**
+> 版本：**v0.11 · 当前 UI 设计基线**
 > 品牌来源：runsuncloud.com（RunSun — "The GPU Cloud"，sun/gold 暖色太阳识别；线上 CSS 资源不可达，本规范以该太阳/金色识别为基准，**正式落地前请以官方品牌指南校准**）
 > 关联文档：`PRD.md`（产品需求）、`ARCHITECTURE.md`（架构）、`MOCK-DATA.md`（数据约束）
 
@@ -697,3 +697,11 @@
 | **命令面板** | `components/command/CommandPalette.tsx` + `palette.css`（§5.25）；导航模型 `app/layouts/navModel.ts`（与 §5.10 Sidebar 同源） |
 | **测试与 CI** | `vitest.config.ts` + `src/**/*.test.ts` + `src/test/architecture.test.ts` + `.github/workflows/ci.yml`（ARCH §15 / §11.1） |
 | UI→数据对照   | ARCHITECTURE §13.2（本文档所有数据型组件按该表取数）                                               |
+
+## 12. 网络管理增补（M7）
+
+网络管理借鉴阿里云 VPC/EIP/安全组/VPN 的信息结构，沿用本项目 Token、表格、筛选、状态标签和 Drawer。列表上方统一区域、项目、名称搜索和创建/分配动作；按名称/ID、状态、项目、CIDR/绑定、数量/费率分列，空结果采用统一空态。
+
+VPC Drawer 含概览、交换机、关联设备、路由、事件；安全组含概览、入方向、出方向、关联设备、事件；EIP 含概览、费用记录、事件；隧道含概览、路由、事件。创建、绑定和规则配置使用第二层 Modal。删除展示依赖失败；EIP 释放要求输入展示 ID。密钥字段密码遮罩，轮换不回显旧值。
+
+VPC 结构图只表达 VPC → 交换机 → 接口归属，未配置跨 VPC 连通时不得画连通边。隧道标签使用「配置已启用/停用」，不使用「已连接」。EIP 使用已绑定/未绑定/已释放，列表、操作提示及费用记录均说明独立保留计费。

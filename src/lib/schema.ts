@@ -25,6 +25,10 @@ export const scalingSchema = z
       ctx.addIssue({ code: "custom", message: "INVALID_SCALING" });
   });
 const common = {
+  vpc: z.string().optional(),
+  subnet: z.string().optional(),
+  securityGroups: z.array(z.string()).min(1).max(5).optional(),
+  eipId: z.string().optional(),
   gpuCount: z.number().int().positive(),
   storageGb: z.number().min(0),
   publicIp: z.boolean(),
@@ -55,7 +59,7 @@ export const serverSchema = z
     dataDiskType: z.enum(["nvme_ssd", "ssd"]),
     vpc: z.string().min(1),
     subnet: z.string().min(1),
-    securityGroups: z.array(z.string()).min(1),
+    securityGroups: z.array(z.string()).min(1).max(5),
     sshPubkey: z.string(),
     bandwidthMbps: z.number().int().min(1).max(1000),
     autoShutdownIdleMin: z.number(),

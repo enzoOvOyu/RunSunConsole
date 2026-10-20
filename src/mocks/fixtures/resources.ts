@@ -37,6 +37,7 @@ export function seedResources(): Resource[] {
   return rows.map(([region, kind, code, count, replicas], i) => {
     const pool = poolsFor(region).find((p) => p.code === code)!;
     const spec = defaultSpec(kind, pool);
+    spec.subnet = `${region}-default`;
     const resourceUuid = seededUuid(i + 1) as ResourceUuid;
     if ("gpuPerInstance" in spec) {
       spec.gpuPerInstance = count;

@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+import { Link } from "react-router-dom";
 import { EP, query } from "../../../lib/api-client";
 import { useData } from "../../shared/hooks";
 import { confirmAction } from "../../../components/ui/ConfirmAction";
@@ -14,7 +16,14 @@ import type {
   BillingMode,
   ScalingConfig,
 } from "../../../types/domain";
-import { Field, Check, Button, KeyValues } from "../../../components/ui";
+import {
+  Field,
+  Check,
+  Button,
+  KeyValues,
+  Loading,
+  ErrorState,
+} from "../../../components/ui";
 import { t, dt } from "../../../i18n";
 import { defaultScaling, normalizeSpec } from "../../../lib/config";
 export interface WizardValues {
@@ -446,38 +455,130 @@ export function ImageCards({
 }
 export function NetworkFields() {
   const { form, spec, update } = useSpec();
-  const region = form.watch("region");
+  const region = form.watch("region"),
+    projectId = form.watch("projectId");
   const options = useData<DeploymentOptions>(
-    ["deployment-options", region],
-    EP.options + query({ region }),
+    ["deployment-network", region, projectId],
+    EP.options + query({ region, project_id: projectId }),
+    { enabled: !!projectId },
   );
-  const vpc = "vpc" in spec ? spec.vpc : "";
-  const subnets =
-    options.data?.vpcs.find((item) => item.id === vpc)?.subnets || [];
+  const vpcId = spec.vpc || "";
+  const instanceQuantity = "quantity" in spec ? spec.quantity : 0;
+  const selected = options.data?.vpcs.find((v) => v.id === vpcId);
+  const groups =
+    options.data?.securityGroups.filter((g) => g.vpcId === vpcId) || [];
+  useEffect(() => {
+    if (!options.data) return;
+    const current = form.getValues("spec");
+    const vpc =
+      options.data.vpcs.find((v) => v.id === current.vpc) ||
+      options.data.vpcs[0];
+    if (!vpc) return;
+    const subnet =
+      vpc.subnets.find((s) => s.id === current.subnet) || vpc.subnets[0];
+    const available = options.data.securityGroups.filter(
+      (g) => g.vpcId === vpc.id,
+    );
+    const changedVpc = current.vpc !== vpc.id;
+    const validGroups = (current.securityGroups || []).filter((id) =>
+      available.some((g) => g.id === id),
+    );
+    const nextGroups =
+      changedVpc || !current.securityGroups
+        ? available.slice(0, 1).map((g) => g.id)
+        : validGroups;
+    if (
+      changedVpc ||
+      current.subnet !== subnet?.id ||
+      JSON.stringify(current.securityGroups) !== JSON.stringify(nextGroups)
+    )
+      form.setValue(
+        "spec",
+        {
+          ...current,
+          vpc: vpc.id,
+          subnet: subnet?.id || "",
+          securityGroups: nextGroups,
+          eipId: undefined,
+        },
+        { shouldValidate: true },
+      );
+  }, [options.data, form]);
+  useEffect(() => {
+    const current = form.getValues("spec");
+    if (
+      current.eipId &&
+      (!current.publicIp ||
+        !("quantity" in current) ||
+        current.quantity !== 1 ||
+        (current.scaling?.max_size || 1) > 1)
+    ) {
+      form.setValue("spec.eipId", undefined, { shouldValidate: true });
+    }
+  }, [
+    form,
+    spec.publicIp,
+    spec.eipId,
+    instanceQuantity,
+    spec.scaling?.max_size,
+  ]);
+  if (options.isPending) return <Loading />;
+  if (options.error) return <ErrorState error={options.error} />;
+  const vm = "gpuPerInstance" in spec;
   return (
-    <div className="form-grid">
-      <SpecSelect
-        name="vpc"
-        label="VPC"
-        options={(options.data?.vpcs || []).map((v) => ({
-          value: v.id,
-          label: dt(v.name),
-        }))}
-      />
-      <SpecSelect
-        name="subnet"
-        label={t("field.subnet")}
-        options={subnets.map((subnet) => ({
-          value: subnet.id,
-          label: dt(subnet.name),
-        }))}
-      />
-      <SpecCheck name="publicIp" label={t("wizard.publicIp")} />
-      {"securityGroups" in spec && (
+    <div className="stack">
+      <div className="notice">
+        {t("network.deploymentScope")} ·{" "}
+        <Link to={`/network/vpcs?region=${region}&project_id=${projectId}`}>
+          {t("network.manage")}
+        </Link>
+      </div>
+      <div className="form-grid">
+        <Field label="VPC">
+          <select
+            aria-label="VPC"
+            value={vpcId}
+            onChange={(e) => {
+              const v = options.data.vpcs.find((v) => v.id === e.target.value)!;
+              update({
+                vpc: v.id,
+                subnet: v.subnets[0]?.id || "",
+                securityGroups: options.data.securityGroups
+                  .filter((g) => g.vpcId === v.id)
+                  .slice(0, 1)
+                  .map((g) => g.id),
+                eipId: undefined,
+              });
+            }}
+          >
+            <option value="">{t("network.select")}</option>
+            {options.data.vpcs.map((v) => (
+              <option key={v.id} value={v.id}>
+                {dt(v.name)} · {v.cidr}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={t("field.subnet")}>
+          <select
+            aria-label={t("field.subnet")}
+            value={spec.subnet || ""}
+            onChange={(e) => update({ subnet: e.target.value })}
+          >
+            <option value="">{t("network.select")}</option>
+            {selected?.subnets.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name} · {s.cidr} ·{" "}
+                {t("network.availableIp", { count: s.availableIps })}
+              </option>
+            ))}
+          </select>
+        </Field>
         <Field label={t("field.securityGroups")}>
           <select
             multiple
-            value={spec.securityGroups}
+            aria-label={t("field.securityGroups")}
+            value={spec.securityGroups || []}
             onChange={(e) =>
               update({
                 securityGroups: Array.from(
@@ -487,14 +588,42 @@ export function NetworkFields() {
               })
             }
           >
-            {options.data?.securityGroups.map((group) => (
-              <option key={group.id} value={group.id}>
-                {dt(group.name)}
+            {groups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {dt(g.name)}
               </option>
             ))}
           </select>
         </Field>
-      )}
+        {vm && (
+          <div className="stack">
+            <SpecCheck name="publicIp" label={t("wizard.publicIp")} />
+            {spec.publicIp && (
+              <>
+                <p className="muted">{t("network.eipIndependent")}</p>
+                {spec.quantity === 1 && (spec.scaling?.max_size || 1) <= 1 && (
+                  <Field label={t("network.eipChoice")}>
+                    <select
+                      aria-label={t("network.eipChoice")}
+                      value={spec.eipId || ""}
+                      onChange={(e) =>
+                        update({ eipId: e.target.value || undefined })
+                      }
+                    >
+                      <option value="">{t("network.eipNew")}</option>
+                      {options.data.eips.map((e) => (
+                        <option key={e.id} value={e.id}>
+                          {e.address} · {e.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
