@@ -11,6 +11,9 @@ import {
 import {
   KINDS,
   REGIONS,
+  POOLS,
+  type PoolCode,
+  type Region,
   type Resource,
   type Quota,
   type ResourceEvent,
@@ -105,33 +108,28 @@ export default function OverviewPage() {
     return <ErrorState error={q.error} retry={() => void q.refetch()} />;
   const data = q.data;
   const show = (id: string) => !hidden.includes(id);
-  const billingMonth = new Date().toISOString().slice(0, 7);
-  const recentCostDays = data.trend
-    .slice(-8, -1)
-    .filter((day) => String(day.date).startsWith(billingMonth));
-  const previousCostDays = data.trend.slice(-15, -8);
-  const hasCostComparison =
-    recentCostDays.length === 7 &&
-    previousCostDays.length === 7 &&
-    previousCostDays.every((day) => String(day.date).startsWith(billingMonth));
-  const costSum = (days: Record<string, unknown>[], key: string) =>
-    days.reduce((sum, day) => sum + Number(day[key] || 0), 0);
-  const recentCost = costSum(recentCostDays, "amount");
-  const previousCost = hasCostComparison
-    ? costSum(previousCostDays, "amount")
-    : 0;
-  const costDelta = recentCost - previousCost;
-  const costDriver = hasCostComparison
-    ? ([...KINDS, "eip"] as const)
-        .map((kind) => ({
-          kind,
-          change:
-            costSum(recentCostDays, kind) - costSum(previousCostDays, kind),
-        }))
-        .sort(
-          (left, right) => Math.abs(right.change) - Math.abs(left.change),
-        )[0]
-    : null;
+  const gpuByModel = Object.fromEntries(
+    POOLS.map((model) => [
+      model,
+      Object.fromEntries(REGIONS.map((region) => [region, 0])),
+    ]),
+  ) as Record<PoolCode, Record<Region, number>>;
+  for (const resource of data.resources) {
+    if (resource.kind === "vgpu") {
+      for (const pool of resource.spec.nodePools)
+        gpuByModel[pool.poolCode][resource.region] +=
+          pool.nodeCount * pool.gpuPerNode;
+    } else {
+      gpuByModel[resource.nodePool][resource.region] += resource.spec.gpuCount;
+    }
+  }
+  const gpuModels = POOLS.map((code) => ({
+    code,
+    name: code.replaceAll("_", " "),
+    regions: gpuByModel[code],
+    total: REGIONS.reduce((sum, region) => sum + gpuByModel[code][region], 0),
+  })).sort((left, right) => right.total - left.total);
+  const largestGpuModel = Math.max(1, ...gpuModels.map((model) => model.total));
   const projects = data.projects
     .map((project) => {
       const resources = data.resources.filter(
@@ -256,71 +254,67 @@ export default function OverviewPage() {
         {show("insights") && (
           <div className="grid grid-2 overview-insights">
             <Panel
-              title={t("overview.costChange")}
-              hint={t("overview.costChangeScope")}
-              action={<Link to="/billing/cost">{t("overview.viewCost")}</Link>}
+              title={t("overview.gpuModels")}
+              hint={t("overview.gpuModelsScope")}
+              action={
+                <Link to="/deployment/server">
+                  {t("overview.viewGpuSpecs")}
+                </Link>
+              }
             >
-              <div className="overview-cost-main">
-                <div>
-                  <small className="muted">
-                    {t("overview.costPeriod", {
-                      days: recentCostDays.length,
-                    })}
-                  </small>
-                  <div className="overview-cost-value">{money(recentCost)}</div>
-                </div>
-                <div className="overview-cost-change">
-                  <small className="muted">{t("overview.costCompared")}</small>
-                  <strong
-                    className={
-                      hasCostComparison && previousCost > 0
-                        ? costDelta > 0
-                          ? "overview-cost-rise"
-                          : costDelta < 0
-                            ? "overview-cost-fall"
-                            : ""
-                        : ""
-                    }
-                  >
-                    {hasCostComparison && previousCost > 0
-                      ? `${costDelta > 0 ? "+" : ""}${number((costDelta / previousCost) * 100, 1)}%`
-                      : "—"}
-                  </strong>
-                  {hasCostComparison && (
-                    <small className="mono muted">
-                      {costDelta > 0 ? "+" : costDelta < 0 ? "−" : ""}
-                      {money(Math.abs(costDelta))}
-                    </small>
-                  )}
-                </div>
+              <div className="overview-gpu-summary">
+                <strong>
+                  {t("overview.gpuModelCount", { count: gpuModels.length })}
+                </strong>
+                <span className="muted">
+                  {t("overview.gpuRegionCount", { count: REGIONS.length })}
+                </span>
               </div>
-              <div className="overview-cost-details">
-                <div>
-                  <small className="muted">{t("overview.costPrevious")}</small>
-                  <strong className="mono">
-                    {hasCostComparison ? money(previousCost) : "—"}
-                  </strong>
-                </div>
-                <div>
-                  <small className="muted">{t("overview.currentHourly")}</small>
-                  <strong className="mono">
-                    {money(data.hourly)}
-                    {t("common.perHour")}
-                  </strong>
-                </div>
-                <div className="overview-cost-driver">
-                  <small className="muted">{t("overview.costDriver")}</small>
-                  <strong>
-                    {costDriver && Math.abs(costDriver.change) > 0.01
-                      ? `${t(`common.${costDriver.kind}`)} · ${costDriver.change > 0 ? "+" : "−"}${money(Math.abs(costDriver.change))}`
-                      : t(
-                          hasCostComparison
-                            ? "overview.costNoDriver"
-                            : "overview.costNoComparison",
-                        )}
-                  </strong>
-                </div>
+              <div className="overview-gpu-legend">
+                {REGIONS.map((region) => (
+                  <span key={region}>
+                    <i className={`overview-gpu-key region-${region}`} />
+                    {region.toUpperCase()}
+                  </span>
+                ))}
               </div>
+              <div className="overview-gpu-list">
+                {gpuModels.map((model) => (
+                  <div className="overview-gpu-row" key={model.code}>
+                    <div className="between">
+                      <strong>{model.name}</strong>
+                      <span className="mono">
+                        {t("overview.gpuCards", { count: number(model.total) })}
+                      </span>
+                    </div>
+                    <div
+                      className="overview-gpu-track"
+                      role="img"
+                      aria-label={t("overview.gpuBarLabel", {
+                        model: model.name,
+                        breakdown: REGIONS.map(
+                          (region) =>
+                            `${region.toUpperCase()} ${number(model.regions[region])}`,
+                        ).join(" · "),
+                      })}
+                    >
+                      {REGIONS.map((region) =>
+                        model.regions[region] ? (
+                          <span
+                            key={region}
+                            className={`overview-gpu-segment region-${region}`}
+                            style={{
+                              width: `${(model.regions[region] / largestGpuModel) * 100}%`,
+                            }}
+                            title={`${region.toUpperCase()} · ${number(model.regions[region])}`}
+                          />
+                        ) : null,
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <small className="muted">{t("overview.gpuZeroNote")}</small>
             </Panel>
             <Panel
               title={t("overview.projectLoad")}

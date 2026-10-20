@@ -40,14 +40,22 @@ test("all navigation pages load without runtime errors", async ({ page }) => {
   }
   expect(errors).toEqual([]);
 });
-test("overview highlights recent cost change instead of budget usage", async ({
+test("overview groups allocated GPU models across every region", async ({
   page,
 }) => {
   await page.goto("/overview");
-  await expect(page.getByText("近 7 日费用变化")).toBeVisible();
-  await expect(page.getByText("主要变化来源")).toBeVisible();
-  await expect(page.getByText("当前每小时费用")).toBeVisible();
-  await expect(page.getByText("预算执行")).toHaveCount(0);
+  await expect(page.getByText("GPU 型号与已分配量")).toBeVisible();
+  await expect(page.locator(".overview-gpu-row")).toHaveCount(5);
+  await expect(page.locator(".overview-gpu-legend")).toContainText("JP");
+  await expect(page.locator(".overview-gpu-legend")).toContainText("SG");
+  await expect(page.locator(".overview-gpu-legend")).toContainText("US");
+  const counts = await page
+    .locator(".overview-gpu-row .mono")
+    .allTextContents();
+  expect(
+    counts.reduce((sum, label) => sum + Number(label.replace(/\D/g, "")), 0),
+  ).toBe(1040);
+  await expect(page.getByText("近 7 日费用变化")).toHaveCount(0);
 });
 test("submenu pages describe their own resource and billing functions", async ({
   page,

@@ -752,59 +752,73 @@ tr.clickable {
   padding-bottom: 16px;
 }
 
-.overview-cost-main,
-.overview-project-row {
+.overview-gpu-summary,
+.overview-gpu-legend,
+.overview-gpu-legend span {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  gap: 8px;
 }
 
-.overview-cost-main {
-  align-items: end;
+.overview-gpu-summary {
+  margin-bottom: 12px;
+}
+
+.overview-gpu-summary strong {
+  font-size: 16px;
+}
+
+.overview-gpu-legend {
+  flex-wrap: wrap;
   margin-bottom: 16px;
+  color: var(--rs-text-muted);
+  font-size: 12px;
 }
 
-.overview-cost-value {
-  font-size: 28px;
-  font-weight: 700;
-  line-height: 1.2;
+.overview-gpu-key {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
 }
 
-.overview-cost-change,
-.overview-cost-details > div {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.overview-gpu-key.region-jp,
+.overview-gpu-segment.region-jp {
+  background: var(--rs-brand);
 }
 
-.overview-cost-change {
-  align-items: flex-end;
-  text-align: right;
+.overview-gpu-key.region-sg,
+.overview-gpu-segment.region-sg {
+  background: var(--rs-info);
 }
 
-.overview-cost-change strong {
-  font-size: 19px;
+.overview-gpu-key.region-us,
+.overview-gpu-segment.region-us {
+  background: var(--rs-gold);
 }
 
-.overview-cost-rise {
-  color: var(--rs-danger);
-}
-
-.overview-cost-fall {
-  color: var(--rs-success);
-}
-
-.overview-cost-details {
+.overview-gpu-list {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  padding-top: 14px;
-  border-top: 1px solid var(--rs-border);
+  gap: 13px;
+  margin-bottom: 14px;
 }
 
-.overview-cost-details .overview-cost-driver {
-  grid-column: 1 / -1;
+.overview-gpu-row .between {
+  gap: 12px;
+  margin-bottom: 5px;
+  font-size: 13px;
+}
+
+.overview-gpu-track {
+  display: flex;
+  width: 100%;
+  height: 9px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: var(--rs-surface-2);
+}
+
+.overview-gpu-segment {
+  height: 100%;
 }
 
 .overview-project-heading {
@@ -831,6 +845,10 @@ tr.clickable {
 }
 
 .overview-project-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   padding: 11px 0;
   border-bottom: 1px solid var(--rs-border);
   color: var(--rs-text);
