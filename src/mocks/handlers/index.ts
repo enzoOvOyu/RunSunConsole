@@ -67,9 +67,11 @@ import {
   inferenceGovernanceSchema,
 } from "../../lib/schema";
 import { canWrite, canManageOrg } from "../../lib/rbac";
-import { displayId } from "../../lib/ids";
+import { displayId, resourceLink } from "../../lib/ids";
 import { round } from "../../lib/money";
 import { compatiblePrecisions } from "../../lib/inference-precision";
+import { STORAGE_PRODUCTS } from "../../lib/storage";
+import { volumesForResource } from "../fixtures/storage";
 import { metricsFor } from "../metrics";
 import { z } from "zod";
 import { putObject, getObject, deleteObject } from "../lib/object-store";
@@ -99,7 +101,17 @@ const used = (region: Region, metric: Quota["metric"], exclude?: string) =>
     ? db.network.eips.filter((e) => e.region === region && !e.releasedAt).length
     : live()
         .filter((r) => r.region === region && r.resourceUuid !== exclude)
-        .reduce((a, r) => a + quotaUse(r, metric), 0);
+        .reduce((a, r) => a + quotaUse(r, metric), 0) +
+      (metric === "storage"
+        ? db.buckets
+            .filter((b) => b.region === region)
+            .reduce(
+              (total, b) =>
+                total +
+                b.objects.reduce((sum, object) => sum + object.size, 0) / 1e9,
+              0,
+            )
+        : 0);
 const limits: Record<Region, Record<Quota["metric"], number>> = {
   jp: { gpu: 528, vcpu: 8448, memory: 135168, storage: 30720, ip: 24 },
   sg: { gpu: 320, vcpu: 5120, memory: 90112, storage: 16384, ip: 12 },
@@ -782,7 +794,7 @@ async function dispatchNetwork(
     const links = {
       vpc: "vpcs",
       subnet: "vpcs",
-      security_group: "firewalls",
+      security_group: "security-groups",
       tunnel: "tunnels",
       ip: "eips",
     };
@@ -1376,6 +1388,41 @@ async function dispatch(request: Request) {
       k8sVersions: ["1.28", "1.29", "1.30", "1.31"],
     });
   }
+  if (path === "/api/storage/products") return json(STORAGE_PRODUCTS);
+  if (path === "/api/storage/volumes" && method === "GET")
+    return json(
+      db.volumes
+        .filter(
+          (volume) =>
+            !volume.deletedAt &&
+            (!region || volume.region === region) &&
+            (!qs.get("project_id") ||
+              volume.projectId === qs.get("project_id")),
+        )
+        .map((volume) => ({
+          ...volume,
+          resourceName:
+            db.resources.find((r) => r.resourceUuid === volume.resourceUuid)
+              ?.name || "",
+          resourceKind:
+            db.resources.find((r) => r.resourceUuid === volume.resourceUuid)
+              ?.kind || "gpu_vm",
+        })),
+    );
+  const volumeMatch = path.match(/^\/api\/storage\/volumes\/([^/]+)$/);
+  if (volumeMatch && method === "GET") {
+    const volume =
+      db.volumes.find((v) => v.id === volumeMatch[1] && !v.deletedAt) ||
+      fail(404, "NOT_FOUND");
+    const attached = db.resources.find(
+      (r) => r.resourceUuid === volume.resourceUuid,
+    );
+    return json({
+      ...volume,
+      resourceName: attached?.name || "",
+      resourceKind: attached?.kind || "gpu_vm",
+    });
+  }
   if (path === "/api/account") {
     if (method === "PATCH") {
       if (!canManageOrg(role)) fail(403, "FORBIDDEN");
@@ -1702,6 +1749,16 @@ async function dispatch(request: Request) {
       settle(r);
       releaseResourceNetwork(db.network, r.resourceUuid);
       r.deletedAt = new Date().toISOString();
+      for (const volume of db.volumes)
+        if (volume.resourceUuid === r.resourceUuid)
+          volume.deletedAt = r.deletedAt;
+      for (const bucket of db.buckets)
+        if (bucket.attachedResourceUuid === r.resourceUuid) {
+          bucket.attachedResourceUuid = null;
+          bucket.references = bucket.references.filter(
+            (reference) => reference.href !== resourceLink(r),
+          );
+        }
       r.status = "terminating";
       r.runningSince = null;
       db.policies = db.policies.filter(
@@ -1885,6 +1942,12 @@ async function dispatch(request: Request) {
         (r) => r.displayId === displayId(parsed.kind, resourceUuid),
       )
     );
+    for (const row of spec.storageSelections || [])
+      if (
+        row.kind === "object" &&
+        db.buckets.some((bucket) => bucket.name === row.name)
+      )
+        fail(409, "BUCKET_NAME_CONFLICT");
     const r = {
       ...parsed,
       spec,
@@ -1902,6 +1965,24 @@ async function dispatch(request: Request) {
     precheck(r);
     syncResourceNetwork(db.network, r);
     db.resources.push(r);
+    db.volumes.push(...volumesForResource(r));
+    for (const row of spec.storageSelections || []) {
+      if (row.kind !== "object") continue;
+      db.buckets.push({
+        id: crypto.randomUUID(),
+        name: row.name,
+        region: r.region,
+        projectId: r.projectId,
+        storageClass: row.tier === "oss_ia" ? "IA" : "STANDARD",
+        attachedResourceUuid: r.resourceUuid,
+        access: "private",
+        quotaGb: row.sizeGb,
+        createdAt: r.createdAt,
+        objects: [],
+        lifecycle: [],
+        references: [{ name: r.name, href: resourceLink(r) }],
+      });
+    }
     const order = {
       idempotencyKey,
       orderUuid: r.orderUuid,
@@ -2522,8 +2603,20 @@ async function dispatch(request: Request) {
         id: crypto.randomUUID(),
         name,
         region: z.enum(REGIONS).parse(body.region),
+        projectId: z.string().optional().parse(body.projectId),
+        storageClass: z
+          .enum(["STANDARD", "IA"])
+          .default("STANDARD")
+          .parse(body.storageClass),
+        attachedResourceUuid: null,
         access: "private" as const,
-        quotaGb: 2048,
+        quotaGb: z
+          .number()
+          .int()
+          .min(100)
+          .max(1048500)
+          .default(2000)
+          .parse(body.quotaGb),
         createdAt: new Date().toISOString(),
         objects: [],
         lifecycle: [],
@@ -2547,7 +2640,7 @@ async function dispatch(request: Request) {
         fail(423, "HAS_DEPENDENCIES", {
           dependencies: b.objects.map((o) => ({
             name: o.key,
-            href: `/data/storage?drawer=${b.id}`,
+            href: `/storage/object?drawer=${b.id}`,
           })),
         });
       db.buckets = db.buckets.filter((x) => x.id !== b.id);
@@ -2594,13 +2687,19 @@ async function dispatch(request: Request) {
           size: z.number().nonnegative().parse(body.size),
           contentType: String(body.contentType || "application/octet-stream"),
           etag: crypto.randomUUID(),
-          storageClass: "STANDARD",
+          storageClass: b.storageClass || "STANDARD",
           updatedAt: new Date().toISOString(),
         };
         if (o.size > 20_000_000) fail(422, "INVALID_FILE");
+        const previous = b.objects.find((x) => x.key === key)?.size || 0;
         if (
-          b.objects.reduce((a, o) => a + o.size, 0) + o.size >
+          b.objects.reduce((a, o) => a + o.size, 0) - previous + o.size >
           b.quotaGb * 1e9
+        )
+          fail(409, "QUOTA_EXCEEDED");
+        if (
+          used(b.region, "storage") + (o.size - previous) / 1e9 >
+          limits[b.region].storage
         )
           fail(409, "QUOTA_EXCEEDED");
         try {
@@ -2784,7 +2883,7 @@ async function dispatch(request: Request) {
           size: 128400000,
           contentType: "application/octet-stream",
           etag: run.id,
-          storageClass: "STANDARD",
+          storageClass: bucket.storageClass || "STANDARD",
           updatedAt: new Date().toISOString(),
         });
       persist();

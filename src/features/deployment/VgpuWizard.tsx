@@ -1,8 +1,14 @@
+import { StorageRows } from "./shared/StorageRows";
 import { z } from "zod";
 import type { VgpuSpec } from "../../types/domain";
 import { t } from "../../i18n";
 import { Button, Field, Panel } from "../../components/ui";
-import { vgpuSchema, nodePoolSchema, isCidr } from "../../lib/schema";
+import {
+  vgpuSchema,
+  nodePoolSchema,
+  isCidr,
+  storageSelectionsSchema,
+} from "../../lib/schema";
 import { WizardLayout, PoolCards } from "./shared/WizardLayout";
 import {
   useSpec,
@@ -26,7 +32,12 @@ function validate(v: WizardValues, step: number) {
     );
   if (step === 2)
     return z.array(nodePoolSchema).min(1).max(5).safeParse(s.nodePools).success;
-  if (step === 3) return !!s.networkPlugin && !!s.storageClass;
+  if (step === 3)
+    return (
+      !!s.networkPlugin &&
+      !!s.storageClass &&
+      storageSelectionsSchema.safeParse(s.storageSelections || []).success
+    );
   return vgpuSchema.safeParse(s).success;
 }
 function VgpuForm({ step, pools }: FormContext) {
@@ -206,6 +217,7 @@ function VgpuForm({ step, pools }: FormContext) {
         />
         <SpecNumber name="defaultPvcGb" label="PVC · GB" min={0} max={32768} />
       </div>
+      <StorageRows />
     </div>
   ) : (
     <div className="stack">

@@ -11,6 +11,7 @@ import type {
   Model,
 } from "../../types/domain";
 import { round } from "../../lib/money";
+import { storageExtraGb, storageProduct } from "../../lib/storage";
 export const discount = (mode: BillingMode) =>
   mode === "spot" ? 0.55 : mode === "reserved" ? 0.7 : 1;
 export function estimate(
@@ -83,14 +84,30 @@ export function estimate(
       spec.gpuCount,
       true,
     );
-  if (spec.storageGb > 0)
+  const baseStorage = Math.max(
+    0,
+    spec.storageGb - storageExtraGb(spec.storageSelections),
+  );
+  if (baseStorage > 0)
     add(
       "storage",
       "per_gb_hour",
       find("per_gb_hour", null),
-      spec.storageGb,
+      baseStorage,
       false,
     );
+  for (const row of spec.storageSelections || []) {
+    if (row.kind === "object") continue;
+    const product = storageProduct(row.kind, row.tier);
+    if (product)
+      add(
+        `storage:${row.key}`,
+        "per_gb_hour",
+        product.usdGbMonth / 730,
+        row.sizeGb * row.count,
+        false,
+      );
+  }
   if (spec.publicIp)
     add(
       "ip",
@@ -142,7 +159,7 @@ export function costPerHour(resource: Resource, rates: Rate[]) {
       .filter(
         (l) =>
           l.key !== "ip" &&
-          (resource.status === "running" || l.key === "storage"),
+          (resource.status === "running" || l.key.startsWith("storage")),
       )
       .reduce((a, l) => a + l.hourly, 0),
     6,

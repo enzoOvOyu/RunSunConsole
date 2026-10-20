@@ -33,8 +33,8 @@ export type NetworkDetail = NetworkRecord & {
   usage?: Usage[];
 };
 export function uiPath(kind: NetworkKind) {
-  return `/network/${kind === "security-groups" ? "firewalls" : kind}`;
+  return `/network/${kind}`;
 }
 export function navKey(kind: NetworkKind) {
-  return kind === "security-groups" ? "firewalls" : kind;
+  return kind;
 }

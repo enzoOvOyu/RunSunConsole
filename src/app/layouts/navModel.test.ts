@@ -3,7 +3,7 @@ import { buildGroups } from "./navModel";
 import { dictionaries } from "../../i18n";
 it("assigns distinct semantic submenu icons through the shared navigation model", () => {
   const groups = buildGroups("owner");
-  for (const id of ["ops", "workbench", "data", "billing"]) {
+  for (const id of ["ops", "workbench", "storage", "billing"]) {
     const group = groups.find((g) => g.id === id)!;
     expect(new Set(group.items.map((i) => i.icon)).size).toBe(
       group.items.length,

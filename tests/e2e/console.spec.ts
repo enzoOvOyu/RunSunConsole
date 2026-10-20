@@ -11,7 +11,7 @@ const routes = [
   "deployment/inference",
   "network/vpcs",
   "network/eips",
-  "network/firewalls",
+  "network/security-groups",
   "network/tunnels",
   "ops/projects",
   "ops/quotas",
@@ -22,7 +22,9 @@ const routes = [
   "workbench/apps",
   "workbench/scaling",
   "data/datasets",
-  "data/storage",
+  "storage/block",
+  "storage/file",
+  "storage/object",
   "data/pipelines",
   "billing/bills",
   "billing/vouchers",
@@ -205,10 +207,10 @@ test("locale changes preserve an in-progress form and do not reload its queries"
 test("resource deletion requires typed confirmation and keeps read-only history", async ({
   page,
 }) => {
-  await page.goto("/resources/servers?region=th");
+  await page.goto("/resources/servers?region=jp");
   await expect(
     page.getByRole("combobox", { name: "区域", exact: true }),
-  ).toHaveValue("th");
+  ).toHaveValue("jp");
   await page.locator("tbody tr").first().click();
   const displayId = (await page
     .getByRole("dialog")
@@ -443,10 +445,10 @@ test("overview uses regional allocations and realistic separate memory quotas", 
   const matrix = page.locator(".overview-distribution");
   await expect(matrix.locator("tbody tr")).toHaveCount(4);
   await expect(matrix.locator("th").filter({ hasText: "日本" })).toBeVisible();
-  await expect(matrix).toContainText("8 台设备");
+  await expect(matrix).toContainText("14 台设备");
   await expect(matrix).toContainText("128 GPU");
-  await expect(page.getByText("主机内存 GB", { exact: true })).toHaveCount(4);
-  await expect(page.getByText("云存储 GB", { exact: true })).toHaveCount(4);
+  await expect(page.getByText("主机内存 GB", { exact: true })).toHaveCount(3);
+  await expect(page.getByText("云存储 GB", { exact: true })).toHaveCount(3);
   await page.getByRole("button", { name: "自定义模块", exact: true }).click();
   await expect(page.getByRole("dialog")).not.toContainText("区域分布");
   await page.keyboard.press("Escape");
@@ -848,4 +850,28 @@ test("cost analysis belongs to Billing while the old route redirects", async ({
   await expect(page.locator("aside")).toContainText("项目与支持");
   await page.goto("/ops/cost");
   await expect(page).toHaveURL(/billing\/cost$/);
+});
+
+test("deployment storage rows create linked file and object resources", async ({ page }) => {
+  await page.goto("/deployment/server");
+  await page.getByRole("button", { name: "下一步", exact: true }).click();
+  await page.getByRole("button", { name: "下一步", exact: true }).click();
+  await page.getByRole("button", { name: "添加存储", exact: true }).click();
+  const fileRow = page.getByText("存储项 1", { exact: true }).locator("../..");
+  await fileRow.getByRole("combobox", { name: "类型", exact: true }).selectOption("file");
+  await fileRow.getByRole("textbox", { name: "名称", exact: true }).fill("shared-models");
+  await page.getByRole("button", { name: "添加存储", exact: true }).click();
+  const objectRow = page.getByText("存储项 2", { exact: true }).locator("../..");
+  await objectRow.getByRole("combobox", { name: "类型", exact: true }).selectOption("object");
+  await objectRow.getByRole("textbox", { name: "存储桶名称", exact: true }).fill("runsun-browser-storage-test");
+  await page.getByRole("button", { name: "下一步", exact: true }).click();
+  await page.getByRole("textbox", { name: "SSH 公钥", exact: true }).fill("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFOO");
+  await page.getByRole("button", { name: "下一步", exact: true }).click();
+  await page.getByLabel("我已阅读并确认配置与计费方式").check();
+  await page.getByRole("button", { name: "新建", exact: true }).click();
+  await expect(page).toHaveURL(/resources\/servers\?drawer=/);
+  await page.goto("/storage/file?region=jp");
+  await expect(page.locator("tbody")).toContainText("shared-models");
+  await page.goto("/storage/object?region=jp");
+  await expect(page.locator("tbody")).toContainText("runsun-browser-storage-test");
 });

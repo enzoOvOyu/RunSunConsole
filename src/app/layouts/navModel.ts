@@ -5,6 +5,7 @@ import {
   Briefcase,
   Terminal,
   Database,
+  CloudUpload,
   Wallet,
   FolderKanban,
   Gauge,
@@ -16,7 +17,6 @@ import {
   Scaling,
   Files,
   HardDrive,
-  Workflow,
   ReceiptText,
   TicketPercent,
   Network,
@@ -45,7 +45,7 @@ export interface NavGroup {
 const itemIcons: Record<string, typeof LayoutDashboard> = {
   vpcs: Network,
   eips: Globe2,
-  firewalls: ShieldCheck,
+  "security-groups": ShieldCheck,
   tunnels: Cable,
   projects: FolderKanban,
   quotas: Gauge,
@@ -55,9 +55,9 @@ const itemIcons: Record<string, typeof LayoutDashboard> = {
   images: Container,
   apps: AppWindow,
   scaling: Scaling,
-  datasets: Files,
-  storage: HardDrive,
-  pipelines: Workflow,
+  block: HardDrive,
+  file: Files,
+  object: CloudUpload,
   bills: ReceiptText,
   vouchers: TicketPercent,
 };
@@ -105,7 +105,7 @@ export function buildGroups(role: Role): NavGroup[] {
       {
         id: "network",
         icon: Network,
-        items: ["vpcs", "eips", "firewalls", "tunnels"],
+        items: ["vpcs", "eips", "security-groups", "tunnels"],
       },
       {
         id: "ops",
@@ -118,9 +118,9 @@ export function buildGroups(role: Role): NavGroup[] {
         items: ["notebooks", "images", "apps", "scaling"],
       },
       {
-        id: "data",
+        id: "storage",
         icon: Database,
-        items: ["datasets", "storage", "pipelines"],
+        items: ["block", "file", "object"],
       },
       { id: "billing", icon: Wallet, items: ["cost", "bills", "vouchers"] },
     ].map((group) => ({

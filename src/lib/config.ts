@@ -1,4 +1,5 @@
 import type { Pool, Kind, Resource, ScalingConfig } from "../types/domain";
+import { storageExtraGb } from "./storage";
 export const defaultScaling = (kind: Kind): ScalingConfig => ({
   strategy_model: kind === "inference" ? "replica" : "node_pool",
   trigger_metric:
@@ -27,6 +28,8 @@ export function defaultSpec(kind: Kind, pool: Pool): Resource["spec"] {
     securityGroups: ["default"],
     gpuCount: 1,
     storageGb: 100,
+    baseStorageGb: 100,
+    storageSelections: [],
     publicIp: false,
     scaling: null,
     env: {},
@@ -127,7 +130,9 @@ export function defaultSpec(kind: Kind, pool: Pool): Resource["spec"] {
 export function normalizeSpec<S extends Resource["spec"]>(spec: S): S {
   const next = { ...spec };
   if ("systemDiskGb" in next) {
-    next.storageGb = (next.systemDiskGb + next.dataDiskGb) * next.quantity;
+    next.storageGb =
+      (next.systemDiskGb + next.dataDiskGb) * next.quantity +
+      storageExtraGb(next.storageSelections);
     next.gpuCount = next.gpuDisabled ? 0 : next.gpuPerInstance * next.quantity;
   }
   if ("nodePools" in next) {
@@ -135,8 +140,16 @@ export function normalizeSpec<S extends Resource["spec"]>(spec: S): S {
       (a, p) => a + p.nodeCount * p.gpuPerNode,
       0,
     );
-    next.storageGb = next.defaultPvcGb;
+    next.storageGb = next.defaultPvcGb + storageExtraGb(next.storageSelections);
   }
   if ("replicas" in next) next.gpuCount = next.replicas * next.gpuPerReplica;
+  if (!("systemDiskGb" in next) && !("nodePools" in next)) {
+    next.baseStorageGb ??= Math.max(
+      0,
+      next.storageGb - storageExtraGb(next.storageSelections),
+    );
+    next.storageGb =
+      next.baseStorageGb + storageExtraGb(next.storageSelections);
+  }
   return next;
 }

@@ -19,7 +19,9 @@ export function StatusBar() {
       "/ops/tickets",
       "/workbench/notebooks",
       "/workbench/scaling",
-      "/data/storage",
+      "/storage/block",
+      "/storage/file",
+      "/storage/object",
     ].includes(pathname);
   const region = regional ? selected : "";
   const data = useData<{ balance: number; month: number; running: number }>(

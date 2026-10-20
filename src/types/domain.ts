@@ -1,4 +1,5 @@
 import type { DeploymentNetworkOptions } from "./network";
+import type { StorageRequest } from "./storage";
 import type { InferenceGatewaySettings } from "./inference";
 export const KINDS = ["gpu_vm", "gpu_baremetal", "vgpu", "inference"] as const;
 export const REGIONS = ["jp", "sg", "us"] as const;
@@ -48,6 +49,8 @@ export interface CommonSpec {
   eipId?: string;
   gpuCount: number;
   storageGb: number;
+  baseStorageGb?: number;
+  storageSelections?: StorageRequest[];
   publicIp: boolean;
   scaling: ScalingConfig | null;
   env?: Record<string, string>;
@@ -361,6 +364,9 @@ export interface Bucket {
   id: string;
   name: string;
   region: Region;
+  projectId?: string;
+  storageClass?: "STANDARD" | "IA";
+  attachedResourceUuid?: ResourceUuid | null;
   access: "private" | "public_read";
   quotaGb: number;
   createdAt: string;

@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useUrlState } from "../shared/useUrlState";
 import { confirmAction } from "../../components/ui/ConfirmAction";
 import { useState, type DragEvent } from "react";
@@ -32,9 +33,14 @@ import {
 export default function StoragePage() {
   const region = useRegion((s) => s.region);
   const role = useAuth((s) => s.role);
+  const projectId = useAuth((s) => s.project);
   const { id, setId } = useDrawer();
   const [newOpen, setNewOpen] = useState(false);
   const [name, setName] = useState("");
+  const [storageClass, setStorageClass] = useState<"STANDARD" | "IA">(
+    "STANDARD",
+  );
+  const [quotaGb, setQuotaGb] = useState(2000);
   const [search, setSearch] = useUrlState("q");
   const [prefix, setPrefix] = useState("");
   const [tab, setTab] = useState("objects");
@@ -102,7 +108,7 @@ export default function StoragePage() {
   return (
     <>
       <PageHeader
-        title={t("nav.storage")}
+        title={t("nav.object")}
         actions={
           <Button
             variant="primary"
@@ -143,6 +149,11 @@ export default function StoragePage() {
                 cell: ({ row }) => t("common." + row.original.region),
               },
               {
+                accessorKey: "storageClass",
+                header: t("storage.tier"),
+                cell: ({ row }) => row.original.storageClass || "STANDARD",
+              },
+              {
                 id: "count",
                 header: t("storage.objects"),
                 cell: ({ row }) => row.original.objects.length,
@@ -176,7 +187,7 @@ export default function StoragePage() {
           setId("");
           setSelected(null);
         }}
-        title={bucket?.name || t("nav.storage")}
+        title={bucket?.name || t("nav.object")}
       >
         {overview.isPending ? (
           <Loading />
@@ -184,6 +195,22 @@ export default function StoragePage() {
           <ErrorState error={overview.error} />
         ) : bucket ? (
           <div className="stack">
+            <Panel title={t("storage.volumeDetails")}>
+              <KeyValues
+                items={[
+                  [t("common.region"), t("common." + bucket.region)],
+                  [t("storage.tier"), bucket.storageClass || "STANDARD"],
+                  [t("common.project"), bucket.projectId || "—"],
+                  [t("storage.attached"), bucket.references[0]?.name || "—"],
+                  [t("common.createdAt"), date(bucket.createdAt)],
+                ]}
+              />
+            </Panel>
+            {bucket.references[0] && (
+              <Link to={bucket.references[0].href}>
+                {t("storage.attached")}: {bucket.references[0].name}
+              </Link>
+            )}
             <Panel
               title={t("storage.capacity")}
               action={
@@ -416,11 +443,48 @@ export default function StoragePage() {
               onChange={(e) => setName(e.target.value)}
             />
           </Field>
+          <div className="form-grid">
+            <Field label={t("storage.tier")}>
+              <select
+                value={storageClass}
+                onChange={(e) =>
+                  setStorageClass(e.target.value as "STANDARD" | "IA")
+                }
+              >
+                <option value="STANDARD">STANDARD</option>
+                <option value="IA">IA</option>
+              </select>
+            </Field>
+            <Field label={t("storage.quotaGb")}>
+              <input
+                className="input"
+                type="number"
+                min={100}
+                max={1048500}
+                step={100}
+                value={quotaGb}
+                onChange={(e) => setQuotaGb(Number(e.target.value))}
+              />
+            </Field>
+          </div>
           <Button
-            disabled={!/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(name) || busy}
+            disabled={
+              !/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(name) ||
+              busy ||
+              quotaGb < 100 ||
+              quotaGb > 1048500 ||
+              quotaGb % 100 !== 0
+            }
             onClick={async () => {
               const b = await run(
-                () => post<Bucket>(EP.buckets, { name, region }),
+                () =>
+                  post<Bucket>(EP.buckets, {
+                    name,
+                    region,
+                    projectId,
+                    storageClass,
+                    quotaGb,
+                  }),
                 "success.created",
               );
               if (b) {

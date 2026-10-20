@@ -103,6 +103,10 @@ export const router = createBrowserRouter([
       },
       {
         path: "network/firewalls",
+        element: <Navigate to="/network/security-groups" replace />,
+      },
+      {
+        path: "network/security-groups",
         lazy: async () => ({
           Component: withLocale(
             (await import("../features/network/NetworkPages"))
@@ -192,12 +196,32 @@ export const router = createBrowserRouter([
         }),
       },
       {
-        path: "data/storage",
+        path: "storage/block",
+        lazy: async () => ({
+          Component: withLocale(
+            (await import("../features/storage/VolumePage")).default,
+          ),
+        }),
+      },
+      {
+        path: "storage/file",
+        lazy: async () => ({
+          Component: withLocale(
+            (await import("../features/storage/VolumePage")).default,
+          ),
+        }),
+      },
+      {
+        path: "storage/object",
         lazy: async () => ({
           Component: withLocale(
             (await import("../features/data/StoragePage")).default,
           ),
         }),
+      },
+      {
+        path: "data/storage",
+        element: <Navigate to="/storage/object" replace />,
       },
       {
         path: "data/pipelines",

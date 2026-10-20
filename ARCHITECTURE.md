@@ -116,7 +116,8 @@ vitest.config.ts              # 测试配置（environment: node，含 @/ 别名
 /resources/inference               /resources/inference?drawer=:resourceUuid   （完整详情为右侧 Drawer）
 /workbench/notebooks             /workbench/images（含模型卡片）  /workbench/apps
 /workbench/scaling               （四类资源分区配置 / 伸缩事件）
-/data/datasets                   /data/storage         /data/pipelines
+/storage/block                  /storage/file         /storage/object
+/data/datasets                   /data/pipelines       （保留旧页面入口）
 /ops/projects                    /ops/projects/:projectUuid     （项目页，A 档整页详情）
 /ops/quotas                      （C 档行内展开；配额含「已分配节点池」视图）
 /ops/tickets                     /ops/tickets/:id                （A 档整页详情）
@@ -1424,3 +1425,10 @@ Mock `Database.network` 保存实体、历史接口、审计和地址池序号�
 列表统一支持 region/project_id/q；EIP 支持 includeReleased。网络作用域错误 409 NETWORK_SCOPE_MISMATCH；依赖错误 NETWORK_HAS_DEPENDENCIES；子网耗尽 SUBNET_EXHAUSTED；路由重叠 CIDR_OVERLAP；EIP 冲突 EIP_IN_USE/EIP_NOT_AVAILABLE；默认删除 DEFAULT_NETWORK。参数校验 422，角色写入 403，已删除对象修改 410。
 
 真实后端接入时，在同一事务内执行配额/地址池预检与分配；数据库需对有效 `(subnet_id, private_ip)`、有效 `(interface_id)` 的 EIP 绑定建立唯一约束。浏览器角色切换仅为展示；实际权限必须由服务端租户会话落实。当前未新增后端或 PostgreSQL 业务表。
+
+### 12.13 存储资源与部署订单
+
+- `StorageRequest` 作为 `CommonSpec.storageSelections` 进入四类订单；`normalizeSpec` 将块与文件容量汇入 `storageGb`，对象桶的容量上限不进入已分配量。
+- `/api/storage/products` 返回规格与价格；`/api/storage/volumes` 及 `/:id` 返回有效卷、关联计算资源名称和类型。对象桶沿用 `/api/buckets`，增加 `projectId`、`storageClass`、`attachedResourceUuid`。
+- Mock `Database.volumes` 从既有系统盘、数据盘、PVC、基础卷和新订单行派生；旧浏览器快照缺少该字段时自动补建。创建订单时卷和桶与资源一起写入；删除资源时卷软删除、桶解除绑定。
+- 导航新入口为 `/storage/block`、`/storage/file`、`/storage/object`；`/data/storage` 重定向至对象存储。安全组规范入口为 `/network/security-groups`，旧 `/network/firewalls` 重定向。

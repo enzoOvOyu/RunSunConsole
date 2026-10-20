@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { REGIONS, POOLS } from "../types/domain";
+import { storageProduct } from "./storage";
 export const scalingSchema = z
   .object({
     strategy_model: z.enum(["node_pool", "replica"]),
@@ -24,6 +25,46 @@ export const scalingSchema = z
     )
       ctx.addIssue({ code: "custom", message: "INVALID_SCALING" });
   });
+export const storageSelectionsSchema = z
+  .array(
+    z.object({
+      key: z.string().min(1),
+      kind: z.enum(["block", "file", "object"]),
+      tier: z.string().min(1),
+      name: z.string().min(3).max(63),
+      sizeGb: z.number().int().positive(),
+      count: z.number().int().min(1).max(8),
+      mountPath: z.string(),
+    }),
+  )
+  .max(8)
+  .superRefine((rows, ctx) => {
+    if (new Set(rows.map((row) => row.key)).size !== rows.length)
+      ctx.addIssue({ code: "custom", message: "DUPLICATE_STORAGE" });
+    const bucketNames = rows
+      .filter((row) => row.kind === "object")
+      .map((row) => row.name);
+    if (new Set(bucketNames).size !== bucketNames.length)
+      ctx.addIssue({ code: "custom", message: "DUPLICATE_BUCKET" });
+    for (const [index, row] of rows.entries()) {
+      const product = storageProduct(row.kind, row.tier);
+      if (
+        !product ||
+        row.sizeGb < product.minGb ||
+        row.sizeGb > product.maxGb ||
+        (row.sizeGb - product.minGb) % product.stepGb !== 0 ||
+        (row.kind === "object" &&
+          (row.count !== 1 ||
+            !/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(row.name))) ||
+        (row.kind !== "object" && !/^\/[A-Za-z0-9/._-]+$/.test(row.mountPath))
+      )
+        ctx.addIssue({
+          code: "custom",
+          path: [index],
+          message: "INVALID_STORAGE_SPEC",
+        });
+    }
+  });
 const common = {
   vpc: z.string().optional(),
   subnet: z.string().optional(),
@@ -31,6 +72,8 @@ const common = {
   eipId: z.string().optional(),
   gpuCount: z.number().int().positive(),
   storageGb: z.number().min(0),
+  baseStorageGb: z.number().min(0).optional(),
+  storageSelections: storageSelectionsSchema.optional(),
   publicIp: z.boolean(),
   scaling: scalingSchema.nullable(),
   env: z.record(z.string()).optional(),

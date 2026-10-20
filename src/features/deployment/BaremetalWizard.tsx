@@ -1,3 +1,4 @@
+import { StorageRows } from "./shared/StorageRows";
 import { z } from "zod";
 import type { BaremetalSpec } from "../../types/domain";
 import { t } from "../../i18n";
@@ -108,11 +109,12 @@ function BaremetalForm({ step, pools, images }: FormContext) {
         options={["recommended", "latest"]}
       />
       <SpecNumber
-        name="storageGb"
+        name="baseStorageGb"
         label={t("quota.storage")}
         min={0}
         max={32768}
       />
+      <StorageRows />
       <ScalingToggle kind="gpu_baremetal" />
       <Review />
     </div>

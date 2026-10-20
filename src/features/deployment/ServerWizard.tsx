@@ -1,8 +1,9 @@
+import { StorageRows } from "./shared/StorageRows";
 import { z } from "zod";
 import type { ServerSpec } from "../../types/domain";
 import { t } from "../../i18n";
 import { Field } from "../../components/ui";
-import { serverSchema } from "../../lib/schema";
+import { serverSchema, storageSelectionsSchema } from "../../lib/schema";
 import { WizardLayout, PoolCards } from "./shared/WizardLayout";
 import {
   useSpec,
@@ -33,13 +34,16 @@ function validate(v: WizardValues, step: number) {
       })
       .safeParse(s).success;
   if (step === 2)
-    return z
-      .object({
-        imageRef: z.string().min(1),
-        systemDiskGb: z.number().min(40).max(2048),
-        dataDiskGb: z.number().min(0).max(32768),
-      })
-      .safeParse(s).success;
+    return (
+      z
+        .object({
+          imageRef: z.string().min(1),
+          systemDiskGb: z.number().min(40).max(2048),
+          dataDiskGb: z.number().min(0).max(32768),
+        })
+        .safeParse(s).success &&
+      storageSelectionsSchema.safeParse(s.storageSelections || []).success
+    );
   if (step === 3)
     return (
       (s.authMethod === "password"
@@ -130,6 +134,7 @@ function ServerForm({ step, pools, images }: FormContext) {
           options={["nvme_ssd", "ssd"]}
         />
       </div>
+      <StorageRows />
     </div>
   ) : step === 3 ? (
     <div className="stack">

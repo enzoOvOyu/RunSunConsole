@@ -1,4 +1,6 @@
 import type { NetworkState } from "../../types/network";
+import type { StorageVolume } from "../../types/storage";
+import { seedStorageVolumes } from "../fixtures/storage";
 import { makeNetwork } from "./network";
 import type {
   Resource,
@@ -40,6 +42,7 @@ export interface Database {
   replicaRestarts: Record<string, Record<string, number>>;
   billingCursors: Record<string, number>;
   resources: Resource[];
+  volumes: StorageVolume[];
   projects: Project[];
   events: ResourceEvent[];
   usage: Usage[];
@@ -306,6 +309,7 @@ export function makeDatabase(): Database {
     replicaRestarts: {},
     billingCursors: {},
     resources,
+    volumes: seedStorageVolumes(resources),
     projects: structuredClone(PROJECTS),
     events,
     usage,
@@ -365,10 +369,11 @@ export function restoreDatabase() {
             r.spec.vpc = `vpc-${r.projectId}-th`;
           if (r.spec.subnet === "th-default" || r.spec.subnet === "th-private")
             r.spec.subnet = `vsw-${r.projectId}-th-${r.spec.subnet === "th-private" ? "b" : "a"}`;
-          r.spec.securityGroups = (r.spec.securityGroups || ["default"]).map((id) =>
-            ["default", "ssh-only", "web", "restricted"].includes(id)
-              ? `sg-${r.projectId}-th-${id}`
-              : id,
+          r.spec.securityGroups = (r.spec.securityGroups || ["default"]).map(
+            (id) =>
+              ["default", "ssh-only", "web", "restricted"].includes(id)
+                ? `sg-${r.projectId}-th-${id}`
+                : id,
           );
         } else {
           r.spec.subnet = "jp-default";
@@ -388,13 +393,17 @@ export function restoreDatabase() {
         data.network.tunnels,
         data.network.audit,
         data.buckets,
+        data.volumes || [],
       ])
         for (const entity of list)
           if ((entity.region as string) === "th") entity.region = "jp";
       for (const voucher of data.vouchers)
-        voucher.regions = [...new Set(voucher.regions.map((r) =>
-          (r as string) === "th" ? "jp" : r,
-        ))];
+        voucher.regions = [
+          ...new Set(
+            voucher.regions.map((r) => ((r as string) === "th" ? "jp" : r)),
+          ),
+        ];
+      data.volumes ??= seedStorageVolumes(data.resources);
       data.usageMeters ??= {};
       data.replicaRestarts ??= {};
       data.voucherPending ??= {};

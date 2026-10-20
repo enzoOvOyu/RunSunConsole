@@ -37,7 +37,7 @@
 
 ## 1. 项目是什么
 
-GPU 公有云（RunSun）的 **Web 控制台前端**。把「部署中心（创建）+ 资源（四类展示）+ 运营 / 工作台 / 数据 / 费用中心」整合为一体。
+GPU 公有云（RunSun）的 **Web 控制台前端**。把「部署中心（创建）+ 资源（四类展示）+ 项目与支持 / 工作台 / 网络管理 / 存储 / 费用中心」整合为一体。
 
 - **当前状态**：以 `PRD.md` v0.11 为产品基线；架构、UI、Mock 与伸缩参考文档已对齐可确认的需求。工作区已建立前端源码、Mock、回归测试与浏览器测试，当前实现和验收记录见 README；旧代码快照保存在 `archive/current-gdashboard/`。未经用户指令，不从归档代码继续开发。
 - **范围边界**：**纯前端 + Mock**。无真实后端，`/api/*` 全部由 **MSW** 拦截。PostgreSQL 只在 `docker/postgres/init/` 里跑 DDL 种子，应用不访问它。
@@ -85,7 +85,7 @@ src/
 ├─ features/                  # 按业务域切分
 │  ├─ overview/  deployment/（四类向导 + shared/）  resources/（四类列表与详情 + shared/）
 │  ├─ ops/（项目/配额/成本/工单）  workbench/（notebooks/images/apps/scaling）  billing/（bills/vouchers）
-│  └─ data/（datasets/storage/pipelines）  shared/（BillingTab/MetricsPanel/api）
+│  └─ storage/（block/file） data/（旧 datasets/pipelines + object） shared/（BillingTab/MetricsPanel/api）
 ├─ components/
 │  ├─ command/                # CommandPalette.tsx + palette.css（⌘K 命令面板）
 │  ├─ ui/                     # Button/Card/Table/Tabs/Badge/Drawer/Toast/EntityDrawer…

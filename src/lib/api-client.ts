@@ -29,6 +29,8 @@ export const EP = {
   scalingEvents: "/api/scaling/events",
   datasets: "/api/datasets",
   buckets: "/api/buckets",
+  storageProducts: "/api/storage/products",
+  storageVolumes: "/api/storage/volumes",
   pipelines: "/api/pipelines",
   pipelineRuns: "/api/pipeline-runs",
   tickets: "/api/tickets",

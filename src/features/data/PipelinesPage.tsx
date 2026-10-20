@@ -346,7 +346,7 @@ export default function PipelinesPage() {
               {runDetail.data.run.artifacts.length ? (
                 runDetail.data.run.artifacts.map((a) => (
                   <div key={a}>
-                    <Link to="/data/storage?drawer=bucket-jp">{a}</Link>
+                    <Link to="/storage/object?drawer=bucket-jp">{a}</Link>
                   </div>
                 ))
               ) : (

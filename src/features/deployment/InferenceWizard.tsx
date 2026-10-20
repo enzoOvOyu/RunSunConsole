@@ -1,10 +1,11 @@
+import { StorageRows } from "./shared/StorageRows";
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { InferenceSpec } from "../../types/domain";
 import { t } from "../../i18n";
 import { post, EP } from "../../lib/api-client";
 import { Field } from "../../components/ui";
-import { inferenceSchema } from "../../lib/schema";
+import { inferenceSchema, storageSelectionsSchema } from "../../lib/schema";
 import {
   compatiblePrecisions,
   precisionLabel,
@@ -37,7 +38,8 @@ function validate(v: WizardValues, step: number) {
       s.port >= 1 &&
       s.port <= 65535 &&
       s.maxBatchSize >= 1 &&
-      s.maxBatchSize <= 512
+      s.maxBatchSize <= 512 &&
+      storageSelectionsSchema.safeParse(s.storageSelections || []).success
     );
   return inferenceSchema.safeParse(s).success;
 }
@@ -227,6 +229,7 @@ function InferenceForm({ step, pools, models }: FormContext) {
         <SpecCheck name="prefixCaching" label={t("wizard.prefixCaching")} />
         <SpecCheck name="chunkedPrefill" label={t("wizard.chunkedPrefill")} />
       </div>
+      <StorageRows />
     </div>
   ) : (
     <div className="stack">
