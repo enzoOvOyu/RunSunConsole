@@ -65,7 +65,7 @@ pnpm build                          # tsc -b && vite build
 | `pnpm test:watch` | 测试 watch 模式 |
 | `pnpm lint` / `pnpm format` | ESLint / Prettier |
 
-**Docker 方式**（`docker compose up -d`）：`dev`（Node 22 空闲开发容器）、PostgreSQL 和 Adminer 均在独立 `runsun-network` 内；仅 `127.0.0.1:5173` 为前端预留的宿主映射，数据库与 Adminer 不发布宿主端口，不得占用或改动其他项目的端口。应用代码创建后通过 `docker compose exec dev ...` 启动。
+**Docker 方式**（`docker compose up -d`）：`dev`（Node 22 空闲开发容器）、PostgreSQL 和 Adminer 均在独立 `runsun-network` 内；仅 `0.0.0.0:5173` 为前端预留的宿主映射，数据库与 Adminer 不发布宿主端口，不得占用或改动其他项目的端口。应用代码创建后通过 `docker compose exec dev ...` 启动。
 
 ---
 
@@ -195,7 +195,7 @@ pnpm typecheck     # 注意：CI 用 tsc -b --force --noEmit
 
 | 症状 | 根因 | 处理 |
 | --- | --- | --- |
-| **5173 暂无页面** | 开发容器当前空闲，尚无前端源码或开发服务器 | 待应用脚手架完成后，在 `dev` 容器启动 Vite；宿主映射固定为 `127.0.0.1:5173` |
+| **5173 暂无页面** | 开发容器当前空闲，尚无前端源码或开发服务器 | 待应用脚手架完成后，在 `dev` 容器启动 Vite；宿主映射固定为 `0.0.0.0:5173` |
 | **数据库 / Adminer 无法从宿主访问** | 两个服务仅加入 `runsun-network`，未发布宿主端口以避免影响其他项目 | 开发容器内分别通过 `db:5432` 和 `adminer:8080` 访问；不得擅自新增宿主映射 |
 | **Dev 容器内依赖安装失败** | 新工作区 Compose 不注入宿主代理，且当前尚无依赖清单 | 先等待源码脚手架与 `package.json`；按届时环境约定配置代理，不修改其他项目网络设置 |
 | **`tsc` 空输出却以为通过** | `tsc -b` 有增量缓存 | 一律用 `tsc -b --force --noEmit` |

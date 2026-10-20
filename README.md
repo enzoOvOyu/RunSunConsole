@@ -14,7 +14,7 @@ docker compose exec dev pnpm test
 docker compose exec dev pnpm build
 ```
 
-The development endpoint is bound to `127.0.0.1:5173`. PostgreSQL and Adminer stay inside `runsun-network`. No application backend is implemented. Set `VITE_ENABLE_MOCK=false` to use the configured API gateway; MSW and derived data are loaded dynamically when enabled.
+The development endpoint listens on all host interfaces at port `5173` (`0.0.0.0:5173`); `http://127.0.0.1:5173` still works locally. PostgreSQL and Adminer stay inside `runsun-network`. No application backend is implemented. Set `VITE_ENABLE_MOCK=false` to use the configured API gateway; MSW and derived data are loaded dynamically when enabled.
 
 ## Implementation milestones
 
