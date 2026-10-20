@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, memo, Suspense, useState } from "react";
 import { Link } from "react-router-dom";
 import type {
   Resource,
@@ -12,6 +12,7 @@ import type {
   Notebook,
 } from "../../../types/domain";
 import { t, dt } from "../../../i18n";
+import { useLocale } from "../../../stores/locale";
 import { EP, query } from "../../../lib/api-client";
 import { useData } from "../../shared/hooks";
 import { money, number, unitMoney } from "../../../lib/money";
@@ -33,6 +34,69 @@ import {
 } from "../../../components/ui";
 import type { ResourceEvent } from "../../../types/domain";
 const TrendChart = lazy(() => import("../../../components/charts/TrendChart"));
+const MONITOR_PAGE_SIZE = 6;
+const MONITOR_POLL_MS: Record<string, number> = {
+  "1h": 10000,
+  "6h": 60000,
+  "24h": 300000,
+  "7d": 3600000,
+};
+const MetricCard = memo(function MetricCard({
+  series,
+}: {
+  series: MetricSeries;
+}) {
+  useLocale((state) => state.locale);
+  const lastPoint = series.points.at(-1);
+  const last = lastPoint?.value;
+  const lastTime = lastPoint ? new Date(lastPoint.at).getTime() : 0;
+  const recent =
+    series.comparison === "below" && series.threshold != null
+      ? series.points.filter(
+          (point) => new Date(point.at).getTime() >= lastTime - 1800000,
+        )
+      : [];
+  const sustained =
+    recent.length > 1 &&
+    new Date(recent[0].at).getTime() <= lastTime - 1740000 &&
+    recent.every(
+      (point) => point.value !== null && point.value < series.threshold!,
+    );
+  const warning =
+    last != null &&
+    series.threshold != null &&
+    (series.comparison === "below" ? sustained : last >= series.threshold);
+  const [key, card] = series.key.split(":");
+  return (
+    <Panel title={t("metric." + key) + (card ? ` · GPU ${card}` : "")}>
+      <div className="between">
+        <strong style={{ fontSize: 24, fontWeight: 600 }}>
+          {last == null
+            ? t("common.noData")
+            : `${number(last, key.startsWith("http_error") || key === "api_error_rate" ? 3 : 1)}${series.capacity ? " / " + series.capacity : ""} ${series.unit}`}
+        </strong>
+        <span className={warning ? "danger-text" : "muted"}>
+          {series.threshold == null
+            ? "—"
+            : `${last == null ? "—" : warning ? "⚠" : "✓"} ${t("metric.threshold")} ${series.comparison === "below" ? "<" : "≥"} ${number(series.threshold, 1)} ${series.unit}`}
+        </span>
+      </div>
+      {series.comparison === "below" && (
+        <small>{t("metric.lowDuration")}</small>
+      )}
+      <Suspense fallback={<Loading />}>
+        <TrendChart
+          data={series.points.map((point) => ({
+            date: point.at,
+            value: point.value,
+          }))}
+          keys={["value"]}
+          currency={false}
+        />
+      </Suspense>
+    </Panel>
+  );
+});
 export function MonitorPanel({
   resource: r,
   only,
@@ -43,11 +107,22 @@ export function MonitorPanel({
   nodeIndex?: number;
 }) {
   const [window, setWindow] = useState("1h");
-  const names = only?.join(",") || "";
+  const [page, setPage] = useState(0);
+  const catalog = useData<MetricSeries[]>(
+    ["metric-catalog", r.resourceUuid, nodeIndex],
+    `${EP.metrics}/${r.kind}/${r.resourceUuid}${query({ catalog: true, node: nodeIndex })}`,
+    { enabled: !only },
+  );
+  const keys = only || catalog.data?.map((series) => series.key) || [];
+  const pageCount = Math.ceil(keys.length / MONITOR_PAGE_SIZE);
+  const activePage = Math.min(page, Math.max(0, pageCount - 1));
+  const names = keys
+    .slice(activePage * MONITOR_PAGE_SIZE, (activePage + 1) * MONITOR_PAGE_SIZE)
+    .join(",");
   const data = useData<MetricSeries[]>(
     ["metrics", r.resourceUuid, window, names, nodeIndex],
     `${EP.metrics}/${r.kind}/${r.resourceUuid}${query({ window, metrics: names, node: nodeIndex })}`,
-    { poll: true },
+    { enabled: !!names, poll: true, pollMs: MONITOR_POLL_MS[window] },
   );
   const processes = useData<
     {
@@ -61,7 +136,7 @@ export function MonitorPanel({
   >(
     ["processes", r.resourceUuid],
     `${EP.metrics}/${r.kind}/${r.resourceUuid}/processes`,
-    { enabled: r.kind === "gpu_vm", poll: true },
+    { enabled: r.kind === "gpu_vm", poll: true, pollMs: 10000 },
   );
   return (
     <div className="stack">
@@ -76,67 +151,48 @@ export function MonitorPanel({
           </Button>
         ))}
       </div>
-      {data.isPending ? (
+      {catalog.isPending && !only ? (
         <Loading />
-      ) : data.error ? (
-        <ErrorState error={data.error} />
+      ) : catalog.error && !only ? (
+        <ErrorState error={catalog.error} />
       ) : (
-        <div className="grid grid-2">
-          {data.data?.map((series) => {
-            const last = series.points.at(-1)?.value;
-            const recent = series.points.filter(
-              (p) =>
-                new Date(p.at).getTime() >=
-                new Date(series.points.at(-1)!.at).getTime() - 1800000,
-            );
-            const sustained =
-              recent.length > 1 &&
-              new Date(recent[0].at).getTime() <=
-                new Date(series.points.at(-1)!.at).getTime() - 1740000 &&
-              recent.every(
-                (p) => p.value !== null && p.value < series.threshold!,
-              );
-            const warning =
-              last != null &&
-              series.threshold != null &&
-              (series.comparison === "below"
-                ? sustained
-                : last >= series.threshold);
-            const [key, card] = series.key.split(":");
-            return (
-              <Panel
-                key={series.key}
-                title={t("metric." + key) + (card ? ` · GPU ${card}` : "")}
-              >
-                <div className="between">
-                  <strong style={{ fontSize: 24, fontWeight: 600 }}>
-                    {last == null
-                      ? t("common.noData")
-                      : `${number(last, key.startsWith("http_error") || key === "api_error_rate" ? 3 : 1)}${series.capacity ? " / " + series.capacity : ""} ${series.unit}`}
-                  </strong>
-                  <span className={warning ? "danger-text" : "muted"}>
-                    {series.threshold == null
-                      ? "—"
-                      : `${last == null ? "—" : warning ? "⚠" : "✓"} ${t("metric.threshold")} ${series.comparison === "below" ? "<" : "≥"} ${number(series.threshold, 1)} ${series.unit}`}
-                  </span>
-                </div>
-                {series.comparison === "below" && (
-                  <small>{t("metric.lowDuration")}</small>
-                )}
-                <Suspense fallback={<Loading />}>
-                  <TrendChart
-                    data={series.points.map((point) => ({
-                      date: point.at,
-                      value: point.value,
-                    }))}
-                    keys={["value"]}
-                    currency={false}
-                  />
-                </Suspense>
-              </Panel>
-            );
-          })}
-        </div>
+        <>
+          {pageCount > 1 && (
+            <div className="between">
+              <span className="muted">
+                {t("metric.pageSummary", {
+                  page: activePage + 1,
+                  total: pageCount,
+                })}
+              </span>
+              <div className="row">
+                <Button
+                  disabled={activePage === 0}
+                  onClick={() => setPage(activePage - 1)}
+                >
+                  {t("metric.previousPage")}
+                </Button>
+                <Button
+                  disabled={activePage >= pageCount - 1}
+                  onClick={() => setPage(activePage + 1)}
+                >
+                  {t("metric.nextPage")}
+                </Button>
+              </div>
+            </div>
+          )}
+          {data.isPending ? (
+            <Loading />
+          ) : data.error ? (
+            <ErrorState error={data.error} />
+          ) : (
+            <div className="grid grid-2">
+              {data.data?.map((series) => (
+                <MetricCard key={series.key} series={series} />
+              ))}
+            </div>
+          )}
+        </>
       )}
       {r.kind === "gpu_vm" && (
         <Panel title={t("metric.processes")}>
@@ -163,8 +219,8 @@ export function MonitorPanel({
 export function MetricsOverview({ resource: r }: { resource: Resource }) {
   const data = useData<MetricSeries[]>(
     ["metrics-overview", r.resourceUuid],
-    `${EP.metrics}/${r.kind}/${r.resourceUuid}?window=1h&metrics=gpu_utilization,gpu_memory_used,gpu_power_draw,gpu_temperature`,
-    { poll: true },
+    `${EP.metrics}/${r.kind}/${r.resourceUuid}?window=1h&metrics=gpu_utilization,gpu_memory_used,gpu_power_draw,gpu_temperature&latest=true`,
+    { poll: true, pollMs: 10000 },
   );
   return (
     <div className="grid grid-4">

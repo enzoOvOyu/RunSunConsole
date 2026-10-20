@@ -9,6 +9,11 @@ export function metricsFor(
   window = "1h",
   fault = "",
   nodeIndex?: number,
+  options: {
+    keys?: readonly string[];
+    catalog?: boolean;
+    latest?: boolean;
+  } = {},
 ): MetricSeries[] {
   const windowMs =
     window === "7d"
@@ -169,6 +174,20 @@ export function metricsFor(
       ],
     );
   }
+  const selectedDefs = options.keys?.length
+    ? defs.filter(([key]) => options.keys!.includes(key))
+    : defs;
+  if (options.catalog)
+    return selectedDefs.map(([key, unit, , threshold]) => ({
+      key,
+      unit,
+      threshold,
+      comparison: key.split(":")[0] === "gpu_utilization" ? "below" : "above",
+      ...(key.split(":")[0] === "gpu_memory_used"
+        ? { capacity: gpu.memoryGb }
+        : {}),
+      points: [],
+    }));
   const discrete = new Set([
     "ecc_sbe",
     "ecc_dbe",
@@ -192,8 +211,9 @@ export function metricsFor(
   const readyAt =
     new Date(r.createdAt).getTime() + provisioningSeconds(r, db.models) * 1000;
   const today = new Date(end).toISOString().slice(0, 10);
-  const times = Array.from({ length: count }, (_, i) => {
-    const ms = end - windowMs + i * bucket;
+  const sampleCount = options.latest ? 1 : count;
+  const times = Array.from({ length: sampleCount }, (_, i) => {
+    const ms = end - (sampleCount - 1 - i) * bucket;
     const timestamp = new Date(ms);
     return {
       ms,
@@ -215,7 +235,7 @@ export function metricsFor(
           timestamp.getUTCHours() === 5),
     };
   });
-  return defs.map(([key, unit, base, threshold]) => {
+  return selectedDefs.map(([key, unit, base, threshold]) => {
     const name = key.split(":")[0];
     const gpuMetric =
       name.startsWith("gpu_") ||

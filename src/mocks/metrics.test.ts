@@ -59,3 +59,37 @@ it("preserves overlapping samples as the monitoring window advances", () => {
     vi.useRealTimers();
   }
 });
+it("selects requested metrics before generating points and returns a lightweight catalog", () => {
+  vi.useFakeTimers();
+  try {
+    vi.setSystemTime(new Date("2026-10-19T14:00:00Z"));
+    const resource = seedResources().find(
+      (item) => item.kind === "gpu_vm" && item.status === "running",
+    )!;
+    const full = metricsFor(resource);
+    const keys = ["gpu_utilization", "cpu_util"];
+    const selected = metricsFor(resource, "1h", "", undefined, { keys });
+    expect(selected).toEqual(
+      full.filter((series) => keys.includes(series.key)),
+    );
+    const catalog = metricsFor(resource, "1h", "", undefined, {
+      catalog: true,
+    });
+    expect(catalog.map((series) => series.key)).toEqual(
+      full.map((series) => series.key),
+    );
+    expect(catalog.every((series) => series.points.length === 0)).toBe(true);
+    const latest = metricsFor(resource, "1h", "", undefined, {
+      keys,
+      latest: true,
+    });
+    expect(latest).toEqual(
+      selected.map((series) => ({
+        ...series,
+        points: series.points.slice(-1),
+      })),
+    );
+  } finally {
+    vi.useRealTimers();
+  }
+});

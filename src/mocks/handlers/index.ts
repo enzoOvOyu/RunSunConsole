@@ -2021,9 +2021,12 @@ async function dispatch(request: Request) {
         .max(r.spec.machineCount - 1)
         .parse(qs.get("node"));
     }
-    const series = metricsFor(r, qs.get("window") || "1h", fault, nodeIndex);
     return json(
-      wanted.length ? series.filter((s) => wanted.includes(s.key)) : series,
+      metricsFor(r, qs.get("window") || "1h", fault, nodeIndex, {
+        keys: wanted,
+        catalog: qs.get("catalog") === "true",
+        latest: qs.get("latest") === "true",
+      }),
     );
   }
   if (path === "/api/projects") {

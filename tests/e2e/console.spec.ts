@@ -758,3 +758,53 @@ test("resource network tabs show per-device private addresses and deployment cho
   expect(values.length).toBeGreaterThan(0);
   expect(values.every((v) => v.startsWith("sg-"))).toBe(true);
 });
+test("resource monitoring loads six charts at a time across all four kinds", async ({
+  page,
+}) => {
+  await page.goto("/resources/servers");
+  await expect(page.locator("tbody tr").first()).toBeVisible();
+  const resources = await page.evaluate(
+    async () =>
+      (await (await fetch("/api/resources?size=1000")).json()).items as {
+        kind: string;
+        resourceUuid: string;
+        region: string;
+        status: string;
+      }[],
+  );
+  for (const [kind, route, tab] of [
+    ["gpu_vm", "servers", "监控"],
+    ["gpu_baremetal", "baremetal", "硬件监控"],
+    ["vgpu", "vgpu", "控制面"],
+    ["inference", "inference", "监控"],
+  ]) {
+    const resource = resources.find(
+      (item) => item.kind === kind && item.status === "running",
+    )!;
+    await page.goto(
+      `/resources/${route}?drawer=${resource.resourceUuid}&region=${resource.region}`,
+    );
+    await page.getByRole("tab", { name: tab, exact: true }).click();
+    await expect(
+      page.getByRole("dialog").locator(".recharts-wrapper"),
+    ).toHaveCount(6);
+    if (kind === "gpu_vm" || kind === "inference") {
+      const catalog = await page.evaluate(
+        async ({ kind, id }) =>
+          (await (
+            await fetch(`/api/metrics/${kind}/${id}?catalog=true`)
+          ).json()) as {
+            key: string;
+            points: unknown[];
+          }[],
+        { kind, id: resource.resourceUuid },
+      );
+      expect(catalog.length).toBeGreaterThan(6);
+      expect(catalog.every((series) => series.points.length === 0)).toBe(true);
+      await page.getByRole("button", { name: "下一页", exact: true }).click();
+      await expect(
+        page.getByRole("dialog").locator(".recharts-wrapper"),
+      ).toHaveCount(6);
+    }
+  }
+});

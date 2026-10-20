@@ -10,7 +10,7 @@ export const pollInterval = Number(
 export function useData<T>(
   key: readonly unknown[],
   path: string,
-  options: { enabled?: boolean; poll?: boolean } = {},
+  options: { enabled?: boolean; poll?: boolean; pollMs?: number } = {},
 ) {
   const mode = useConnection((s) => s.mode);
   return useQuery<T>({
@@ -18,7 +18,9 @@ export function useData<T>(
     queryFn: () => api<T>(path),
     enabled: options.enabled,
     refetchInterval:
-      options.poll && mode !== "websocket" ? pollInterval : false,
+      options.poll && mode !== "websocket"
+        ? (options.pollMs ?? pollInterval)
+        : false,
   });
 }
 export function useAction() {
