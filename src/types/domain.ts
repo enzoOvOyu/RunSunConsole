@@ -264,9 +264,16 @@ export interface Transaction {
   balanceAfter: number;
   referenceId: string;
 }
+export const QUOTA_METRICS = [
+  "gpu",
+  "vcpu",
+  "memory",
+  "storage",
+  "ip",
+] as const;
 export interface Quota {
   region: Region;
-  metric: "gpu" | "vcpu" | "storage" | "ip";
+  metric: (typeof QUOTA_METRICS)[number];
   limitValue: number;
   usedValue: number;
 }

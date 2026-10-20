@@ -1,5 +1,5 @@
 import { useConnection } from "../../stores/connection";
-import { CreditCard, Activity, Layers, MapPin } from "lucide-react";
+import { CreditCard, Activity, MapPin } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { useRegion } from "../../stores/region";
 import { useData } from "../../features/shared/hooks";
@@ -53,10 +53,6 @@ export function StatusBar() {
         <span className={styles.optional}>
           <Activity size={12} />
           {t("common.mtd")} {data.data ? money(data.data.month) : "—"}
-        </span>
-        <span className={styles.optional}>
-          <Layers size={12} />
-          {t("common.running")} {data.data?.running ?? "—"}
         </span>
       </div>
       <small className={styles.optional}>USD</small>

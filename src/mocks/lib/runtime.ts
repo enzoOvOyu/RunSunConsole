@@ -1,4 +1,5 @@
-import type { Resource } from "../../types/domain";
+import type { BaremetalMachine } from "../../types/baremetal";
+import { REGIONS, type Resource } from "../../types/domain";
 import type {
   HardwareSnapshot,
   ClusterView,
@@ -40,6 +41,30 @@ export function servingRates(r: Extract<Resource, { kind: "inference" }>) {
   const avgGeneration = 240 + model.paramsB;
   return { tokens, rps: tokens / avgGeneration, avgGeneration, memory };
 }
+export function baremetalMachines(
+  r: Extract<Resource, { kind: "gpu_baremetal" }>,
+): BaremetalMachine[] {
+  const pool = GPU_SPECS[r.nodePool];
+  const segment =
+    parseInt(r.resourceUuid.replaceAll("-", "").slice(-4), 16) % 240;
+  return Array.from({ length: r.spec.machineCount }, (_, index) => ({
+    index,
+    nodeUuid: `${r.resourceUuid}-${index + 1}`,
+    name: `${r.displayId}-node-${index + 1}`,
+    hostname: `${r.spec.hostnamePrefix || r.displayId}-${String(index + 1).padStart(2, "0")}`,
+    status: r.status,
+    gpuModel: pool.gpuModel,
+    gpuCount: pool.gpusPerNode,
+    cpuModel: r.spec.cpuModel,
+    vcpu: pool.gpusPerNode * 16,
+    memoryGb: r.spec.memoryGb,
+    localNvmeGb: r.spec.localNvmeGb,
+    privateIp: `10.${REGIONS.indexOf(r.region) + 20}.${segment}.${index + 10}`,
+    bmcIp: `10.255.${segment}.${index + 10}`,
+    rack: `${r.region.toUpperCase()}-R${Math.floor(index / 8) + 1}`,
+    network: pool.network,
+  }));
+}
 export function hardwareSnapshot(
   r: Resource,
   nodeIndex = 0,
@@ -49,10 +74,12 @@ export function hardwareSnapshot(
   const liquid = ["B200_NVL72", "B300", "GB300_NVL72"].includes(r.nodePool);
   const available = r.status === "running" || r.status === "error";
   const damaged = fault === "xid48";
+  const machine =
+    r.kind === "gpu_baremetal" ? baremetalMachines(r)[nodeIndex] : undefined;
   const power =
     gpu.gpusPerNode * gpu.tdp * 0.74 + (gpu.gpusPerNode === 72 ? 9000 : 500);
   return {
-    nodeUid: `${r.displayId}-node-${nodeIndex + 1}`,
+    nodeUid: machine?.name ?? `${r.displayId}-node-${nodeIndex + 1}`,
     available,
     gpuHealth: {
       ecc_sbe: 0,
@@ -75,11 +102,11 @@ export function hardwareSnapshot(
     })),
     disks: Array.from({ length: 8 }, (_, i) => ({
       name: `nvme${i}n1`,
-      capacityGb: 3840,
+      capacityGb: gpu.localNvmeGb / 8,
       mediaErrors: 0,
-      percentageUsed: 11 + i * 2,
+      percentageUsed: 11 + i * 2 + (nodeIndex % 4),
       criticalWarning: 0,
-      temperatureC: 42 + (i % 4),
+      temperatureC: 42 + ((i + nodeIndex) % 4),
       raid: r.kind === "gpu_baremetal" ? r.spec.raidLevel : "none",
     })),
     psus: Array.from({ length: 4 }, (_, i) => ({
@@ -92,12 +119,12 @@ export function hardwareSnapshot(
       ? null
       : Array.from({ length: 6 }, (_, i) => ({
           name: `FAN ${i + 1}`,
-          rpm: 6800 + i * 120,
+          rpm: 6800 + i * 120 + nodeIndex * 10,
           status: "ready",
         })),
     inletC: liquid ? null : 24,
     bmc: {
-      ip: `10.255.${nodeIndex}.10`,
+      ip: machine?.bmcIp ?? `10.255.${nodeIndex}.10`,
       firmware: "2.14.0",
       reachable:
         !r.deletedAt && (r.kind !== "gpu_baremetal" || r.spec.ipmiEnabled),

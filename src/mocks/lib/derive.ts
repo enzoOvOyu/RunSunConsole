@@ -1,3 +1,4 @@
+import { GPU_SPECS } from "../fixtures/gpu-specs";
 import type {
   Resource,
   Rate,
@@ -176,22 +177,35 @@ export function modelMemory(
     loadS: (weights * 1024) / 1800 + 5,
   };
 }
-export const quotaUse = (r: Resource, metric: string) =>
-  r.deletedAt
-    ? 0
-    : metric === "storage"
-      ? r.spec.storageGb
-      : metric === "ip"
-        ? Number(
-            r.spec.publicIp && r.status !== "stopped" && r.status !== "error",
-          )
-        : r.status === "stopped" || r.status === "error"
-          ? 0
-          : metric === "gpu"
-            ? r.spec.gpuCount
-            : "vcpu" in r.spec
-              ? r.spec.vcpu * ("quantity" in r.spec ? r.spec.quantity : 1)
-              : r.spec.gpuCount * 16;
+export function allocatedMemoryGb(r: Resource): number {
+  if (r.kind === "gpu_vm") return r.spec.memoryGb * r.spec.quantity;
+  if (r.kind === "gpu_baremetal") return r.spec.memoryGb * r.spec.machineCount;
+  if (r.kind === "vgpu")
+    return r.spec.nodePools.reduce(
+      (n, p) => n + GPU_SPECS[p.poolCode].memorySystemGb * p.nodeCount,
+      0,
+    );
+  const pool = GPU_SPECS[r.nodePool];
+  return Math.round((pool.memorySystemGb / pool.gpusPerNode) * r.spec.gpuCount);
+}
+export function quotaUse(r: Resource, metric: string): number {
+  if (r.deletedAt) return 0;
+  if (metric === "storage") return r.spec.storageGb;
+  if (
+    r.status === "stopped" ||
+    r.status === "error" ||
+    r.status === "terminating"
+  )
+    return 0;
+  if (metric === "ip") return Number(r.spec.publicIp);
+  if (metric === "gpu") return r.spec.gpuCount;
+  if (metric === "memory") return allocatedMemoryGb(r);
+  if (metric === "vcpu")
+    return "vcpu" in r.spec
+      ? r.spec.vcpu * r.spec.quantity
+      : r.spec.gpuCount * 16;
+  return 0;
+}
 
 export function meteringLines(estimate: PriceEstimate): PriceLine[] {
   const units = new Map<PriceLine["unit"], PriceLine>();

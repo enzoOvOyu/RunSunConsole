@@ -30,7 +30,7 @@ import {
 import { RATES } from "../fixtures/pricing";
 import { estimate, meteringLines, provisioningSeconds } from "./derive";
 import { round } from "../../lib/money";
-import { defaultScaling } from "../../lib/config";
+import { defaultScaling, normalizeSpec } from "../../lib/config";
 export interface Database {
   usageMeters: Record<string, { quantity: number; amount: number }>;
   voucherPending: Record<string, number>;
@@ -352,6 +352,9 @@ function restore() {
       typeof localStorage !== "undefined" ? localStorage.getItem(KEY) : null;
     if (stored) {
       const data = JSON.parse(stored) as StoredDatabase;
+      data.resources = data.resources.map(
+        (r) => ({ ...r, spec: normalizeSpec(r.spec) }) as Resource,
+      );
       data.usageMeters ??= {};
       data.replicaRestarts ??= {};
       data.voucherPending ??= {};

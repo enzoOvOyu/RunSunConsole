@@ -81,7 +81,9 @@ export function Sidebar({
                               }
                             >
                               <ItemIcon
-                                size={15}
+                                size={16}
+                                strokeWidth={1.75}
+                                aria-hidden="true"
                                 style={{ color: item.color }}
                               />
                               {item.label()}

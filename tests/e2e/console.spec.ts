@@ -38,7 +38,9 @@ test("aggregate, locale, theme, commands and responsive navigation", async ({
   page,
 }) => {
   await page.goto("/overview");
-  await expect(page.getByText("1,040", { exact: true })).toBeVisible();
+  await expect(
+    page.locator(".overview-stats").getByText("1,040", { exact: true }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "English", exact: true }).click();
   await expect(page.locator("h1")).toHaveText("Overview");
   await page.getByRole("button", { name: "Toggle theme", exact: true }).click();
@@ -234,7 +236,9 @@ test("runtime diagnostics and replica restart persist across refresh", async ({
   page,
 }) => {
   await page.goto("/overview");
-  await expect(page.getByText("1,040", { exact: true })).toBeVisible();
+  await expect(
+    page.locator(".overview-stats").getByText("1,040", { exact: true }),
+  ).toBeVisible();
   const resources = await page.evaluate(
     async () =>
       (await (await fetch("/api/resources?size=1000")).json()).items as {
@@ -316,7 +320,9 @@ test("inference governance reviews changes, persists settings and stays read-onl
   page,
 }) => {
   await page.goto("/overview");
-  await expect(page.getByText("1,040", { exact: true })).toBeVisible();
+  await expect(
+    page.locator(".overview-stats").getByText("1,040", { exact: true }),
+  ).toBeVisible();
   const r = await page.evaluate(async () => {
     const data = await (
       await fetch("/api/resources?kind=inference&size=1000")
@@ -416,4 +422,151 @@ test("inference governance reviews changes, persists settings and stays read-onl
       exact: true,
     }),
   ).toBeVisible();
+});
+
+test("overview uses regional allocations and realistic separate memory quotas", async ({
+  page,
+}) => {
+  await page.goto("/overview");
+  await expect(
+    page.locator(".overview-stats").getByText("1,040", { exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".overview-stats .stat")).toHaveCount(4);
+  await expect(
+    page.getByRole("heading", { name: "区域分布", exact: true }),
+  ).toHaveCount(0);
+  await expect(page.locator(".overview-stats")).not.toContainText("运行中资源");
+  const matrix = page.locator(".overview-distribution");
+  await expect(matrix.locator("tbody tr")).toHaveCount(4);
+  await expect(matrix.locator("th").filter({ hasText: "日本" })).toBeVisible();
+  await expect(matrix).toContainText("8 台设备");
+  await expect(matrix).toContainText("128 GPU");
+  await expect(page.getByText("主机内存 GB", { exact: true })).toHaveCount(4);
+  await expect(page.getByText("云存储 GB", { exact: true })).toHaveCount(4);
+  await page.getByRole("button", { name: "自定义模块", exact: true }).click();
+  await expect(page.getByRole("dialog")).not.toContainText("区域分布");
+  await page.keyboard.press("Escape");
+  await matrix.locator("tbody tr").nth(1).locator("button").first().click();
+  await expect(page).toHaveURL(/resources\/baremetal\?region=jp/);
+});
+test("deployment estimates remain beside the form on laptop and desktop screens", async ({
+  page,
+}) => {
+  for (const width of [1280, 1440, 1920]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto("/deployment/server");
+    await expect(page.locator(".cost-total")).toBeVisible();
+    const main = await page.locator(".wizard-main").boundingBox();
+    const price = await page.locator(".cost-summary").boundingBox();
+    expect(main).toBeTruthy();
+    expect(price).toBeTruthy();
+    expect(price!.x).toBeGreaterThanOrEqual(main!.x + main!.width);
+    expect(Math.abs(price!.y - main!.y)).toBeLessThan(5);
+    expect(price!.x + price!.width).toBeLessThanOrEqual(width);
+    expect(price!.width).toBeGreaterThanOrEqual(300);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator(".wizard-main")).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+});
+test("bare metal clusters expose every machine and switch BMC and hardware scope", async ({
+  page,
+}) => {
+  await page.goto("/overview");
+  await expect(
+    page.locator(".overview-stats").getByText("1,040", { exact: true }),
+  ).toBeVisible();
+  const r = await page.evaluate(async () => {
+    const data = await (
+      await fetch("/api/resources?kind=gpu_baremetal&size=1000")
+    ).json();
+    return data.items.find(
+      (r: { status: string }) => r.status === "running",
+    ) as {
+      resourceUuid: string;
+      region: string;
+      spec: { machineCount: number };
+    };
+  });
+  await page.goto(
+    `/resources/baremetal?drawer=${r.resourceUuid}&region=${r.region}`,
+  );
+  const inventory = page.locator(".panel").filter({
+    has: page.getByRole("heading", { name: "集群设备清单", exact: true }),
+  });
+  await expect(inventory.locator("tbody tr")).toHaveCount(r.spec.machineCount);
+  const devices = await page.evaluate(
+    async (uuid) =>
+      await (await fetch(`/api/resources/${uuid}/machines`)).json(),
+    r.resourceUuid,
+  );
+  await inventory.locator("tbody tr").nth(1).click();
+  await expect(page.getByLabel("当前设备", { exact: true })).toHaveValue("1");
+  await expect(
+    page.getByRole("heading", { name: devices[1].name, exact: true }),
+  ).toBeVisible();
+  await page.getByRole("tab", { name: "带外管理", exact: true }).click();
+  await expect(page.getByRole("dialog")).toContainText(devices[1].bmcIp);
+  await page.getByLabel("当前设备", { exact: true }).selectOption("0");
+  await expect(page.getByRole("dialog")).toContainText(devices[0].bmcIp);
+  await expect(page.getByRole("dialog")).not.toContainText(devices[1].bmcIp);
+});
+
+test("restored mock state repairs PVC capacity without discarding saved resources", async ({
+  page,
+}) => {
+  await page.goto("/overview");
+  await expect(
+    page.locator(".overview-stats").getByText("1,040", { exact: true }),
+  ).toBeVisible();
+  const project = await page.evaluate(
+    async () =>
+      await (
+        await fetch("/api/projects", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Role": "owner" },
+          body: JSON.stringify({
+            name: "Retained project",
+            slug: "migration-retained",
+          }),
+        })
+      ).json(),
+  );
+  const original = await page.evaluate(() => {
+    const key = "rs.mock.database.v2";
+    const data = JSON.parse(localStorage.getItem(key)!);
+    const cluster = data.resources.find(
+      (r: { kind: string }) => r.kind === "vgpu",
+    );
+    cluster.name = "retained-migrated-cluster";
+    cluster.spec.storageGb = 17;
+    localStorage.setItem(key, JSON.stringify(data));
+    return {
+      id: cluster.resourceUuid,
+      pvc: cluster.spec.defaultPvcGb,
+      count: data.resources.length,
+    };
+  });
+  await page.reload();
+  await expect(
+    page.locator(".overview-stats").getByText("1,040", { exact: true }),
+  ).toBeVisible();
+  const restored = await page.evaluate(
+    async (id) => await (await fetch(`/api/resources/${id}`)).json(),
+    original.id,
+  );
+  expect(restored.name).toBe("retained-migrated-cluster");
+  expect(restored.spec.storageGb).toBe(original.pvc);
+  const count = await page.evaluate(
+    async () => (await (await fetch("/api/resources?size=1000")).json()).total,
+  );
+  expect(count).toBe(original.count);
+  const projects = await page.evaluate(
+    async () => await (await fetch("/api/projects")).json(),
+  );
+  expect(projects.some((p: { id: string }) => p.id === project.id)).toBe(true);
 });

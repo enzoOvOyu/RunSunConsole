@@ -6,6 +6,19 @@ import {
   Terminal,
   Database,
   Wallet,
+  FolderKanban,
+  Gauge,
+  ChartNoAxesCombined,
+  Ticket,
+  NotebookPen,
+  Container,
+  AppWindow,
+  Scaling,
+  Files,
+  HardDrive,
+  Workflow,
+  ReceiptText,
+  TicketPercent,
 } from "lucide-react";
 import { KINDS, type Role } from "../../types/domain";
 import { KIND_META } from "../../lib/ids";
@@ -25,6 +38,21 @@ export interface NavGroup {
   items: NavItem[];
   direct?: boolean;
 }
+const itemIcons: Record<string, typeof LayoutDashboard> = {
+  projects: FolderKanban,
+  quotas: Gauge,
+  cost: ChartNoAxesCombined,
+  tickets: Ticket,
+  notebooks: NotebookPen,
+  images: Container,
+  apps: AppWindow,
+  scaling: Scaling,
+  datasets: Files,
+  storage: HardDrive,
+  pipelines: Workflow,
+  bills: ReceiptText,
+  vouchers: TicketPercent,
+};
 export function buildGroups(role: Role): NavGroup[] {
   const groups: NavGroup[] = [
     {
@@ -90,7 +118,7 @@ export function buildGroups(role: Role): NavGroup[] {
         id,
         path: `/${group.id}/${id}`,
         label: () => t(`nav.${id}`),
-        icon: group.icon,
+        icon: itemIcons[id],
       })),
     })),
   ];

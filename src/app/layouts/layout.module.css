@@ -318,3 +318,8 @@
     right: 10px;
   }
 }
+
+.subItems .navLink > svg {
+  flex-shrink: 0;
+  opacity: 0.9;
+}

@@ -7,7 +7,7 @@ import { resourceLink } from "../../lib/ids";
 import { useData } from "../shared/hooks";
 import { RegionFilter } from "../shared/RegionFilter";
 import { t, dt } from "../../i18n";
-import { money } from "../../lib/money";
+import { money, number } from "../../lib/money";
 import {
   Panel,
   PageHeader,
@@ -58,12 +58,12 @@ export default function QuotasPage() {
       ) : q.error ? (
         <ErrorState error={q.error} />
       ) : (
-        <div className="grid grid-4">
+        <div className="grid quota-grid">
           {q.data?.map((quota) => (
             <Panel key={quota.metric} title={t("quota." + quota.metric)}>
               <div className="stat-value">
-                {quota.usedValue}
-                <small> / {quota.limitValue}</small>
+                {number(quota.usedValue)}
+                <small> / {number(quota.limitValue)}</small>
               </div>
               <Progress value={(quota.usedValue / quota.limitValue) * 100} />
             </Panel>
@@ -80,7 +80,7 @@ export default function QuotasPage() {
                     <th>{t("resource.pool")}</th>
                     <th>{t("common.region")}</th>
                     <th>{t("overview.allocated")}</th>
-                    <th>{t("overview.running")}</th>
+                    <th>{t("quota.runningGpu")}</th>
                     <th>{t("common.price")} · USD/GPU·h</th>
                   </tr>
                 </thead>
@@ -105,7 +105,13 @@ export default function QuotasPage() {
                           <td>
                             {rows.reduce((a, r) => a + r.spec.gpuCount, 0)}
                           </td>
-                          <td>{rows.length}</td>
+                          <td>
+                            {number(
+                              rows
+                                .filter((r) => r.status === "running")
+                                .reduce((n, r) => n + r.spec.gpuCount, 0),
+                            )}
+                          </td>
                           <td>
                             {money(
                               rates.data?.find(

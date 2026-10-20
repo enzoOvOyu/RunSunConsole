@@ -23,6 +23,7 @@ The development endpoint is bound to `127.0.0.1:5173`. PostgreSQL and Adminer st
 - M3: Operations, workbench, datasets, object storage, pipelines and billing workflows.
 - M4: Resource runtime diagnostics, secure password drafts, idempotent deployment, billing and historical data consistency.
 - M5: Inference service governance, weighted release traffic, gateway settings and review before saving.
+- M6: Regional allocation overview, host memory quotas, per-machine bare metal inventory, semantic navigation icons and responsive deployment estimates.
 
 M1 validated with `pnpm typecheck`, `pnpm test` (7 files, 13 assertions), and `pnpm build`.
 
@@ -39,6 +40,12 @@ M4 validation: 37 tests in 9 Vitest files, plus 11 Chromium scenarios. Type chec
 M5 implements PRD §4.3.4 service governance: weighted stable/canary releases, QPS limits and request timeouts, a change review before saving, read-only role/state guards, persisted settings and configuration audit events. Calling examples respect the service authentication setting and use an environment variable for the API key. Scaling remains managed exclusively from Workbench. API and deterministic release data contracts are documented in `ARCHITECTURE.md` §12.11.5 and `MOCK-DATA.md` §6.8.5. Actual deployment and gateway enforcement require backend services.
 
 M5 validation: 46 tests in 10 Vitest files and 12 Chromium scenarios, including cancellation without a write, saved settings after reload, read-only controls, and English governance/event text. Type checking, ESLint, Stylelint and production build pass; entry JavaScript remains below 250 KB.
+
+M6 follows the updated overview requirements: four comparable summary cards, a region-by-type allocation matrix with type-specific machine/cluster/replica quantities, and no independent region summary. Host RAM quotas derive from assigned VM memory, physical machines, node pools and inference allocations; cloud storage remains separate. Peak scaling preflight includes RAM. VM disk and vGPU PVC sizes are normalized when restoring existing Mock state, preserving saved resources, projects and historical billing.
+
+Bare metal Drawers now include every physical machine, cluster RAM/NVMe totals, and selected-machine hardware, BMC, network and firmware details. Machine identities align with placement records, and monitoring query keys and seeds include the selected machine index. Navigation uses distinct submenu icons and the label “My resources”. Deployment forms keep a wider estimate card on the right at desktop/laptop widths, with horizontal steps and a stacked layout on small screens.
+
+M6 validation: 54 tests in 12 Vitest files and 16 Chromium scenarios; type checking, ESLint, Stylelint and build pass. Browser coverage includes allocation semantics, all machines and BMC switching, 1280/1440/1920 pixel deployment layouts, mobile overflow, and restoring saved state with a repaired PVC size. Entry JavaScript is 152.85 KB.
 
 Run browser scenarios on a host with Chromium available:
 

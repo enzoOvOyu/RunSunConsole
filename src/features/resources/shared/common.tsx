@@ -36,15 +36,17 @@ const TrendChart = lazy(() => import("../../../components/charts/TrendChart"));
 export function MonitorPanel({
   resource: r,
   only,
+  nodeIndex,
 }: {
   resource: Resource;
   only?: string[];
+  nodeIndex?: number;
 }) {
   const [window, setWindow] = useState("1h");
   const names = only?.join(",") || "";
   const data = useData<MetricSeries[]>(
-    ["metrics", r.resourceUuid, window, names],
-    `${EP.metrics}/${r.kind}/${r.resourceUuid}${query({ window, metrics: names })}`,
+    ["metrics", r.resourceUuid, window, names, nodeIndex],
+    `${EP.metrics}/${r.kind}/${r.resourceUuid}${query({ window, metrics: names, node: nodeIndex })}`,
     { poll: true },
   );
   const processes = useData<

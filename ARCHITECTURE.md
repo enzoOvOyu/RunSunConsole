@@ -574,7 +574,7 @@ CREATE TYPE invoice_status    AS ENUM ('open','paid','overdue','void');
 CREATE TYPE txn_type          AS ENUM ('charge','refund','credit','adjustment');
 CREATE TYPE voucher_status    AS ENUM ('unused','partial','used','expired','void');
 CREATE TYPE reservation_status AS ENUM ('scheduled','active','expired','cancelled','refunded');
-CREATE TYPE quota_metric      AS ENUM ('gpu','vcpu','storage_gb','public_ip');
+CREATE TYPE quota_metric      AS ENUM ('gpu','vcpu','memory_gb','storage_gb','public_ip');
 
 -- 单价表（资源类型 × 节点池 × 区域 × 单位 × 有效期）
 CREATE TABLE billing_rates (
@@ -1199,6 +1199,10 @@ GET /api/resources/:uuid
 - 计费三表另有三接口（PRD §7.8）：`GET /api/billing/usage`、`/api/billing/transactions`、`/api/billing/rates`。
 - **字段可空性**：上表中 `?` 标记字段为可选，前端一律 `?.` 读取并缺省"—"（PRD §13.3 空指针约束）。
 
+- **总览分布**：`GET /api/overview` 返回 `distribution:[{region,kind,gpuCount,unitCount,nodeCount}]`，含四区域 × 四类型共 16 格。`unitCount` 分别按 VM quantity、裸金属 machineCount、vGPU 集群数、推理 replicas 统计，不混合求和；`nodeCount` 用于 vGPU 节点数。取消独立 `regions` 数据块。
+- **配额内存**：API `metric='memory'` 对应 DDL `memory_gb`，另有 gpu/vcpu/storage/ip，共四区域 × 五项。VM 内存为 `memoryGb×quantity`；裸金属为 `memoryGb×machineCount`；vGPU 按各池 `memorySystemGb×nodeCount` 累加；推理按所分配 GPU 对应的主机内存份额计算。内存随停止/释放归零，下单与伸缩预检按 max 档检查。云存储与本地 NVMe 不是主机内存，分开计量。
+- **裸金属逐台信息**：`GET /api/resources/:uuid/machines` 返回 `machineCount` 行，含 `index,nodeUuid,name,hostname,status,gpuModel,gpuCount,cpuModel,vcpu,memoryGb,localNvmeGb,privateIp,bmcIp,rack,network`；稳定设备 ID 与 placement.nodes 对齐。硬件 `GET /api/metrics/gpu_baremetal/:uuid/hardware?node=N` 及设备监控 `GET /api/metrics/gpu_baremetal/:uuid?node=N` 验证索引，越界返回 422。已释放设备可只读查询历史配置。
+
 #### 12.11.5 推理服务治理接口（PRD §4.3.4）
 
 - `GET /api/resources/:uuid/governance`：返回 `endpoint`、`modelRef`、`modelName`、`authEnabled`、`active`、`versions[]`、`canaryPercent`、`qpsLimit`、`timeoutMs` 与只读 `scalingPolicy`。不返回 API Key。停止或已释放资源可读取历史配置，`active=false`。
@@ -1306,7 +1310,7 @@ plans/orgs/users/projects                      身份与计费主体
 | 详情页事件时间线                 | `resource_events`                                      | `resource_id`, `created_at DESC`                    |
 | 来源（镜像/模型/模板）             | `images`/`models`/`app_templates`  ← orders            | `orders.source_type` + `source_ref_id`              |
 | 拓扑视图（**vGPU 详情内嵌**）       | `resource_placements` → `gpu_nodes` → `node_pools`     | `node_id`, `rack_id`, `gpu_indices`                 |
-| **总览·关键指标条 / 区域分布**   | 当前用户可见资源 → `Σ gpu_count`（按 `region`，`deleted_at IS NULL`） | **四区域已分配 GPU 总卡数合计 = 1040**；不使用 `quotas.used_value` 或平台节点池容量（MOCK-DATA §1 G11） |
+| **总览·关键指标条 / 区域与类型矩阵**   | 当前用户可见资源 → `Σ gpu_count`（按 `region`，`deleted_at IS NULL`） | **四区域已分配 GPU 总卡数合计 = 1040**；不使用 `quotas.used_value` 或平台节点池容量（MOCK-DATA §1 G11） |
 | 顶部状态栏（服务状态/余额/花费/运行中）      | 服务事件聚合、`orgs`, `billing_usage`, `resources`      | 语义化服务状态、`credit_balance`、`billing_period`；不展示健康百分比或节点明细 |
 | 成本分析（按项目/资源/区域）          | `billing_usage` → `projects`/`resources`               | `project_id`, `resource_id`, `region`               |
 | 配额水位                    | `quotas`                                               | `metric`, `limit_value`, `used_value`               |

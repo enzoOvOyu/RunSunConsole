@@ -2,7 +2,6 @@ import { lazy, Suspense, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Cpu,
-  Layers,
   Wallet,
   TrendingUp,
   Settings2,
@@ -45,7 +44,13 @@ interface Overview {
   balance: number;
   remainingHours: number | null;
   resources: Resource[];
-  regions: { region: string; count: number; gpu: number }[];
+  distribution: {
+    region: string;
+    kind: (typeof KINDS)[number];
+    gpuCount: number;
+    unitCount: number;
+    nodeCount: number;
+  }[];
   quotas: Quota[];
   trend: Record<string, unknown>[];
   events: ResourceEvent[];
@@ -53,7 +58,7 @@ interface Overview {
   account: Account;
   projects: { id: string; name: string }[];
 }
-const modules = ["matrix", "quotas", "regions", "trend", "alerts", "activity"];
+const modules = ["matrix", "quotas", "trend", "alerts", "activity"];
 function initialHidden(): string[] {
   try {
     return JSON.parse(localStorage.getItem("rs.overview.modules") || "[]");
@@ -106,12 +111,6 @@ export default function OverviewPage() {
       <div className="grid overview-stats">
         {[
           {
-            label: t("overview.running"),
-            value: number(data.running),
-            note: t("common.current"),
-            icon: Layers,
-          },
-          {
             label: t("overview.allocated"),
             value: number(data.allocated),
             note: t("overview.allocatedScope"),
@@ -156,16 +155,17 @@ export default function OverviewPage() {
       <div className="stack section-gap">
         {show("matrix") && (
           <Panel title={t("overview.matrix")} hint={t("overview.matrixScope")}>
-            <div className="table-wrap">
+            <div className="table-wrap overview-distribution">
               <table>
                 <thead>
                   <tr>
                     <th>{t("common.type")}</th>
-                    {["running", "stopped", "provisioning", "error"].map(
-                      (status) => (
-                        <th key={status}>{t(`common.${status}`)}</th>
-                      ),
-                    )}
+                    {REGIONS.map((region) => (
+                      <th key={region}>
+                        {t("common." + region)} · {region.toUpperCase()}
+                      </th>
+                    ))}
+                    <th>{t("overview.gpuTotal")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -179,31 +179,72 @@ export default function OverviewPage() {
                               size={16}
                               style={{ color: KIND_META[kind].color }}
                             />
-                            {t(`common.${kind}`)}
+                            {t("common." + kind)}
                           </span>
                         </td>
-                        {["running", "stopped", "provisioning", "error"].map(
-                          (status) => (
-                            <td key={status}>
-                              <button
-                                className="link-button mono"
-                                onClick={() =>
-                                  navigate(
-                                    `/resources/${KIND_META[kind].routeKey}?status=${status}`,
-                                  )
-                                }
-                              >
-                                {data.resources.filter(
-                                  (r) => r.kind === kind && r.status === status,
-                                ).length || "—"}
-                              </button>
+                        {REGIONS.map((region) => {
+                          const cell = data.distribution.find(
+                            (d) => d.kind === kind && d.region === region,
+                          );
+                          return (
+                            <td key={region}>
+                              {cell?.unitCount ? (
+                                <button
+                                  type="button"
+                                  className="distribution-cell"
+                                  onClick={() =>
+                                    navigate(
+                                      `/resources/${KIND_META[kind].routeKey}?region=${region}`,
+                                    )
+                                  }
+                                >
+                                  <strong className="mono">
+                                    {number(cell.gpuCount)} <small>GPU</small>
+                                  </strong>
+                                  <small>
+                                    {t("overview.units." + kind, {
+                                      count: number(cell.unitCount),
+                                    })}
+                                    {kind === "vgpu"
+                                      ? " · " +
+                                        t("overview.nodes", {
+                                          count: number(cell.nodeCount),
+                                        })
+                                      : ""}
+                                  </small>
+                                </button>
+                              ) : (
+                                <span className="muted">—</span>
+                              )}
                             </td>
-                          ),
-                        )}
+                          );
+                        })}
+                        <td className="mono">
+                          {number(
+                            data.distribution
+                              .filter((d) => d.kind === kind)
+                              .reduce((n, d) => n + d.gpuCount, 0),
+                          )}
+                        </td>
                       </tr>
                     );
                   })}
                 </tbody>
+                <tfoot>
+                  <tr>
+                    <th>{t("overview.gpuTotal")}</th>
+                    {REGIONS.map((region) => (
+                      <td key={region} className="mono">
+                        {number(
+                          data.distribution
+                            .filter((d) => d.region === region)
+                            .reduce((n, d) => n + d.gpuCount, 0),
+                        )}
+                      </td>
+                    ))}
+                    <td className="mono">{number(data.allocated)}</td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           </Panel>
@@ -233,38 +274,6 @@ export default function OverviewPage() {
                         />
                       </div>
                     ))}
-                </div>
-              ))}
-            </div>
-          </Panel>
-        )}
-        {show("regions") && (
-          <Panel title={t("overview.regions")} hint={t("overview.regionScope")}>
-            <div className="grid grid-4">
-              {data.regions.map((region) => (
-                <div className="region-card" key={region.region}>
-                  <div className="between">
-                    <h3>{t(`common.${region.region}`)}</h3>
-                    <span className="chip">{region.region.toUpperCase()}</span>
-                  </div>
-                  <div style={{ margin: "14px 0 6px" }}>
-                    <strong className="mono">
-                      {region.gpu ? number(region.gpu) : "—"}
-                    </strong>{" "}
-                    <small>GPU</small>
-                  </div>
-                  <small>
-                    {region.count
-                      ? t("common.rows", { count: region.count })
-                      : t("overview.noResources")}
-                  </small>
-                  <div style={{ marginTop: 12 }}>
-                    <Progress
-                      value={
-                        data.allocated ? (region.gpu / data.allocated) * 100 : 0
-                      }
-                    />
-                  </div>
                 </div>
               ))}
             </div>

@@ -29,11 +29,14 @@ import { MonitorPanel } from "./common";
 export function HardwareHealthPanel({
   resource: r,
   networkOnly = false,
+  nodeIndex,
 }: {
   resource: ResourceOf<"gpu_baremetal">;
   networkOnly?: boolean;
+  nodeIndex?: number;
 }) {
-  const [node, setNode] = useState(0);
+  const [localNode, setNode] = useState(0);
+  const node = nodeIndex ?? localNode;
   const q = useData<HardwareSnapshot>(
     ["hardware", r.resourceUuid, node],
     `${EP.metrics}/${r.kind}/${r.resourceUuid}/hardware${query({ node })}`,
@@ -44,15 +47,20 @@ export function HardwareHealthPanel({
   const data = q.data;
   return (
     <div className="stack">
-      <Field label={t("hardware.machine")}>
-        <select value={node} onChange={(e) => setNode(Number(e.target.value))}>
-          {Array.from({ length: r.spec.machineCount }, (_, i) => (
-            <option key={i} value={i}>
-              {r.displayId}-node-{i + 1}
-            </option>
-          ))}
-        </select>
-      </Field>
+      {nodeIndex == null && (
+        <Field label={t("hardware.machine")}>
+          <select
+            value={node}
+            onChange={(e) => setNode(Number(e.target.value))}
+          >
+            {Array.from({ length: r.spec.machineCount }, (_, i) => (
+              <option key={i} value={i}>
+                {r.displayId}-node-{i + 1}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
       {!data.available ? (
         <Empty text={t("common.noData")} />
       ) : (
@@ -191,6 +199,7 @@ export function HardwareHealthPanel({
               </Panel>
               <MonitorPanel
                 resource={r}
+                nodeIndex={node}
                 only={[
                   "gpu_utilization",
                   "gpu_memory_used",

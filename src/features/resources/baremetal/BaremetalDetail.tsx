@@ -1,12 +1,22 @@
+import { MachineInventory, MachineAccess } from "./MachinePanels";
+import type { BaremetalMachine } from "../../../types/baremetal";
+import { EP } from "../../../lib/api-client";
+import { useData } from "../../shared/hooks";
 import { HardwareHealthPanel } from "../shared/RuntimePanels";
 import { useState } from "react";
 import type { ResourceOf } from "../../../types/domain";
 import { t } from "../../../i18n";
-import { Panel, Tabs, KeyValues } from "../../../components/ui";
+import {
+  Panel,
+  Tabs,
+  KeyValues,
+  Field,
+  Loading,
+  ErrorState,
+} from "../../../components/ui";
 import { size } from "../../../lib/money";
 import {
   MetricsOverview,
-  AccessPanel,
   EventsPanel,
   BillingPanel,
   ScalingReadonly,
@@ -18,6 +28,15 @@ export function BaremetalDetail({
   resource: ResourceOf<"gpu_baremetal">;
 }) {
   const [tab, setTab] = useState("overview");
+  const [node, setNode] = useState(0);
+  const selected = Math.min(node, r.spec.machineCount - 1);
+  const machines = useData<BaremetalMachine[]>(
+    ["baremetal-machines", r.resourceUuid],
+    EP.machines(r.resourceUuid),
+    { poll: true },
+  );
+  const machine = machines.data?.[selected];
+
   return (
     <>
       <Tabs
@@ -38,23 +57,56 @@ export function BaremetalDetail({
         value={tab}
         onChange={setTab}
       />
+      {["hardware", "network", "oob", "firmware"].includes(tab) && (
+        <Field label={t("baremetal.selectedMachine")}>
+          <select
+            aria-label={t("baremetal.selectedMachine")}
+            value={selected}
+            onChange={(e) => setNode(Number(e.target.value))}
+          >
+            {(machines.data || []).map((m) => (
+              <option key={m.nodeUuid} value={m.index}>
+                {m.name} · {m.privateIp}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
+      {["hardware", "network"].includes(tab) && machine && (
+        <Panel title={machine.name}>
+          <KeyValues
+            items={[
+              [t("baremetal.hostname"), machine.hostname],
+              [t("baremetal.privateIp"), machine.privateIp],
+              [t("baremetal.bmcIp"), machine.bmcIp],
+              [t("baremetal.memory"), size(machine.memoryGb)],
+              [t("resource.nvme"), size(machine.localNvmeGb)],
+              [t("resource.rack"), machine.rack],
+            ]}
+          />
+        </Panel>
+      )}
       {tab === "overview" ? (
         <div className="stack">
           <Panel title={t("tab.overview")}>
             <KeyValues
               items={[
                 [t("resource.machineType"), r.spec.machineType],
-                [t("resource.rack"), r.placement?.rackId || "—"],
+
                 [
                   t("resource.machineCount"),
                   `${r.spec.machineCount} ${t("common.machines")}`,
                 ],
                 [t("resource.totalGpu"), r.spec.gpuCount],
+                [t("baremetal.cpuPerMachine"), r.spec.cpuModel],
                 [
-                  t("resource.cpu"),
-                  `${r.spec.cpuModel} / ${size(r.spec.memoryGb)}`,
+                  t("baremetal.clusterMemory"),
+                  size(r.spec.memoryGb * r.spec.machineCount),
                 ],
-                [t("resource.nvme"), size(r.spec.localNvmeGb)],
+                [
+                  t("baremetal.clusterNvme"),
+                  size(r.spec.localNvmeGb * r.spec.machineCount),
+                ],
                 [
                   t("wizard.passthrough"),
                   r.spec.passthrough
@@ -65,16 +117,37 @@ export function BaremetalDetail({
               ]}
             />
           </Panel>
+          {machines.isPending ? (
+            <Loading />
+          ) : machines.error ? (
+            <ErrorState error={machines.error} />
+          ) : (
+            <MachineInventory
+              machines={machines.data}
+              onSelect={(m) => {
+                setNode(m.index);
+                setTab("hardware");
+              }}
+            />
+          )}
           <MetricsOverview resource={r} />
         </div>
       ) : tab === "hardware" ? (
-        <HardwareHealthPanel resource={r} />
+        <HardwareHealthPanel resource={r} nodeIndex={selected} />
       ) : tab === "oob" ? (
-        <AccessPanel resource={r} mode="bmc" />
+        machine ? (
+          <MachineAccess resource={r} machine={machine} />
+        ) : (
+          <Loading />
+        )
       ) : tab === "firmware" ? (
-        <AccessPanel resource={r} mode="firmware" />
+        machine ? (
+          <MachineAccess resource={r} machine={machine} firmware />
+        ) : (
+          <Loading />
+        )
       ) : tab === "network" ? (
-        <HardwareHealthPanel resource={r} networkOnly />
+        <HardwareHealthPanel resource={r} nodeIndex={selected} networkOnly />
       ) : tab === "events" ? (
         <EventsPanel resource={r} />
       ) : tab === "billing" ? (

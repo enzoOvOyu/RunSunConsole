@@ -43,18 +43,19 @@ export default function BaremetalPage() {
     },
     {
       id: "cpu",
-      header: t("resource.cpu"),
+      header: t("baremetal.cpuMemoryPerMachine"),
       cell: ({ row }) =>
         `${row.original.spec.cpuModel} / ${size(row.original.spec.memoryGb)}`,
     },
     {
-      id: "rack",
-      header: t("resource.rack"),
-      cell: ({ row }) => row.original.placement?.rackId || "—",
+      id: "memory",
+      header: t("baremetal.clusterMemory"),
+      cell: ({ row }) =>
+        size(row.original.spec.memoryGb * row.original.spec.machineCount),
     },
     {
       id: "nvme",
-      header: t("resource.nvme"),
+      header: t("baremetal.nvmePerMachine"),
       cell: ({ row }) => size(row.original.spec.localNvmeGb),
     },
     {

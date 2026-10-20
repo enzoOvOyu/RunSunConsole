@@ -2,11 +2,17 @@ import type {
   InferenceGovernance,
   InferenceGovernanceSettings,
 } from "../../types/inference";
-import { hardwareSnapshot, clusterView, replicaView } from "../lib/runtime";
+import {
+  hardwareSnapshot,
+  clusterView,
+  replicaView,
+  baremetalMachines,
+} from "../lib/runtime";
 import { seedResources } from "../fixtures/resources";
 import { http, HttpResponse, delay } from "msw";
 import {
   KINDS,
+  QUOTA_METRICS,
   REGIONS,
   ROLES,
   type Region,
@@ -71,14 +77,14 @@ const used = (region: Region, metric: Quota["metric"], exclude?: string) =>
     .filter((r) => r.region === region && r.resourceUuid !== exclude)
     .reduce((a, r) => a + quotaUse(r, metric), 0);
 const limits: Record<Region, Record<Quota["metric"], number>> = {
-  jp: { gpu: 400, vcpu: 6400, storage: 20480, ip: 16 },
-  th: { gpu: 128, vcpu: 2048, storage: 10240, ip: 8 },
-  sg: { gpu: 320, vcpu: 5120, storage: 16384, ip: 12 },
-  us: { gpu: 640, vcpu: 10240, storage: 32768, ip: 32 },
+  jp: { gpu: 400, vcpu: 6400, memory: 102400, storage: 20480, ip: 16 },
+  th: { gpu: 128, vcpu: 2048, memory: 32768, storage: 10240, ip: 8 },
+  sg: { gpu: 320, vcpu: 5120, memory: 90112, storage: 16384, ip: 12 },
+  us: { gpu: 640, vcpu: 10240, memory: 196608, storage: 32768, ip: 32 },
 };
 export const quotas = (): Quota[] =>
   REGIONS.flatMap((region) =>
-    (["gpu", "vcpu", "storage", "ip"] as const).map((metric) => ({
+    QUOTA_METRICS.map((metric) => ({
       region,
       metric,
       limitValue: limits[region][metric],
@@ -177,10 +183,10 @@ function precheck(r: Resource, exclude?: string) {
     )
       fail(409, "LICENSE_EXCEEDED");
   }
-  for (const metric of ["gpu", "vcpu", "storage", "ip"] as const) {
+  for (const metric of QUOTA_METRICS) {
     const amount =
       quotaUse({ ...r, status: "running" } as Resource, metric) *
-      (metric === "gpu" || metric === "vcpu" ? multiplier : 1);
+      (["gpu", "vcpu", "memory"].includes(metric) ? multiplier : 1);
     if (used(r.region, metric, exclude) + amount > limits[r.region][metric])
       fail(409, "QUOTA_EXCEEDED", {
         metric,
@@ -521,17 +527,25 @@ function enrich(r: Resource): Resource {
     placement: {
       rackId: `${r.region.toUpperCase()}-R${(parseInt(r.resourceUuid.slice(-2), 16) % 8) + 1}`,
       switchGroup: `${r.region.toUpperCase()}-IB-A`,
-      nodes: Array.from({ length: nodeCount }, (_, i) => ({
-        nodeUuid: `${r.resourceUuid}-${i}`,
-        name: `${r.displayId}-node-${i + 1}`,
-        state:
-          r.status === "running"
-            ? "ready"
-            : r.status === "error"
-              ? "quarantined"
-              : "initializing",
-        gpuCount: GPU_SPECS[r.nodePool].gpusPerNode,
-      })),
+      nodes:
+        r.kind === "gpu_baremetal"
+          ? baremetalMachines(r).map((m) => ({
+              nodeUuid: m.nodeUuid,
+              name: m.name,
+              state: m.status,
+              gpuCount: m.gpuCount,
+            }))
+          : Array.from({ length: nodeCount }, (_, i) => ({
+              nodeUuid: `${r.resourceUuid}-${i}`,
+              name: `${r.displayId}-node-${i + 1}`,
+              state:
+                r.status === "running"
+                  ? "ready"
+                  : r.status === "error"
+                    ? "quarantined"
+                    : "initializing",
+              gpuCount: GPU_SPECS[r.nodePool].gpusPerNode,
+            })),
     },
     cost: {
       perHour: costPerHour(r, RATES),
@@ -605,13 +619,36 @@ async function dispatch(request: Request) {
     return json({
       ...summary(null, new Date().toISOString().slice(0, 7)),
       resources: rs,
-      regions: REGIONS.map((region) => ({
-        region,
-        count: rs.filter((r) => r.region === region).length,
-        gpu: rs
-          .filter((r) => r.region === region)
-          .reduce((a, r) => a + r.spec.gpuCount, 0),
-      })),
+      distribution: REGIONS.flatMap((region) =>
+        KINDS.map((kind) => {
+          const rows = rs.filter((r) => r.region === region && r.kind === kind);
+          return {
+            region,
+            kind,
+            gpuCount: rows.reduce((n, r) => n + r.spec.gpuCount, 0),
+            unitCount: rows.reduce(
+              (n, r) =>
+                n +
+                (r.kind === "gpu_vm"
+                  ? r.spec.quantity
+                  : r.kind === "gpu_baremetal"
+                    ? r.spec.machineCount
+                    : r.kind === "inference"
+                      ? r.spec.replicas
+                      : 1),
+              0,
+            ),
+            nodeCount: rows.reduce(
+              (n, r) =>
+                n +
+                (r.kind === "vgpu"
+                  ? r.spec.nodePools.reduce((a, p) => a + p.nodeCount, 0)
+                  : 0),
+              0,
+            ),
+          };
+        }),
+      ),
       quotas: quotas(),
       events: db.events
         .slice()
@@ -728,6 +765,10 @@ async function dispatch(request: Request) {
             { status: 410 },
           );
         return json(data);
+      }
+      if (action === "machines") {
+        if (r.kind !== "gpu_baremetal") fail(404, "NOT_FOUND");
+        return json(baremetalMachines(r));
       }
       if (action === "governance") {
         if (r.kind !== "inference") fail(404, "NOT_FOUND");
@@ -1161,7 +1202,17 @@ async function dispatch(request: Request) {
       );
     }
     const wanted = (qs.get("metrics") || "").split(",").filter(Boolean);
-    const series = metricsFor(r, qs.get("window") || "1h", fault);
+    let nodeIndex: number | undefined;
+    if (qs.has("node")) {
+      if (r.kind !== "gpu_baremetal") fail(422, "VALIDATION_ERROR");
+      nodeIndex = z.coerce
+        .number()
+        .int()
+        .min(0)
+        .max(r.spec.machineCount - 1)
+        .parse(qs.get("node"));
+    }
+    const series = metricsFor(r, qs.get("window") || "1h", fault, nodeIndex);
     return json(
       wanted.length ? series.filter((s) => wanted.includes(s.key)) : series,
     );

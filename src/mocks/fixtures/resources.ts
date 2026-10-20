@@ -5,7 +5,7 @@ import type {
   Kind,
   PoolCode,
 } from "../../types/domain";
-import { defaultSpec } from "../../lib/config";
+import { defaultSpec, normalizeSpec } from "../../lib/config";
 import { displayId } from "../../lib/ids";
 import { poolsFor } from "./gpu-specs";
 import { seededUuid } from "../lib/rng";
@@ -55,6 +55,7 @@ export function seedResources(): Resource[] {
     if ("nodePools" in spec) {
       spec.nodePools[0].nodeCount = count;
       spec.gpuCount = count * pool.gpusPerNode;
+      spec.defaultPvcGb = 500;
       spec.storageGb = 500;
       spec.subnet = `${region}-default`;
     }
@@ -103,7 +104,7 @@ export function seedResources(): Resource[] {
       mode: i % 7 === 0 ? "spot" : "on_demand",
       labels: [region, kind === "inference" ? "production" : "research"],
       orderUuid: seededUuid(500 + i),
-      spec,
+      spec: normalizeSpec(spec),
     } as Resource;
   });
 }

@@ -8,6 +8,7 @@ export function metricsFor(
   r: Resource,
   window = "1h",
   fault = "",
+  nodeIndex?: number,
 ): MetricSeries[] {
   const windowMs =
     window === "7d"
@@ -229,7 +230,7 @@ export function metricsFor(
     const missing =
       inactive || base === null || (r.spec.gpuCount === 0 && gpuMetric);
     const seed = hash(
-      `${import.meta.env.VITE_MOCK_SEED || 20261017}:${r.region}:${r.resourceUuid}:${key}`,
+      `${import.meta.env.VITE_MOCK_SEED || 20261017}:${r.region}:${r.resourceUuid}:${nodeIndex == null ? "cluster" : "node-" + nodeIndex}:${key}`,
     );
     const cap =
       name === "gpu_memory_used"

@@ -712,8 +712,43 @@ tr.clickable {
   margin-top: 24px;
 }
 
-.overview-stats {
+.quota-grid {
   grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.distribution-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  padding: 6px 0;
+  color: var(--rs-text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.distribution-cell small {
+  color: var(--rs-text-secondary);
+  white-space: nowrap;
+}
+
+.overview-distribution table {
+  min-width: 760px;
+}
+
+.overview-distribution tfoot {
+  background: var(--rs-surface-2);
+  font-weight: 600;
+}
+
+.overview-stats {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.overview-stats .stat-value {
+  font-size: clamp(22px, 1.85vw, 30px);
 }
 
 .chip {
@@ -774,17 +809,17 @@ button.catalog-card {
 
 .wizard {
   display: grid;
-  grid-template-columns: 180px minmax(0, 1fr) 280px;
+  grid-template-columns: minmax(0, 1.65fr) minmax(300px, 1fr);
   gap: 24px;
   align-items: start;
 }
 
 .wizard-steps {
+  grid-column: 1 / -1;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 6px;
-  position: sticky;
-  top: 24px;
+  overflow: auto;
 }
 
 .wizard-step {
@@ -818,6 +853,9 @@ button.catalog-card {
 .cost-summary {
   position: sticky;
   top: 24px;
+  min-width: 0;
+  max-height: max(360px, calc(100dvh - 300px));
+  overflow: auto;
 }
 
 .cost-line {
@@ -831,6 +869,10 @@ button.catalog-card {
 
 .cost-line strong {
   font-weight: 500;
+}
+
+.distribution-cell:hover strong {
+  color: var(--rs-brand);
 }
 
 .cost-total {
@@ -937,23 +979,15 @@ button.catalog-card {
   }
 }
 
-@media (width <= 1450px) {
+@media (width <= 1200px) {
   .overview-stats {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .wizard {
-    grid-template-columns: 150px minmax(0, 1fr);
-  }
-
-  .cost-summary {
-    position: static;
-    grid-column: 2;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (width <= 1000px) {
   .grid-4,
+  .quota-grid,
   .grid-3,
   .overview-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -979,6 +1013,9 @@ button.catalog-card {
 
   .cost-summary {
     grid-column: 1;
+    position: static;
+    max-height: none;
+    overflow: visible;
   }
 
   .split {
@@ -992,6 +1029,7 @@ button.catalog-card {
   }
 
   .grid-2,
+  .quota-grid,
   .grid-3,
   .grid-4,
   .overview-stats,
