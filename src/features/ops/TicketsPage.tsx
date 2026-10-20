@@ -209,79 +209,160 @@ export default function TicketsPage() {
 export function TicketDetail() {
   const { id } = useParams();
   const q = useData<Ticket>(["ticket", id], `${EP.tickets}/${id}`);
+  const resourceQ = useData<Resource>(
+    ["ticket-resource", q.data?.resourceUuid],
+    `${EP.resources}/${q.data?.resourceUuid || ""}`,
+    { enabled: !!q.data },
+  );
   const [message, setMessage] = useState("");
   const { run, busy } = useAction();
   const role = useAuth((s) => s.role);
   if (q.isPending) return <Loading />;
   if (q.error) return <ErrorState error={q.error} />;
   const ticket = q.data;
+  const resource = resourceQ.data;
+  const lastMessage = ticket.messages.at(-1);
   return (
     <>
       <PageHeader
         title={dt(ticket.title)}
+        subtitle={`${t("tickets.caseId")} · ${ticket.id}`}
         actions={<Link to="/ops/tickets">{t("common.previous")}</Link>}
       />
-      <div className="stack">
-        <Panel
-          title={
-            <span className="row">
-              <Badge status={ticket.status} />
-              <Badge status={ticket.priority} />
-            </span>
-          }
-        >
-          <div className="stack">
-            {ticket.messages.map((m, i) => (
-              <article className="notice" key={i}>
-                <small>
-                  {m.actor} · {date(m.at)}
-                </small>
-                <p style={{ marginTop: 8 }}>{dt(m.body)}</p>
-              </article>
-            ))}
-          </div>
-        </Panel>
-        <Panel title={t("tickets.reply")}>
-          <div className="stack">
-            <textarea
-              aria-label={t("tickets.message")}
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              disabled={!canWrite(role)}
-            />
-            <div className="row">
-              <Button
-                disabled={!canWrite(role) || !message || busy}
-                onClick={async () => {
-                  await run(() => patch(`${EP.tickets}/${id}`, { message }));
-                  setMessage("");
-                }}
-              >
-                {t("tickets.reply")}
-              </Button>
-              <Button
-                disabled={!canWrite(role) || busy}
-                onClick={() =>
-                  void run(() =>
-                    patch(`${EP.tickets}/${id}`, {
-                      status: ticket.status === "open" ? "closed" : "open",
-                    }),
-                  )
-                }
-              >
-                {t("common." + (ticket.status === "open" ? "closed" : "open"))}
-              </Button>
+      <div className="grid ticket-detail-layout">
+        <div className="stack">
+          <Panel
+            title={t("tickets.correspondence")}
+            hint={t("tickets.correspondenceScope")}
+          >
+            <div className="ticket-thread">
+              {ticket.messages.map((item, index) => (
+                <article className="ticket-message" key={`${item.at}-${index}`}>
+                  <div className="ticket-message-marker" aria-hidden="true" />
+                  <div className="ticket-message-content">
+                    <div className="between">
+                      <strong>{item.actor}</strong>
+                      <small className="muted">{date(item.at)}</small>
+                    </div>
+                    <p>{dt(item.body)}</p>
+                  </div>
+                </article>
+              ))}
             </div>
-          </div>
-        </Panel>
-        <Link
-          to={resourceLink({
-            kind: "gpu_vm",
-            resourceUuid: ticket.resourceUuid,
-          })}
-        >
-          {t("nav.resources")}
-        </Link>
+          </Panel>
+          <Panel title={t("tickets.reply")}>
+            <div className="stack">
+              <textarea
+                aria-label={t("tickets.message")}
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                disabled={!canWrite(role)}
+              />
+              <div className="row">
+                <Button
+                  disabled={!canWrite(role) || !message.trim() || busy}
+                  onClick={async () => {
+                    const result = await run(() =>
+                      patch<Ticket>(`${EP.tickets}/${id}`, {
+                        message: message.trim(),
+                      }),
+                    );
+                    if (result) setMessage("");
+                  }}
+                >
+                  {t("tickets.reply")}
+                </Button>
+              </div>
+            </div>
+          </Panel>
+        </div>
+        <div className="stack">
+          <Panel title={t("tickets.caseDetails")}>
+            <dl className="ticket-detail-fields">
+              <div>
+                <dt>{t("common.status")}</dt>
+                <dd>
+                  <Badge status={ticket.status} />
+                </dd>
+              </div>
+              <div>
+                <dt>{t("tickets.priority")}</dt>
+                <dd>
+                  <Badge status={ticket.priority} />
+                </dd>
+              </div>
+              <div>
+                <dt>{t("tickets.caseId")}</dt>
+                <dd className="mono">{ticket.id}</dd>
+              </div>
+              <div>
+                <dt>{t("common.createdAt")}</dt>
+                <dd>{date(ticket.createdAt)}</dd>
+              </div>
+              <div>
+                <dt>{t("tickets.lastActivity")}</dt>
+                <dd>{date(lastMessage?.at || ticket.createdAt)}</dd>
+              </div>
+              <div>
+                <dt>{t("tickets.messageCount")}</dt>
+                <dd>{ticket.messages.length}</dd>
+              </div>
+            </dl>
+            <Button
+              disabled={!canWrite(role) || busy}
+              onClick={() =>
+                void run(() =>
+                  patch(`${EP.tickets}/${id}`, {
+                    status: ticket.status === "open" ? "closed" : "open",
+                  }),
+                )
+              }
+            >
+              {t("common." + (ticket.status === "open" ? "closed" : "open"))}
+            </Button>
+          </Panel>
+          <Panel title={t("tickets.relatedResource")}>
+            {resource ? (
+              <div className="ticket-resource">
+                <strong>{dt(resource.name)}</strong>
+                <span className="mono muted">{resource.displayId}</span>
+                <dl className="ticket-detail-fields">
+                  <div>
+                    <dt>{t("common.type")}</dt>
+                    <dd>{t("common." + resource.kind)}</dd>
+                  </div>
+                  <div>
+                    <dt>{t("common.region")}</dt>
+                    <dd>{t("common." + resource.region)}</dd>
+                  </div>
+                  <div>
+                    <dt>{t("common.status")}</dt>
+                    <dd>
+                      <Badge status={resource.status} />
+                    </dd>
+                  </div>
+                </dl>
+                <div className="row">
+                  <Link to={resourceLink(resource)}>
+                    {t("tickets.viewResource")}
+                  </Link>
+                  <Link to={`/ops/projects/${resource.projectId}`}>
+                    {t("tickets.viewProject")}
+                  </Link>
+                </div>
+              </div>
+            ) : resourceQ.isPending ? (
+              <Loading />
+            ) : (
+              <div className="ticket-resource">
+                <span className="mono">{ticket.resourceUuid}</span>
+                <small className="muted">
+                  {t("tickets.resourceUnavailable")}
+                </small>
+              </div>
+            )}
+          </Panel>
+        </div>
       </div>
     </>
   );

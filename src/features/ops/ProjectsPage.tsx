@@ -4,6 +4,7 @@ import { useState, lazy, Suspense } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { Folder, Plus } from "lucide-react";
 import {
+  KINDS,
   REGIONS,
   ROLES,
   type Project,
@@ -14,7 +15,8 @@ import {
 import { useAuth } from "../../stores/auth";
 import { canWrite, canManageOrg } from "../../lib/rbac";
 import { EP, post, patch, remove } from "../../lib/api-client";
-import { resourceLink } from "../../lib/ids";
+import { KIND_META, resourceLink } from "../../lib/ids";
+import { date } from "../../lib/date";
 import { useAction, useData } from "../shared/hooks";
 import { t, dt } from "../../i18n";
 import { money, number } from "../../lib/money";
@@ -184,6 +186,31 @@ export function ProjectDetail() {
   if (q.isPending) return <Loading />;
   if (q.error) return <ErrorState error={q.error} />;
   const p = q.data;
+  const resourceMix = KINDS.map((kind) => {
+    const items = p.resourceItems.filter((resource) => resource.kind === kind);
+    return {
+      kind,
+      total: items.length,
+      running: items.filter((resource) => resource.status === "running").length,
+      gpuCount: items.reduce(
+        (sum, resource) => sum + resource.spec.gpuCount,
+        0,
+      ),
+    };
+  });
+  const regionalMix = REGIONS.map((region) => {
+    const items = p.resourceItems.filter(
+      (resource) => resource.region === region,
+    );
+    return {
+      region,
+      total: items.length,
+      gpuCount: items.reduce(
+        (sum, resource) => sum + resource.spec.gpuCount,
+        0,
+      ),
+    };
+  });
   return (
     <>
       <PageHeader
@@ -219,16 +246,90 @@ export function ProjectDetail() {
         onChange={setTab}
       />
       {tab === "overview" ? (
-        <div className="grid grid-3">
-          {[
-            [t("overview.allocated"), p.gpuTotal],
-            [t("common.mtd"), money(p.monthCost)],
-            [t("project.members"), p.members.length],
-          ].map(([k, v]) => (
-            <Panel title={k} key={k}>
-              <strong className="stat-value">{v}</strong>
+        <div className="stack">
+          <div className="grid project-detail-stats">
+            {[
+              [t("overview.allocated"), number(p.gpuTotal)],
+              [t("common.mtd"), money(p.monthCost)],
+              [t("project.resources"), number(p.resourceItems.length)],
+              [t("project.members"), number(p.members.length)],
+            ].map(([label, value]) => (
+              <Panel title={label} key={label}>
+                <strong className="stat-value">{value}</strong>
+              </Panel>
+            ))}
+          </div>
+          <div className="grid grid-2 project-detail-grid">
+            <Panel title={t("project.resourceMix")}>
+              <div className="project-detail-table">
+                <div className="project-detail-table-head">
+                  <span>{t("common.type")}</span>
+                  <span>{t("project.runningTotal")}</span>
+                  <span>GPU</span>
+                </div>
+                {resourceMix.map((item) => {
+                  const Icon = KIND_META[item.kind].icon;
+                  return (
+                    <div className="project-detail-table-row" key={item.kind}>
+                      <span className="row">
+                        <Icon
+                          size={16}
+                          style={{ color: KIND_META[item.kind].color }}
+                        />
+                        {t("common." + item.kind)}
+                      </span>
+                      <span className="mono">
+                        {number(item.running)} / {number(item.total)}
+                      </span>
+                      <strong className="mono">{number(item.gpuCount)}</strong>
+                    </div>
+                  );
+                })}
+              </div>
+              <h3 className="project-region-heading">
+                {t("project.regionalMix")}
+              </h3>
+              <div className="grid grid-3 project-regions">
+                {regionalMix.map((item) => (
+                  <div key={item.region}>
+                    <small className="muted">
+                      {t("common." + item.region)}
+                    </small>
+                    <strong className="mono">
+                      {number(item.gpuCount)} GPU
+                    </strong>
+                    <small>
+                      {t("project.resourceCount", {
+                        count: number(item.total),
+                      })}
+                    </small>
+                  </div>
+                ))}
+              </div>
             </Panel>
-          ))}
+            <Panel title={t("project.profile")}>
+              <dl className="project-detail-profile">
+                {[
+                  [t("project.slug"), p.slug],
+                  [t("project.defaultRegion"), t("common." + p.defaultRegion)],
+                  [t("common.createdAt"), date(p.createdAt)],
+                  [t("project.myRole"), t("common." + p.myRole)],
+                  [
+                    t("project.labels"),
+                    p.labels.length ? p.labels.join(", ") : "—",
+                  ],
+                ].map(([label, value]) => (
+                  <div key={label}>
+                    <dt>{label}</dt>
+                    <dd>{value}</dd>
+                  </div>
+                ))}
+              </dl>
+              {p.isDefault && (
+                <span className="chip">{t("project.default")}</span>
+              )}
+            </Panel>
+          </div>
         </div>
       ) : tab === "resources" ? (
         <Panel title={t("project.resources")}>
@@ -242,6 +343,16 @@ export function ProjectDetail() {
                 cell: ({ row }) => dt(row.original.name),
               },
               { accessorKey: "displayId", header: "ID" },
+              {
+                accessorKey: "region",
+                header: t("common.region"),
+                cell: ({ row }) => t("common." + row.original.region),
+              },
+              {
+                accessorKey: "gpuCount",
+                header: "GPU",
+                cell: ({ row }) => number(row.original.spec.gpuCount),
+              },
               {
                 accessorKey: "kind",
                 header: t("common.type"),
@@ -329,31 +440,64 @@ export function ProjectDetail() {
           </div>
         </Panel>
       ) : tab === "quotas" ? (
-        <Panel title={t("overview.quotas")}>
-          <div className="grid grid-4">
+        <Panel
+          title={t("project.sharedQuotas")}
+          hint={t("project.sharedQuotasScope")}
+        >
+          <div className="grid grid-3">
             {REGIONS.map((region) => (
               <div key={region}>
                 <h3>{t("common." + region)}</h3>
                 {p.quotas
                   .filter((q) => q.region === region)
-                  .map((q) => (
-                    <div className="quota-line" key={q.metric}>
-                      <small>
-                        {t("quota." + q.metric)} · {q.usedValue}/{q.limitValue}
-                      </small>
-                      <Progress value={(q.usedValue / q.limitValue) * 100} />
-                    </div>
-                  ))}
+                  .flatMap((quota) =>
+                    quota.metric === "storage"
+                      ? (quota.storageBreakdown || []).map((storage) => (
+                          <div className="quota-line" key={storage.kind}>
+                            <div className="between">
+                              <small>
+                                {t("quota.storage." + storage.kind)}
+                              </small>
+                              <small className="mono">
+                                {number(storage.usedGb / 1000)} /{" "}
+                                {number(storage.limitGb / 1000)} TB
+                              </small>
+                            </div>
+                            <Progress
+                              value={(storage.usedGb / storage.limitGb) * 100}
+                            />
+                          </div>
+                        ))
+                      : [
+                          <div className="quota-line" key={quota.metric}>
+                            <div className="between">
+                              <small>{t("quota." + quota.metric)}</small>
+                              <small className="mono">
+                                {number(quota.usedValue)} /{" "}
+                                {number(quota.limitValue)}
+                              </small>
+                            </div>
+                            <Progress
+                              value={(quota.usedValue / quota.limitValue) * 100}
+                            />
+                          </div>,
+                        ],
+                  )}
               </div>
             ))}
           </div>
         </Panel>
       ) : tab === "cost" ? (
-        <Panel title={t("overview.trend")}>
-          <Suspense fallback={<Loading />}>
-            <TrendChart data={p.costTrend7d} />
-          </Suspense>
-        </Panel>
+        <div className="stack">
+          <Panel title={t("common.mtd")}>
+            <strong className="stat-value">{money(p.monthCost)}</strong>
+          </Panel>
+          <Panel title={t("overview.trend")} hint={t("project.costTrendScope")}>
+            <Suspense fallback={<Loading />}>
+              <TrendChart data={p.costTrend7d} />
+            </Suspense>
+          </Panel>
+        </div>
       ) : (
         <Panel title={t("project.settings")}>
           <div className="stack">
