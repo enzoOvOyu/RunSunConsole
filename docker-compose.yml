@@ -17,6 +17,27 @@ services:
     networks:
       - runsun
 
+  api:
+    image: node:22-alpine
+    container_name: runsun-api
+    working_dir: /workspace
+    command: ["sh", "-c", "corepack enable && node server/index.mjs"]
+    volumes:
+      - .:/workspace
+      - runsun_node_modules:/workspace/node_modules
+    environment:
+      PGHOST: db
+      PGPORT: 5432
+      PGUSER: runsun
+      PGPASSWORD: ${POSTGRES_PASSWORD:-runsun-local-dev}
+      PGDATABASE: runsun
+      PORT: 8080
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - runsun
+
   db:
     image: postgres:15
     container_name: runsun-db
