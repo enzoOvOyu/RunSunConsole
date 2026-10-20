@@ -1,17 +1,20 @@
 import { expect, it } from "vitest";
 import { CATALOG_MODELS } from "./model-catalog";
 import { MODELS } from "./content";
+import { GPU_SPECS } from "./gpu-specs";
+import { modelMemory } from "../lib/derive";
+import { compatiblePrecisions } from "../../lib/inference-precision";
 
-it("imports all supplied models with researched public metadata and without unverified deployment settings", () => {
+it("imports all supplied models with researched public metadata and mock deployment settings", () => {
   expect(CATALOG_MODELS).toHaveLength(50);
   expect(new Set(CATALOG_MODELS.map((model) => model.modelRef)).size).toBe(50);
   expect(new Set(MODELS.map((model) => model.id)).size).toBe(54);
   expect(
     CATALOG_MODELS.every(
       (model) =>
-        model.catalogOnly &&
         model.context > 0 &&
-        model.quantizations.length === 0 &&
+        model.quantizations.includes("bf16") &&
+        model.quantizations.includes("fp4") &&
         !!model.license &&
         !!model.architecture &&
         !!model.sourceUrl,
@@ -69,4 +72,14 @@ it("pins NVIDIA and Meta catalog entries ahead of the default model list", () =>
   expect(featured[0].modelRef).toBe(
     "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16",
   );
+});
+
+it("allows every catalog model through mock inference validation on an adequate pool", () => {
+  const pool = GPU_SPECS.GB300_NVL72;
+  for (const model of CATALOG_MODELS) {
+    expect(compatiblePrecisions(model, pool.code, "vllm")).toContain("fp4");
+    expect(modelMemory(model, "fp4", 4096).requiredGb).toBeLessThan(
+      pool.memoryGb * 8,
+    );
+  }
 });

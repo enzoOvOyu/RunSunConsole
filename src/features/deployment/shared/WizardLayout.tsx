@@ -228,7 +228,8 @@ function WizardForm({
     };
     try {
       const stored = sessionStorage.getItem(`wizard:${kind}`);
-      if (stored && !clone) return JSON.parse(stored) as WizardValues;
+      if (stored && !clone && !source.model)
+        return JSON.parse(stored) as WizardValues;
     } catch {
       /* Start a fresh form when a stored draft is invalid. */
     }
@@ -245,9 +246,7 @@ function WizardForm({
     if (
       source.model &&
       "modelRef" in base.spec &&
-      context.models.some(
-        (model) => model.id === source.model && !model.catalogOnly,
-      )
+      context.models.some((model) => model.id === source.model)
     )
       base.spec.modelRef = source.model;
     if (source.image && "imageRef" in base.spec)

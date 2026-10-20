@@ -968,7 +968,7 @@ test("deployment storage rows create linked file and object resources", async ({
   );
 });
 
-test("model catalog features NVIDIA and Meta while keeping pending models out of deployment", async ({
+test("model catalog features NVIDIA and Meta and opens deployment for every model", async ({
   page,
 }) => {
   await page.goto("/workbench/images");
@@ -979,12 +979,12 @@ test("model catalog features NVIDIA and Meta while keeping pending models out of
   await expect(
     page.locator(".model-catalog-card").nth(1).locator("h3"),
   ).toContainText("Muse Spark Open");
-  await page.getByRole("combobox", { name: "可用状态" }).selectOption("ready");
-  await expect(page.locator(".model-catalog-card")).toHaveCount(4);
-  await page
-    .getByRole("combobox", { name: "可用状态" })
-    .selectOption("catalog");
-  await expect(page.locator(".model-catalog-card")).toHaveCount(50);
+  await expect(page.locator(".model-catalog-status.ready")).toHaveCount(54);
+  await expect(
+    page
+      .locator(".model-catalog-card")
+      .getByRole("button", { name: "基于此项部署" }),
+  ).toHaveCount(54);
   await page.getByRole("textbox", { name: "搜索" }).fill("Nemotron-3-Ultra");
   await expect(page.locator(".model-catalog-card")).toHaveCount(1);
   await page
@@ -998,7 +998,13 @@ test("model catalog features NVIDIA and Meta while keeping pending models out of
     "href",
     "https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16",
   );
-  await expect(page.getByRole("button", { name: "基于此项部署" })).toHaveCount(
-    0,
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "推理服务" })
+    .click();
+  await expect(page).toHaveURL(/deployment\/inference\?model=catalog-7/);
+  await page.getByRole("button", { name: "下一步", exact: true }).click();
+  await expect(page.locator(".catalog-card.selected")).toContainText(
+    "NVIDIA Nemotron 3 Ultra",
   );
 });

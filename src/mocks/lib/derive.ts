@@ -199,9 +199,9 @@ export function modelMemory(
     (concurrency *
       context *
       2 *
-      model.layers *
-      model.kvHeads *
-      model.headDim *
+      (model.layers || 80) *
+      (model.kvHeads || 8) *
+      (model.headDim || 128) *
       2) /
     1e9;
   return {

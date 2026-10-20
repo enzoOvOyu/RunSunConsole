@@ -52,7 +52,6 @@ export default function ImagesPage() {
   const [license, setLicense] = useUrlState("license");
   const [paramsSize, setParamsSize] = useUrlState("params");
   const [publisher, setPublisher] = useUrlState("publisher");
-  const [availability, setAvailability] = useUrlState("availability");
   const [sort, setSort] = useUrlState("sort");
   const [favorite, setFavorite] = useState(false);
   const [modelId, setModelId] = useState<string | null>(null);
@@ -86,10 +85,6 @@ export default function ImagesPage() {
               ? item.paramsB < 100 && item.paramsB >= 30
               : item.paramsB >= 100)) &&
         (!publisher || publisherName(item) === publisher) &&
-        (!availability ||
-          (availability === "ready"
-            ? !item.catalogOnly
-            : !!item.catalogOnly)) &&
         (!favorite || item.favorite)
       );
     })
@@ -100,7 +95,7 @@ export default function ImagesPage() {
         return publisherName(left).localeCompare(publisherName(right));
       return (left.featuredRank || 999) - (right.featuredRank || 999);
     });
-  const readyCount = allModels.filter((item) => !item.catalogOnly).length;
+  const readyCount = allModels.length;
   return (
     <>
       <PageHeader
@@ -151,15 +146,6 @@ export default function ImagesPage() {
               ))}
             </select>
             <select
-              aria-label={t("images.availability")}
-              value={availability}
-              onChange={(event) => setAvailability(event.target.value)}
-            >
-              <option value="">{t("images.allAvailability")}</option>
-              <option value="ready">{t("images.deployable")}</option>
-              <option value="catalog">{t("images.catalogOnly")}</option>
-            </select>
-            <select
               aria-label={t("images.modality")}
               value={modality}
               onChange={(event) => setModality(event.target.value)}
@@ -167,7 +153,9 @@ export default function ImagesPage() {
               <option value="">{t("images.allModalities")}</option>
               <option value="text">{t("images.modality.text")}</option>
               <option value="image">{t("images.modality.image")}</option>
-              <option value="multimodal">{t("images.modality.multimodal")}</option>
+              <option value="multimodal">
+                {t("images.modality.multimodal")}
+              </option>
               <option value="unknown">{t("images.unknown")}</option>
             </select>
             <select
@@ -239,14 +227,8 @@ export default function ImagesPage() {
                     </span>
                   </div>
                   <div className="row">
-                    <span
-                      className={`model-catalog-status ${item.catalogOnly ? "" : "ready"}`}
-                    >
-                      {t(
-                        item.catalogOnly
-                          ? "images.catalogOnly"
-                          : "images.deployable",
-                      )}
+                    <span className="model-catalog-status ready">
+                      {t("images.deployable")}
                     </span>
                     <Button
                       variant="ghost"
@@ -277,7 +259,7 @@ export default function ImagesPage() {
                 </div>
                 <p className="model-catalog-description">
                   {t(
-                    item.catalogOnly
+                    item.modelRef
                       ? `images.description.${item.id}`
                       : "images.description.ready",
                   )}
@@ -324,17 +306,15 @@ export default function ImagesPage() {
                   <Button onClick={() => setModelId(item.id)}>
                     {t("common.details")}
                   </Button>
-                  {!item.catalogOnly && (
-                    <Button
-                      variant="primary"
-                      disabled={!canWrite(role)}
-                      onClick={() =>
-                        navigate("/deployment/inference?model=" + item.id)
-                      }
-                    >
-                      {t("images.deploy")}
-                    </Button>
-                  )}
+                  <Button
+                    variant="primary"
+                    disabled={!canWrite(role)}
+                    onClick={() =>
+                      navigate("/deployment/inference?model=" + item.id)
+                    }
+                  >
+                    {t("images.deploy")}
+                  </Button>
                 </div>
               </article>
             ))}
@@ -390,7 +370,7 @@ export default function ImagesPage() {
           <div className="stack">
             <p className="model-catalog-description">
               {t(
-                model.catalogOnly
+                model.modelRef
                   ? `images.description.${model.id}`
                   : "images.description.ready",
               )}
@@ -400,14 +380,7 @@ export default function ImagesPage() {
                 items={[
                   [t("images.publisher"), publisherName(model)],
                   [t("images.modelRef"), model.modelRef || model.id],
-                  [
-                    t("images.availability"),
-                    t(
-                      model.catalogOnly
-                        ? "images.catalogOnly"
-                        : "images.deployable",
-                    ),
-                  ],
+                  [t("images.availability"), t("images.deployable")],
                   [
                     t("images.country"),
                     model.countryCode
@@ -468,34 +441,24 @@ export default function ImagesPage() {
                 <small>{t("images.verifiedAt")}: 2026-10-20</small>
               </Panel>
             )}
-            <p className="model-catalog-note">
-              {t(
-                model.catalogOnly
-                  ? "images.catalogNotice"
-                  : "images.billingNote",
-              )}
-            </p>
-            {!model.catalogOnly && (
-              <div className="row">
-                <Button
-                  variant="primary"
-                  disabled={!canWrite(role)}
-                  onClick={() =>
-                    navigate("/deployment/inference?model=" + model.id)
-                  }
-                >
-                  {t("common.inference")}
-                </Button>
-                <Button
-                  disabled={!canWrite(role)}
-                  onClick={() =>
-                    navigate("/deployment/server?model=" + model.id)
-                  }
-                >
-                  {t("common.gpu_vm")}
-                </Button>
-              </div>
-            )}
+            <p className="model-catalog-note">{t("images.billingNote")}</p>
+            <div className="row">
+              <Button
+                variant="primary"
+                disabled={!canWrite(role)}
+                onClick={() =>
+                  navigate("/deployment/inference?model=" + model.id)
+                }
+              >
+                {t("common.inference")}
+              </Button>
+              <Button
+                disabled={!canWrite(role)}
+                onClick={() => navigate("/deployment/server?model=" + model.id)}
+              >
+                {t("common.gpu_vm")}
+              </Button>
+            </div>
           </div>
         ) : image ? (
           <div className="stack">

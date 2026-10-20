@@ -1,7 +1,8 @@
 import type { Model } from "../../types/domain";
 import { MODEL_RESEARCH } from "./model-research";
+import { MODEL_KV_SHAPES } from "./model-runtime";
 
-// Catalog metadata supplied by the project owner. Runtime specifications have not been verified.
+// IDs and parameter estimates supplied by the project owner; public model metadata is researched separately.
 const entries = [
   ["Qwen/Qwen3.8-2.4T-A95B", "2.4T / 95B", "CN"],
   ["moonshotai/Kimi-K3", "2.8T / 104B", "CN"],
@@ -75,6 +76,7 @@ export const CATALOG_MODELS: Model[] = entries.map(
   ([modelRef, parameters, countryCode], index) => {
     const [total, active] = parameters.split(" / ");
     const publisher = modelRef.split("/")[0];
+    const [layers, kvHeads, headDim] = MODEL_KV_SHAPES[modelRef] || [0, 0, 0];
     return {
       id: `catalog-${index + 1}`,
       name: modelRef.split("/")[1].replaceAll("-", " "),
@@ -84,14 +86,13 @@ export const CATALOG_MODELS: Model[] = entries.map(
       paramsB: toBillions(total),
       activeParamsB: active ? toBillions(active) : undefined,
       parameterEstimate: total.startsWith("约"),
-      quantizations: [],
-      layers: 0,
-      kvHeads: 0,
-      headDim: 0,
+      quantizations: ["bf16", "fp8", "fp4"],
+      layers,
+      kvHeads,
+      headDim,
       ...MODEL_RESEARCH[modelRef],
       sourceUrl: `https://huggingface.co/${modelRef}`,
       favorite: false,
-      catalogOnly: true,
       featuredRank:
         featured.indexOf(modelRef) < 0
           ? undefined

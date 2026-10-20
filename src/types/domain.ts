@@ -328,7 +328,6 @@ export interface Model {
   countryCode?: string;
   activeParamsB?: number;
   parameterEstimate?: boolean;
-  catalogOnly?: boolean;
   featuredRank?: number;
   architecture?: string;
   access?: "public" | "terms" | "manual";

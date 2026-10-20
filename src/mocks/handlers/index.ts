@@ -329,7 +329,6 @@ function precheck(r: Resource, exclude?: string) {
     const model =
       db.models.find((m) => m.id === r.spec.modelRef) ||
       fail(422, "VALIDATION_ERROR");
-    if (model.catalogOnly) fail(422, "VALIDATION_ERROR");
     if (r.spec.maxModelLen > model.context) fail(422, "VALIDATION_ERROR");
     if (
       !compatiblePrecisions(model, r.nodePool, r.spec.engine).includes(
@@ -2386,7 +2385,6 @@ async function dispatch(request: Request) {
       db.models.find((m) => m.id === body.modelRef) ||
       fail(422, "VALIDATION_ERROR");
     const precision = String(body.quantization || "bf16");
-    if (model.catalogOnly) fail(422, "VALIDATION_ERROR");
     if (!model.quantizations.includes(precision))
       fail(422, "UNSUPPORTED_PRECISION");
     return json(modelMemory(model, precision, Number(body.context || 8192)));

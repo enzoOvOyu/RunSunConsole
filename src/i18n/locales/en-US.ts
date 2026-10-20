@@ -419,12 +419,12 @@ export default {
   "wizard.addPool": "Add node pool · up to 5",
   "wizard.removePool": "Remove node pool",
   "wizard.license": "Available NVIDIA licenses: {count}",
-  "wizard.quantization": "Model weight format",
+  "wizard.quantization": "Serving precision",
   "wizard.precisionHint":
-    "Available formats depend on model weights, GPU architecture, and serving engine. NVFP4 requires Blackwell.",
+    "Serving precision depends on GPU architecture and engine. NVFP4 requires Blackwell. Memory is an estimate.",
   "wizard.context": "Context length · 4096–1048576",
   "wizard.memoryRequired":
-    "Required memory per replica {required} GB / selected capacity {capacity} GB",
+    "Estimated memory per replica {required} GB / selected capacity {capacity} GB",
   "wizard.memoryError":
     "Insufficient VRAM. Increase tensor parallel GPUs or use a smaller precision.",
   "wizard.review": "Review configuration and cost before creating",
@@ -650,14 +650,13 @@ export default {
   "images.catalogCount": "Catalog models",
   "images.deployableCount": "Deployable",
   "images.catalogNotice":
-    "Model details were checked against official model cards. Newly listed models still need deployment integration on this platform.",
+    "Model details were checked against official model cards. This is a mock deployment flow; memory and regional capacity are checked during creation, and restricted weights require access.",
   "images.searchPlaceholder": "Search models, publishers, or model IDs",
   "images.publisher": "Publisher",
   "images.allPublishers": "All publishers",
   "images.availability": "Availability",
   "images.allAvailability": "All states",
   "images.deployable": "Deployable",
-  "images.catalogOnly": "Deployment pending",
   "images.allModalities": "All modalities",
   "images.modality.text": "Text",
   "images.modality.image": "Image",
