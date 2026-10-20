@@ -154,6 +154,24 @@ it("rejects unavailable pools, impossible model VRAM and maximum scaling quota",
     ).status,
   ).toBe(409);
 });
+it("rejects inference precision variants unsupported by the selected GPU", async () => {
+  const spec = defaultSpec("inference", poolsFor("jp")[0]);
+  if (!("quantization" in spec)) throw Error("fixture");
+  spec.quantization = "fp4";
+  const result = await request("/deployment-orders", "POST", {
+    kind: "inference",
+    name: "invalid-precision",
+    projectId: "default",
+    region: "jp",
+    nodePool: "H100_SXM",
+    mode: "on_demand",
+    labels: [],
+    spec,
+  });
+  expect(result.status).toBe(422);
+  expect(result.data.code).toBe("UNSUPPORTED_PRECISION");
+});
+
 it("creates an order and materializes one matching policy", async () => {
   const spec = defaultSpec("gpu_vm", poolsFor("sg")[0]);
   if ("subnet" in spec) spec.subnet = "sg-default";

@@ -1,6 +1,7 @@
 import type { Database } from "./database";
 import { GPU_SPECS, poolsFor } from "../fixtures/gpu-specs";
 import { modelMemory } from "./derive";
+import { compatiblePrecisions } from "../../lib/inference-precision";
 export function assertConsistency(db: Database, initial = false) {
   const fail = (message: string) => {
     throw new Error(`CONSISTENCY: ${message}`);
@@ -31,6 +32,13 @@ export function assertConsistency(db: Database, initial = false) {
     if (r.deletedAt && r.status !== "terminating") fail("deleted lifecycle");
     if (r.kind === "inference") {
       const m = db.models.find((m) => m.id === r.spec.modelRef);
+      if (
+        m &&
+        !compatiblePrecisions(m, r.nodePool, r.spec.engine).includes(
+          r.spec.quantization,
+        )
+      )
+        fail("inference precision unsupported");
       if (
         m &&
         modelMemory(m, r.spec.quantization, r.spec.maxModelLen).requiredGb >

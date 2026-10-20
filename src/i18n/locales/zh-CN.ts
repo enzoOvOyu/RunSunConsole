@@ -355,7 +355,9 @@ export default {
   "wizard.addPool": "添加节点池 · 最多 5 个",
   "wizard.removePool": "移除此节点池",
   "wizard.license": "NVIDIA License 余量：{count}",
-  "wizard.quantization": "量化精度",
+  "wizard.quantization": "模型权重格式",
+  "wizard.precisionHint":
+    "可选格式取决于模型权重、GPU 架构和推理引擎；NVFP4 仅适用于 Blackwell。",
   "wizard.context": "上下文长度 · 4096–1048576",
   "wizard.memoryRequired":
     "每副本所需显存 {required} GB / 已选容量 {capacity} GB",
@@ -532,6 +534,7 @@ export default {
   "error.DEFAULT_PROJECT": "默认项目不可删除",
   "error.DATASET_IN_USE": "数据集正在被引用，无法删除",
   "error.BUCKET_IN_USE": "存储桶正在被引用，无法删除",
+  "error.UNSUPPORTED_PRECISION": "所选模型权重格式与 GPU 或推理引擎不兼容",
   "error.MODEL_MEMORY_EXCEEDED": "模型显存需求超过所选 GPU 容量",
   "error.LICENSE_EXCEEDED": "NVIDIA License 余量不足",
   "error.INVALID_FILE": "文件格式或大小不符合要求",
@@ -683,7 +686,7 @@ export default {
   "field.modelRef": "模型",
   "field.replicas": "副本数",
   "field.gpuPerReplica": "每副本 GPU",
-  "field.quantization": "量化精度",
+  "field.quantization": "模型权重格式",
   "field.engine": "推理引擎",
   "field.port": "服务端口",
   "field.authEnabled": "API Key 鉴权",

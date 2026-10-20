@@ -363,7 +363,9 @@ export default {
   "wizard.addPool": "Add node pool · up to 5",
   "wizard.removePool": "Remove node pool",
   "wizard.license": "Available NVIDIA licenses: {count}",
-  "wizard.quantization": "Quantization",
+  "wizard.quantization": "Model weight format",
+  "wizard.precisionHint":
+    "Available formats depend on model weights, GPU architecture, and serving engine. NVFP4 requires Blackwell.",
   "wizard.context": "Context length · 4096–1048576",
   "wizard.memoryRequired":
     "Required memory per replica {required} GB / selected capacity {capacity} GB",
@@ -555,6 +557,8 @@ export default {
   "error.DEFAULT_PROJECT": "The default project cannot be deleted",
   "error.DATASET_IN_USE": "Dataset is in use and cannot be deleted",
   "error.BUCKET_IN_USE": "Bucket is in use and cannot be deleted",
+  "error.UNSUPPORTED_PRECISION":
+    "The selected model weight format is incompatible with this GPU or engine",
   "error.MODEL_MEMORY_EXCEEDED":
     "Model VRAM requirements exceed selected GPU capacity",
   "error.LICENSE_EXCEEDED": "Insufficient available NVIDIA licenses",
@@ -712,7 +716,7 @@ export default {
   "field.modelRef": "Model",
   "field.replicas": "Replicas",
   "field.gpuPerReplica": "GPUs per replica",
-  "field.quantization": "Quantization",
+  "field.quantization": "Model weight format",
   "field.engine": "Inference engine",
   "field.port": "Service port",
   "field.authEnabled": "API key authentication",

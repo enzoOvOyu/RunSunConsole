@@ -169,7 +169,14 @@ export function modelMemory(
   context: number,
   concurrency = 1,
 ) {
-  const bytes = quantization === "bf16" ? 2 : quantization === "fp8" ? 1 : 0.5;
+  const bytes =
+    quantization === "bf16"
+      ? 2
+      : quantization === "fp8"
+        ? 1
+        : quantization === "awq"
+          ? 0.625
+          : 0.5625;
   const weights = model.paramsB * bytes;
   const kv =
     (concurrency *

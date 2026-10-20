@@ -5,6 +5,10 @@ import { t } from "../../i18n";
 import { post, EP } from "../../lib/api-client";
 import { Field } from "../../components/ui";
 import { inferenceSchema } from "../../lib/schema";
+import {
+  compatiblePrecisions,
+  precisionLabel,
+} from "../../lib/inference-precision";
 import { WizardLayout, PoolCards } from "./shared/WizardLayout";
 import {
   useSpec,
@@ -40,6 +44,8 @@ function validate(v: WizardValues, step: number) {
 function InferenceForm({ step, pools, models }: FormContext) {
   const { spec, update, form } = useSpec<InferenceSpec>();
   const model = models.find((m) => m.id === spec.modelRef) || models[0];
+  const selectedPool = form.watch("nodePool");
+  const precisions = compatiblePrecisions(model, selectedPool, spec.engine);
   const memory = useQuery({
     queryKey: [
       "model-memory",
@@ -77,7 +83,11 @@ function InferenceForm({ step, pools, models }: FormContext) {
             onClick={() =>
               update({
                 modelRef: m.id,
-                quantization: m.quantizations[0],
+                quantization: compatiblePrecisions(
+                  m,
+                  selectedPool,
+                  spec.engine,
+                )[0],
                 maxModelLen: Math.min(spec.maxModelLen, m.context),
               })
             }
@@ -93,7 +103,10 @@ function InferenceForm({ step, pools, models }: FormContext) {
         <SpecSelect
           name="quantization"
           label={t("wizard.quantization")}
-          options={model.quantizations}
+          options={precisions.map((precision) => ({
+            value: precision,
+            label: precisionLabel(precision),
+          }))}
         />
         <SpecNumber
           name="maxModelLen"
@@ -102,6 +115,7 @@ function InferenceForm({ step, pools, models }: FormContext) {
           max={model.context}
         />
       </div>
+      <div className="notice">{t("wizard.precisionHint")}</div>
       <div className="notice">
         {t("wizard.memoryRequired", {
           required: required.toFixed(1),
@@ -115,10 +129,20 @@ function InferenceForm({ step, pools, models }: FormContext) {
         kind="inference"
         pools={pools.map((p) => ({
           ...p,
-          available: p.available && p.memoryGb * 8 >= required,
+          available:
+            p.available &&
+            p.memoryGb * 8 >= required &&
+            compatiblePrecisions(model, p.code, spec.engine).includes(
+              spec.quantization,
+            ),
         }))}
         selected={form.watch("nodePool")}
-        onSelect={(p) => form.setValue("nodePool", p.code)}
+        onSelect={(p) => {
+          form.setValue("nodePool", p.code);
+          const available = compatiblePrecisions(model, p.code, spec.engine);
+          if (!available.includes(spec.quantization))
+            update({ quantization: available[0] });
+        }}
       />
       <div className="form-grid">
         <Field label={t("resource.replicas") + " · 1–32"}>
@@ -167,11 +191,31 @@ function InferenceForm({ step, pools, models }: FormContext) {
     <div className="stack">
       <NetworkFields />
       <div className="form-grid">
-        <SpecSelect
-          name="engine"
-          label={t("resource.engine")}
-          options={["vllm", "sglang", "trt-llm"]}
-        />
+        <Field label={t("resource.engine")}>
+          <select
+            value={spec.engine}
+            onChange={(e) => {
+              const engine = e.target.value;
+              const available = compatiblePrecisions(
+                model,
+                selectedPool,
+                engine,
+              );
+              update({
+                engine,
+                quantization: available.includes(spec.quantization)
+                  ? spec.quantization
+                  : available[0],
+              });
+            }}
+          >
+            {["vllm", "sglang", "trt-llm"].map((engine) => (
+              <option key={engine} value={engine}>
+                {engine}
+              </option>
+            ))}
+          </select>
+        </Field>
         <SpecNumber name="port" label="Port · 1–65535" min={1} max={65535} />
         <SpecNumber
           name="maxBatchSize"

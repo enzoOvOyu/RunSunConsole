@@ -383,6 +383,7 @@ RunSun 控制台
 | 4  | 服务配置     | `engine`(Radio · 必填 · `vllm`/`sglang`/`trt-llm`)；`port`(Number · 必填 · 1–65535 · 默认 8000)；`auth_enabled`(Switch · 必填 · 默认开 → `api_key` 自动生成并展示一次)；`max_batch_size`(Number · 选填 · 1–512)；`enable_prefix_caching`(Switch · 选填 · 默认开)；`enable_chunked_prefill`(Switch · 选填)；`env`(KeyValueEditor · 选填 · 含 `HF_HOME`/模型挂载路径)                                                                                     |
 | 5  | 高级与确认    | `canary`(Switch · 选填 · 开启后配置 `canary_replicas` 与 `traffic_percent`(1–99))；`cold_standby`(Switch · 选填)；`warmup_prompt`(Textarea · 选填 · 预热提示词) → 右侧费用明细（副本数 × 单副本 GPU 数 × 单价）→ 「创建」                                                                                                                                                                                                                             |
 
+- **模型权重格式匹配**：`bf16`、`fp8`、`awq`（INT4 AWQ）、`fp4`（NVFP4）必须先在模型目录提供对应权重变体；NVFP4 只在 Blackwell B200/B300/GB300 且使用 vLLM 或 TensorRT-LLM 时可选；AWQ 仅用于文本模型。页面按所选模型、节点池和引擎过滤，创建接口重复校验并返回 `UNSUPPORTED_PRECISION`。
 - **显存校验（强制，MOCK-DATA §7.3 派生）**：`所需显存 = weights_gb + kv_cache_gb + activation + ≥2GB 框架开销`；若 `所需显存 > gpu_per_replica × 单卡显存`，表单**阻断**并给出建议（"Llama-3.1-70B BF16 需 140 GB，当前 1×80 GB 不足，建议：改用 FP8（70 GB）或 2×H100 张量并行"）。这条是防 G8 红旗的关键闸门。
 - 供给时长 60s–12min，**权重加载时长必须由模型体积派生**（MOCK-DATA §5.1）。
 

@@ -656,11 +656,13 @@ tokens_per_second = mfu × peak_node_flops × node_count / flops_per_token
 ### 7.3 推理 decode 上界（带宽受限）
 
 ```
-weights_bytes       = params × bytes_per_param        // BF16=2, FP8=1, FP4=0.5
+weights_bytes       = params × bytes_per_param        // BF16=2, FP8=1, INT4 AWQ≈0.625, NVFP4≈0.5625（含量化元数据）
 theoretical_max_tps ≈ hbm_bandwidth_gbs / weights_bytes × efficiency
 efficiency          = 0.5 – 0.8（batch 越大越高，上限受 KV cache 制约）
 ```
 示例（**必须能自洽**）：Llama-3.1-70B FP8 单张 H100 → weights ≈ 70 GB，带宽 3.35 TB/s → 上界 ≈ 47 tok/s 单请求串行解码；因此 **70B 必须多卡 TP**，Mock 不得让单张 80GB 卡跑 70B BF16（140 GB > 80 GB，物理不可能 → G8 红旗）。
+
+模型目录只声明已提供的权重变体；NVFP4 限 Blackwell B200/B300/GB300 与 vLLM/TensorRT-LLM，INT4 AWQ 限文本模型。创建端与估算端使用同一格式口径，非法组合返回 `UNSUPPORTED_PRECISION`。
 
 ### 7.4 KV cache 与加载时长
 

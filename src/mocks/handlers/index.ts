@@ -69,6 +69,7 @@ import {
 import { canWrite, canManageOrg } from "../../lib/rbac";
 import { displayId } from "../../lib/ids";
 import { round } from "../../lib/money";
+import { compatiblePrecisions } from "../../lib/inference-precision";
 import { metricsFor } from "../metrics";
 import { z } from "zod";
 import { putObject, getObject, deleteObject } from "../lib/object-store";
@@ -262,11 +263,13 @@ function precheck(r: Resource, exclude?: string) {
     const model =
       db.models.find((m) => m.id === r.spec.modelRef) ||
       fail(422, "VALIDATION_ERROR");
+    if (r.spec.maxModelLen > model.context) fail(422, "VALIDATION_ERROR");
     if (
-      !model.quantizations.includes(r.spec.quantization) ||
-      r.spec.maxModelLen > model.context
+      !compatiblePrecisions(model, r.nodePool, r.spec.engine).includes(
+        r.spec.quantization,
+      )
     )
-      fail(422, "VALIDATION_ERROR");
+      fail(422, "UNSUPPORTED_PRECISION");
     if (
       modelMemory(model, r.spec.quantization, r.spec.maxModelLen).requiredGb >
       pool.memoryGb * r.spec.gpuPerReplica
@@ -2174,13 +2177,10 @@ async function dispatch(request: Request) {
     const model =
       db.models.find((m) => m.id === body.modelRef) ||
       fail(422, "VALIDATION_ERROR");
-    return json(
-      modelMemory(
-        model,
-        String(body.quantization || "bf16"),
-        Number(body.context || 8192),
-      ),
-    );
+    const precision = String(body.quantization || "bf16");
+    if (!model.quantizations.includes(precision))
+      fail(422, "UNSUPPORTED_PRECISION");
+    return json(modelMemory(model, precision, Number(body.context || 8192)));
   }
 
   const modelMatch = path.match(/^\/api\/models\/([^/]+)$/);

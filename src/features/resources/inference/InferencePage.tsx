@@ -1,3 +1,4 @@
+import { precisionLabel } from "../../../lib/inference-precision";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { ResourceOf } from "../../../types/domain";
 import { ResourceListShell, ResourceName } from "../shared/ResourceListShell";
@@ -38,7 +39,7 @@ export default function InferencePage() {
     {
       id: "quantization",
       header: t("field.quantization"),
-      cell: ({ row }) => row.original.spec.quantization.toUpperCase(),
+      cell: ({ row }) => precisionLabel(row.original.spec.quantization),
     },
     {
       id: "gpuPerReplica",
@@ -85,7 +86,7 @@ export default function InferencePage() {
         {
           id: "quantization",
           label: t("field.quantization"),
-          value: (r) => r.spec.quantization,
+          value: (r) => precisionLabel(r.spec.quantization),
           format: (value) => value.toUpperCase(),
         },
       ]}
