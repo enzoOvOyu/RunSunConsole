@@ -5,7 +5,7 @@ export default defineConfig({
   workers: 1,
   timeout: 45000,
   use: {
-    baseURL: "http://127.0.0.1:5173",
+    baseURL: process.env.E2E_BASE_URL || "http://127.0.0.1:5173",
     viewport: { width: 1600, height: 1000 },
     headless: true,
     launchOptions: {

@@ -1,19 +1,17 @@
 # RunSunConsole
 
-> GPU cloud tenant console — frontend and its Mock contracts.
+> GPU cloud tenant console with a PostgreSQL-backed development API and optional MSW mode.
 
 [![CI](https://github.com/enzoOvOyu/RunSunConsole/actions/workflows/ci.yml/badge.svg)](https://github.com/enzoOvOyu/RunSunConsole/actions/workflows/ci.yml)
 ![Stack](https://img.shields.io/badge/stack-React%20%2B%20Vite%20%2B%20TypeScript-61dafb)
-![Scope](https://img.shields.io/badge/scope-frontend%20%2B%20MSW%20mock-blue)
+![Scope](https://img.shields.io/badge/scope-frontend%20%2B%20PostgreSQL%20API-blue)
 ![Node](https://img.shields.io/badge/node-22%2B-339933)
 
 RunSunConsole is a web console for managing GPU cloud tenants. Product behavior follows
 [`PRD.md`](./PRD.md), component behavior follows [`DESIGN-SYSTEM.md`](./DESIGN-SYSTEM.md), and
 API/data contracts follow [`ARCHITECTURE.md`](./ARCHITECTURE.md) and [`MOCK-DATA.md`](./MOCK-DATA.md).
 
-**Scope:** This repository implements the **frontend and its Mock contracts** (MSW). No application
-backend is implemented — real GPU provisioning, SSH/Jupyter/BMC sessions, external object endpoints
-and invoice issuance require backend services.
+**Scope:** The console keeps MSW as its default preview mode and includes an opt-in internal PostgreSQL API for resource, project, quota, storage, network and billing records. High frequency GPU utilization, temperature and QPS telemetry still use the existing simulation. Physical provisioning, SSH/Jupyter/BMC sessions, public object endpoints and invoice issuance remain outside this API.
 
 ## Preview
 
@@ -61,7 +59,7 @@ review & create, with a live cost estimate on the right:
 
 | Layer        | Choice                                                            |
 | ------------ | ----------------------------------------------------------------- |
-| Framework    | React 18 + TypeScript + Vite                                      |
+| Framework    | React 19 + TypeScript + Vite                                      |
 | Runtime      | Node 22, pnpm                                                     |
 | State        | Zustand (theme & locale), TanStack Query, React Hook Form + Zod   |
 | UI           | Radix UI primitives, `lucide-react` icons, `recharts` / `@visx` charts |
@@ -90,8 +88,15 @@ docker compose exec dev pnpm dev
 ```
 
 The dev endpoint binds all host interfaces at port `5173`. PostgreSQL and Adminer stay inside
-`runsun-network`. Set `VITE_ENABLE_MOCK=false` to use the configured API gateway; MSW and derived
-data are loaded dynamically when enabled.
+`runsun-network`. Set `VITE_ENABLE_MOCK=false` to proxy `/api` to the internal `api` service; MSW and its
+browser-local state are loaded only when enabled. Do not publish the API externally: the current
+role header is a development contract, not tenant authentication.
+
+## PostgreSQL API development mode
+
+The `api` Compose service is reachable only on `runsun-network`. It applies `server/migrations/*.sql` on startup and seeds the PostgreSQL tables once if empty. Start it with `docker compose up -d db api`. To inspect the database-backed UI inside the development network, run a second Vite instance in the `dev` container with `VITE_ENABLE_MOCK=false` and `--port 5174`; do not change the existing public 5173 preview. The Vite proxy sends `/api` requests to `http://api:8080`. `GET /api/events/stream` invalidates open browsers after committed changes, with periodic refetch as fallback.
+
+The API reuses the existing request contract and business handlers, persists their domain records in PostgreSQL, and calculates key current allocations from SQL views. Its `X-Role` header is not an authentication mechanism, so this mode is for internal development until a server-side tenant session is implemented.
 
 ## Scripts
 
@@ -100,7 +105,7 @@ data are loaded dynamically when enabled.
 | `pnpm dev`             | Start Vite dev server (`--host 0.0.0.0`, port 5173)  |
 | `pnpm build`           | Type-check (`tsc -b`) then production build          |
 | `pnpm typecheck`       | `tsc -b --force --noEmit`                            |
-| `pnpm test`            | Run unit tests (Vitest)                              |
+| `pnpm test`            | Run Vitest and API derivation tests                  |
 | `pnpm test:watch`      | Vitest watch mode                                    |
 | `pnpm test:e2e`        | Playwright browser tests                             |
 | `pnpm lint`            | ESLint                                               |
@@ -277,7 +282,7 @@ screenshots were inspected for network details and the expanded quota page.
 <summary><strong>M8 — Resource specifications & navigation</strong></summary>
 
 The fresh Mock catalog now contains 41 logical resources across all four regions and all four resource
-kinds while retaining the 1,040 allocated GPU total. Server instances cover 1/2/4/8 GPU shapes, bare
+kinds while deriving allocated GPU totals from current resource rows. Server instances cover 1/2/4/8 GPU shapes, bare
 metal clusters vary by machine and RAID configuration, vGPU clusters vary by slicing and control-plane
 tier, and inference services vary by model, engine and quantization. Resource lists show the relevant
 specification fields and offer type-specific filters. Existing browser-saved Mock state remains intact;
@@ -295,8 +300,8 @@ and `git diff --check` pass. The entry JavaScript remains below the 250 kB budge
 
 ## Testing
 
-Business data and mutations are served by MSW. Compact billing state is saved in browser storage and
-uploaded object content in IndexedDB.
+In the default preview, MSW serves business data and mutations. In the internal API mode, PostgreSQL
+persists domain records and object content; both modes keep the same frontend request contracts.
 
 **Unit tests**
 
@@ -318,8 +323,7 @@ the Vite server; browser execution takes place on the Ubuntu host.
 
 ## Status & Scope
 
-- **Frontend + MSW only.** Real GPU provisioning, SSH/Jupyter/BMC sessions, external object endpoints and
-  invoice issuance require backend services; this repository implements the frontend and its Mock contracts.
+- **Optional PostgreSQL API.** Business records persist in PostgreSQL and key quota, resource, network and billing totals derive from SQL rows. Default public preview remains MSW; the internal API does not yet implement tenant authentication or physical provisioning.
 - **Performance budget.** Entry JavaScript is kept below **250 KB** (M4 142 KB, M6 153 KB, M7 173 KB).
 - **Quality gates.** Every milestone passes TypeScript, ESLint, Stylelint and production build; M7/M8 also
   pass `git diff --check`.

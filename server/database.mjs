@@ -13,6 +13,11 @@ export const pool = new Pool({
   max: 8,
 });
 
+let resourceAllocation = () => ({ vcpu: 0, memory: 0 });
+export function setResourceAllocationDeriver(derive) {
+  resourceAllocation = derive;
+}
+
 const tables = [
   { table: "projects", path: "projects", id: "id", fields: {} },
   {
@@ -25,6 +30,8 @@ const tables = [
       kind: "kind",
       status: "status",
       gpu_count: (item) => item.spec.gpuCount,
+      vcpu_count: (item) => resourceAllocation(item).vcpu,
+      memory_gb: (item) => resourceAllocation(item).memory,
       deleted_at: "deletedAt",
     },
   },

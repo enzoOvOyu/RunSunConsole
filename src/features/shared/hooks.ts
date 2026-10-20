@@ -18,7 +18,7 @@ export function useData<T>(
     queryFn: () => api<T>(path),
     enabled: options.enabled,
     refetchInterval:
-      options.poll && mode !== "websocket"
+      options.poll && mode !== "websocket" && mode !== "stream"
         ? (options.pollMs ?? pollInterval)
         : false,
   });
@@ -33,7 +33,7 @@ export function useAction() {
     setBusy(true);
     try {
       const result = await action();
-      await client.invalidateQueries();
+      setTimeout(() => void client.invalidateQueries(), 100);
       toast(t(success));
       return result;
     } catch (error) {

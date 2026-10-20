@@ -1,6 +1,6 @@
 # ARCHITECTURE — RunSun GPU Cloud 控制台（前端架构）
 
-> 文档类型：架构说明（前端为主；后端为蓝图，不在本次实现）
+> 文档类型：架构说明（前端与内部 PostgreSQL API 开发模式）
 > 版本：**v0.11 · 当前架构基线**
 > 关联文档：`PRD.md`（产品需求，业务规则唯一来源）、`DESIGN-SYSTEM.md`（UI 规范）、`MOCK-DATA.md`（数据约束）
 
@@ -14,8 +14,8 @@
 | ------ | --------------------------------------------------- |
 | 前端框架   | **React 19**（并发特性、Actions、`use()`）                  |
 | 语言     | **TypeScript 5**（strict 模式，禁止 `any` 泄露到领域层）          |
-| 本次范围   | **仅前端展示**；数据全部来自 Mock 层                             |
-| 未来后端存储 | 约定使用 **PostgreSQL 15+（pg）**（仅蓝图，见 §12）              |
+| 本次范围   | 默认 Mock；可选内部 PostgreSQL API                             |
+| 未来后端存储 | **PostgreSQL 15+（pg）**，实现见 `server/migrations/`              |
 | 包管理    | pnpm                                                |
 | 构建     | Vite 6                                              |
 | 代码质量   | ESLint + Prettier + Stylelint                       |
@@ -339,7 +339,7 @@ transitions:
 
 ## 12. 后端蓝图（仅供设计参考，本次不实现）
 
-> 声明：本节 DDL **不在本次交付范围**，仅用于前端契约对齐。脚本为 PostgreSQL 15+ 可建表语句，字段与关系对应 PRD §6.5 / §7；**前端 Mock 实体须与之同构**。
+> 本节为原设计蓝图；当前实际运行表结构以 `server/migrations/*.sql` 为准，前端 Mock 与内部 PostgreSQL API 共享请求契约。
 > 修订要点：拆除订单↔资源**循环外键**、补齐生命周期终态、统一 ID/枚举命名、补齐资产/配额/工单/通知/事件等被 UI 引用但此前无模型的实体。
 >
 > **建表顺序（重要）**：`resource_placements.node_id` 外键指向 `gpu_nodes`，故实际执行顺序应为：**§12.1 identity → §12.3 supply → §12.2 deployment → §12.4 billing → §12.5 content**。本节按"业务叙事"编排，落库时请按上述依赖顺序执行。
@@ -1311,7 +1311,7 @@ plans/orgs/users/projects                      身份与计费主体
 | 详情页事件时间线                 | `resource_events`                                      | `resource_id`, `created_at DESC`                    |
 | 来源（镜像/模型/模板）             | `images`/`models`/`app_templates`  ← orders            | `orders.source_type` + `source_ref_id`              |
 | 拓扑视图（**vGPU 详情内嵌**）       | `resource_placements` → `gpu_nodes` → `node_pools`     | `node_id`, `rack_id`, `gpu_indices`                 |
-| **总览·关键指标条 / 区域与类型矩阵**   | 当前用户可见资源 → `Σ gpu_count`（按 `region`，`deleted_at IS NULL`） | **三区域已分配 GPU 总卡数合计 = 1040**；不使用 `quotas.used_value` 或平台节点池容量（MOCK-DATA §1 G11） |
+| **总览·关键指标条 / 区域与类型矩阵**   | 当前用户可见资源 → `Σ gpu_count`（按 `region`，`deleted_at IS NULL`） | **三区域已分配 GPU 总卡数按当前资源实时求和**；不使用 `quotas.used_value` 或平台节点池容量（MOCK-DATA §1 G11） |
 | 顶部状态栏（服务状态/余额/花费/运行中）      | 服务事件聚合、`orgs`, `billing_usage`, `resources`      | 语义化服务状态、`credit_balance`、`billing_period`；不展示健康百分比或节点明细 |
 | 成本分析（按项目/资源/区域）          | `billing_usage` → `projects`/`resources`               | `project_id`, `resource_id`, `region`               |
 | 配额水位                    | `quotas`                                               | `metric`, `limit_value`, `used_value`               |
@@ -1424,7 +1424,7 @@ Mock `Database.network` 保存实体、历史接口、审计和地址池序号�
 
 列表统一支持 region/project_id/q；EIP 支持 includeReleased。网络作用域错误 409 NETWORK_SCOPE_MISMATCH；依赖错误 NETWORK_HAS_DEPENDENCIES；子网耗尽 SUBNET_EXHAUSTED；路由重叠 CIDR_OVERLAP；EIP 冲突 EIP_IN_USE/EIP_NOT_AVAILABLE；默认删除 DEFAULT_NETWORK。参数校验 422，角色写入 403，已删除对象修改 410。
 
-真实后端接入时，在同一事务内执行配额/地址池预检与分配；数据库需对有效 `(subnet_id, private_ip)`、有效 `(interface_id)` 的 EIP 绑定建立唯一约束。浏览器角色切换仅为展示；实际权限必须由服务端租户会话落实。当前未新增后端或 PostgreSQL 业务表。
+真实后端接入时，在同一事务内执行配额/地址池预检与分配；数据库需对有效 `(subnet_id, private_ip)`、有效 `(interface_id)` 的 EIP 绑定建立唯一约束。浏览器角色切换仅为展示；实际权限必须由服务端租户会话落实。当前内部 API 已有 PostgreSQL 业务表与网络用量视图；租户认证尚待服务端实现，因此不对公网开放。
 
 ### 12.13 存储资源与部署订单
 

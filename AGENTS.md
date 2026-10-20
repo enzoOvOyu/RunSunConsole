@@ -31,7 +31,7 @@
 - 完成后简要列出修改文件、关键变化和风险。
 - 按用户授权，每完成一个里程碑，在验收通过后提交并推送到 `enzoOvOyu/RunSunConsole`；提交作者固定使用 `enzoOvOyu`，仅配置仓库级 Git 身份。未经明确要求，不部署。
 
-> 落到本项目：受影响的测试至少跑 `pnpm test`（含架构守护）与 `pnpm typecheck`；改了构建/依赖时补跑 `pnpm build`（见 §7）。
+> 落到本项目：受影响的测试至少跑 `pnpm test`（含架构守护与 API 派生测试）与 `pnpm typecheck`；改了构建/依赖时补跑 `pnpm build`（见 §7）。
 
 ---
 
@@ -40,7 +40,7 @@
 GPU 公有云（RunSun）的 **Web 控制台前端**。把「部署中心（创建）+ 资源（四类展示）+ 项目与支持 / 工作台 / 网络管理 / 存储 / 费用中心」整合为一体。
 
 - **当前状态**：以 `PRD.md` v0.11 为产品基线；架构、UI、Mock 与伸缩参考文档已对齐可确认的需求。工作区已建立前端源码、Mock、回归测试与浏览器测试，当前实现和验收记录见 README；旧代码快照保存在 `archive/current-gdashboard/`。未经用户指令，不从归档代码继续开发。
-- **范围边界**：**纯前端 + Mock**。无真实后端，`/api/*` 全部由 **MSW** 拦截。PostgreSQL 只在 `docker/postgres/init/` 里跑 DDL 种子，应用不访问它。
+- **范围边界**：默认 5173 仍使用 MSW；新增可选的内部 PostgreSQL API 服务（`server/`），`VITE_ENABLE_MOCK=false` 时前端通过 Vite 代理访问。四类资源、项目、配额、存储、网络和费用以数据库记录及 SQL 视图为准；GPU 利用率、温度、QPS 等高频监控维持既有 Mock 方案。API 尚无真实租户认证，仅限内部开发网络，不得直接对公网开放。
 - **技术栈**：React 19 + TypeScript 5（strict）+ Vite 6 + pnpm 9 + Zustand + TanStack Query + MSW 2 + Recharts + cmdk + 自研轻量 i18n。
 - 源码仓库：`https://github.com/enzoOvOyu/RunSunConsole`（main 分支，SSH 部署密钥推送）。
 

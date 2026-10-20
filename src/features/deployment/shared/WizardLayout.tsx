@@ -16,6 +16,7 @@ import {
 import { defaultSpec } from "../../../lib/config";
 import { orderSchema } from "../../../lib/schema";
 import { KIND_META, resourceLink } from "../../../lib/ids";
+import { clientUuid } from "../../../lib/uuid";
 import { EP, post, query } from "../../../lib/api-client";
 import { useRegion } from "../../../stores/region";
 import { useAuth } from "../../../stores/auth";
@@ -206,7 +207,7 @@ function WizardForm({
   const [submitted, setSubmitted] = useState(false);
   const submittedRef = useRef(false);
   const idempotency = useRef(
-    sessionStorage.getItem(`wizard:key:${kind}`) || crypto.randomUUID(),
+    sessionStorage.getItem(`wizard:key:${kind}`) || clientUuid(),
   );
   useEffect(() => {
     sessionStorage.setItem(`wizard:key:${kind}`, idempotency.current);

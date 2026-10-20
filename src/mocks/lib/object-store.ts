@@ -46,3 +46,12 @@ export async function deleteObject(key: string) {
   });
   db.close();
 }
+
+export function objectStoreSnapshot(): [string, string][] {
+  return [...fallback.entries()];
+}
+
+export function loadObjectStore(entries: [string, string][]) {
+  fallback.clear();
+  for (const [key, value] of entries) fallback.set(key, value);
+}

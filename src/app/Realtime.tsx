@@ -5,6 +5,26 @@ export function Realtime() {
   const client = useQueryClient();
   useEffect(() => {
     const endpoint = import.meta.env.VITE_WS_URL;
+    if (!endpoint && import.meta.env.VITE_ENABLE_MOCK === "false") {
+      const stream = new EventSource("/api/events/stream");
+      stream.onopen = () => useConnection.getState().setMode("stream");
+      stream.addEventListener("change", () => {
+        useConnection.getState().setMode("stream");
+        void client.invalidateQueries();
+      });
+      stream.onerror = () => useConnection.getState().setMode("polling");
+      const fallback = setInterval(
+        () => {
+          if (useConnection.getState().mode !== "stream")
+            void client.invalidateQueries();
+        },
+        Number(import.meta.env.VITE_POLL_INTERVAL_MS || 3000),
+      );
+      return () => {
+        clearInterval(fallback);
+        stream.close();
+      };
+    }
     if (!endpoint) return;
     let ws: WebSocket;
     let lastMessage = 0;

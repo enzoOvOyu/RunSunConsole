@@ -3058,8 +3058,13 @@ async function dispatch(request: Request) {
   }
   fail(404, "NOT_FOUND");
 }
-export async function handleMockRequest(request: Request): Promise<Response> {
-  await delay(import.meta.env.MODE === "test" ? 0 : 100);
+export async function handleMockRequest(
+  request: Request,
+  options: { delayMs?: number } = {},
+): Promise<Response> {
+  const delayMs =
+    options.delayMs ?? (import.meta.env.MODE === "test" ? 0 : 100);
+  if (delayMs > 0) await delay(delayMs);
   try {
     return await dispatch(request);
   } catch (error) {

@@ -41,7 +41,11 @@ export function StatusBar() {
           />
           {data.isError
             ? t("common.offline")
-            : t(mode === "websocket" ? "common.websocket" : "common.polling")}
+            : t(
+                mode === "websocket" || mode === "stream"
+                  ? "common.websocket"
+                  : "common.polling",
+              )}
         </span>
         <span className={styles.optional}>
           <MapPin size={12} />

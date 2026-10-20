@@ -508,7 +508,12 @@ export function restoreDatabase() {
   return makeDatabase();
 }
 export const db = restoreDatabase();
+let persistHook: (() => void) | null = null;
+export function setPersistHook(hook: (() => void) | null) {
+  persistHook = hook;
+}
 export function persist() {
+  persistHook?.();
   if (typeof localStorage === "undefined") return;
   const indexes = new Map(db.resources.map((r, i) => [r.resourceUuid, i]));
   const stored: StoredDatabase = {

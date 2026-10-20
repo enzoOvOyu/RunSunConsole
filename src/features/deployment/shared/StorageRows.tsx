@@ -8,6 +8,7 @@ import type {
   StorageRequest,
 } from "../../../types/storage";
 import { useSpec } from "./fields";
+import { clientUuid } from "../../../lib/uuid";
 
 const kindNames: Record<StorageKind, string> = {
   block: "storage.kind.block",
@@ -44,7 +45,7 @@ export function StorageRows() {
               storageSelections: [
                 ...rows,
                 {
-                  key: crypto.randomUUID(),
+                  key: clientUuid(),
                   kind: "block",
                   tier: product.tier,
                   name: `data-${suffix}`,
