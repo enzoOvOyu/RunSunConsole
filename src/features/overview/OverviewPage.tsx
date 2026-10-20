@@ -105,8 +105,33 @@ export default function OverviewPage() {
     return <ErrorState error={q.error} retry={() => void q.refetch()} />;
   const data = q.data;
   const show = (id: string) => !hidden.includes(id);
-  const budget = data.account.budget;
-  const budgetUsed = budget > 0 ? (data.month / budget) * 100 : 0;
+  const billingMonth = new Date().toISOString().slice(0, 7);
+  const recentCostDays = data.trend
+    .slice(-8, -1)
+    .filter((day) => String(day.date).startsWith(billingMonth));
+  const previousCostDays = data.trend.slice(-15, -8);
+  const hasCostComparison =
+    recentCostDays.length === 7 &&
+    previousCostDays.length === 7 &&
+    previousCostDays.every((day) => String(day.date).startsWith(billingMonth));
+  const costSum = (days: Record<string, unknown>[], key: string) =>
+    days.reduce((sum, day) => sum + Number(day[key] || 0), 0);
+  const recentCost = costSum(recentCostDays, "amount");
+  const previousCost = hasCostComparison
+    ? costSum(previousCostDays, "amount")
+    : 0;
+  const costDelta = recentCost - previousCost;
+  const costDriver = hasCostComparison
+    ? ([...KINDS, "eip"] as const)
+        .map((kind) => ({
+          kind,
+          change:
+            costSum(recentCostDays, kind) - costSum(previousCostDays, kind),
+        }))
+        .sort(
+          (left, right) => Math.abs(right.change) - Math.abs(left.change),
+        )[0]
+    : null;
   const projects = data.projects
     .map((project) => {
       const resources = data.resources.filter(
@@ -231,29 +256,49 @@ export default function OverviewPage() {
         {show("insights") && (
           <div className="grid grid-2 overview-insights">
             <Panel
-              title={t("overview.budgetHealth")}
+              title={t("overview.costChange")}
+              hint={t("overview.costChangeScope")}
               action={<Link to="/billing/cost">{t("overview.viewCost")}</Link>}
             >
-              <div className="overview-budget-main">
-                <div>
-                  <small className="muted">{t("overview.budgetUsed")}</small>
-                  <div className="overview-budget-value">
-                    {number(budgetUsed, 1)}%
-                  </div>
-                </div>
-                <div className="overview-budget-total">
-                  <small className="muted">{t("common.budget")}</small>
-                  <strong className="mono">{money(budget)}</strong>
-                </div>
-              </div>
-              <Progress value={budgetUsed} />
-              <div className="overview-budget-details">
+              <div className="overview-cost-main">
                 <div>
                   <small className="muted">
-                    {t("overview.budgetRemaining")}
+                    {t("overview.costPeriod", {
+                      days: recentCostDays.length,
+                    })}
                   </small>
+                  <div className="overview-cost-value">{money(recentCost)}</div>
+                </div>
+                <div className="overview-cost-change">
+                  <small className="muted">{t("overview.costCompared")}</small>
+                  <strong
+                    className={
+                      hasCostComparison && previousCost > 0
+                        ? costDelta > 0
+                          ? "overview-cost-rise"
+                          : costDelta < 0
+                            ? "overview-cost-fall"
+                            : ""
+                        : ""
+                    }
+                  >
+                    {hasCostComparison && previousCost > 0
+                      ? `${costDelta > 0 ? "+" : ""}${number((costDelta / previousCost) * 100, 1)}%`
+                      : "—"}
+                  </strong>
+                  {hasCostComparison && (
+                    <small className="mono muted">
+                      {costDelta > 0 ? "+" : costDelta < 0 ? "−" : ""}
+                      {money(Math.abs(costDelta))}
+                    </small>
+                  )}
+                </div>
+              </div>
+              <div className="overview-cost-details">
+                <div>
+                  <small className="muted">{t("overview.costPrevious")}</small>
                   <strong className="mono">
-                    {money(Math.max(0, budget - data.month))}
+                    {hasCostComparison ? money(previousCost) : "—"}
                   </strong>
                 </div>
                 <div>
@@ -261,6 +306,18 @@ export default function OverviewPage() {
                   <strong className="mono">
                     {money(data.hourly)}
                     {t("common.perHour")}
+                  </strong>
+                </div>
+                <div className="overview-cost-driver">
+                  <small className="muted">{t("overview.costDriver")}</small>
+                  <strong>
+                    {costDriver && Math.abs(costDriver.change) > 0.01
+                      ? `${t(`common.${costDriver.kind}`)} · ${costDriver.change > 0 ? "+" : "−"}${money(Math.abs(costDriver.change))}`
+                      : t(
+                          hasCostComparison
+                            ? "overview.costNoDriver"
+                            : "overview.costNoComparison",
+                        )}
                   </strong>
                 </div>
               </div>

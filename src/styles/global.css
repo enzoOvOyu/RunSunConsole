@@ -752,8 +752,7 @@ tr.clickable {
   padding-bottom: 16px;
 }
 
-.overview-budget-main,
-.overview-budget-details,
+.overview-cost-main,
 .overview-project-row {
   display: flex;
   align-items: center;
@@ -761,32 +760,51 @@ tr.clickable {
   gap: 16px;
 }
 
-.overview-budget-main {
+.overview-cost-main {
   align-items: end;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
-.overview-budget-value {
+.overview-cost-value {
   font-size: 28px;
   font-weight: 700;
   line-height: 1.2;
 }
 
-.overview-budget-total,
-.overview-budget-details > div {
+.overview-cost-change,
+.overview-cost-details > div {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.overview-budget-total {
+.overview-cost-change {
+  align-items: flex-end;
   text-align: right;
 }
 
-.overview-budget-details {
-  margin-top: 16px;
+.overview-cost-change strong {
+  font-size: 19px;
+}
+
+.overview-cost-rise {
+  color: var(--rs-danger);
+}
+
+.overview-cost-fall {
+  color: var(--rs-success);
+}
+
+.overview-cost-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
   padding-top: 14px;
   border-top: 1px solid var(--rs-border);
+}
+
+.overview-cost-details .overview-cost-driver {
+  grid-column: 1 / -1;
 }
 
 .overview-project-heading {

@@ -40,6 +40,15 @@ test("all navigation pages load without runtime errors", async ({ page }) => {
   }
   expect(errors).toEqual([]);
 });
+test("overview highlights recent cost change instead of budget usage", async ({
+  page,
+}) => {
+  await page.goto("/overview");
+  await expect(page.getByText("近 7 日费用变化")).toBeVisible();
+  await expect(page.getByText("主要变化来源")).toBeVisible();
+  await expect(page.getByText("当前每小时费用")).toBeVisible();
+  await expect(page.getByText("预算执行")).toHaveCount(0);
+});
 test("submenu pages describe their own resource and billing functions", async ({
   page,
 }) => {
