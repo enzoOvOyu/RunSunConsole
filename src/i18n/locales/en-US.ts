@@ -30,6 +30,32 @@ export default {
   "nav.pipelines": "Data pipelines",
   "nav.bills": "My bills",
   "nav.vouchers": "Vouchers",
+  "pageDescription.resources.gpu_vm":
+    "Review GPU VM status, specifications and network settings, and manage instance lifecycle.",
+  "pageDescription.resources.gpu_baremetal":
+    "Inspect bare metal clusters, individual machines, allocation and operating status.",
+  "pageDescription.resources.vgpu":
+    "Review GPU clusters, node pools and shared capacity, and manage cluster lifecycle.",
+  "pageDescription.resources.inference":
+    "Review inference deployments, model replicas and service status, and manage runtime settings.",
+  "pageDescription.quotas":
+    "Review regional compute, memory, storage and network quota usage and remaining capacity.",
+  "pageDescription.tickets":
+    "Report resource or platform issues, track ticket status and continue the discussion.",
+  "pageDescription.notebooks":
+    "Create and manage Notebook and IDE sessions on running compute resources.",
+  "pageDescription.images":
+    "Browse deployment models and system images, with filters for modality, license and size.",
+  "pageDescription.apps":
+    "Browse AI application templates, review their resource needs and open the matching deployment flow.",
+  "pageDescription.scaling":
+    "Configure autoscaling rules for compute resources and review policy status and scaling events.",
+  "pageDescription.cost":
+    "Analyze usage charges by project, resource, region or resource type, and manage budgets.",
+  "pageDescription.bills":
+    "Review usage charges, transactions, invoices and account balance by billing period.",
+  "pageDescription.vouchers":
+    "Review voucher value, remaining balance, eligible resources, expiry and redemption status.",
   "common.gpu_vm": "GPU Cloud Server",
   "common.gpu_baremetal": "GPU Bare Metal",
   "common.vgpu": "vGPU",
@@ -114,7 +140,6 @@ export default {
   "common.selected": "{count} selected",
   "common.page": "Page {page}",
   "common.rows": "{count} records",
-  "common.subtitle": "Manage your GPU infrastructure and applications",
   "common.offline": "Connection lost",
   "common.polling": "Polling connected",
   "common.connection": "Connection status",
@@ -432,7 +457,7 @@ export default {
     "Valid range {min}–{max}; controls capacity and maximum cost",
   "project.default": "Default project",
   "project.members": "Members",
-  "project.description": "Organize resources, members and spend by project",
+  "project.description": "Review project resources, member access, quotas and cost allocation",
   "project.resources": "Project resources",
   "project.settings": "Project settings",
   "project.myRole": "My role",

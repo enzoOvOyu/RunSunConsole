@@ -54,6 +54,7 @@ export default function NotebooksPage() {
     <>
       <PageHeader
         title={t("nav.notebooks")}
+        subtitle={t("pageDescription.notebooks")}
         actions={
           <Button
             variant="primary"

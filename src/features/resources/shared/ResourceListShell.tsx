@@ -192,6 +192,7 @@ export function ResourceListShell<K extends Kind>({
             </span>
           </span>
         }
+        subtitle={t(`pageDescription.resources.${kind}`)}
         actions={
           <Button
             variant="primary"

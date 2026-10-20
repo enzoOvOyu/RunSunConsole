@@ -59,7 +59,10 @@ export default function CostPage() {
   }
   return (
     <>
-      <PageHeader title={t("nav.cost")} />
+      <PageHeader
+        title={t("nav.cost")}
+        subtitle={t("pageDescription.cost")}
+      />
       <div className="toolbar">
         <RegionFilter />
         <label className="row">

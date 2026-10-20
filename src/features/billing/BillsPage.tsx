@@ -43,7 +43,10 @@ export default function BillsPage() {
   >(["invoices"], EP.invoices);
   return (
     <>
-      <PageHeader title={t("nav.bills")} />
+      <PageHeader
+        title={t("nav.bills")}
+        subtitle={t("pageDescription.bills")}
+      />
       <div className="toolbar">
         <label className="row">
           {t("billing.period")}

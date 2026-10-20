@@ -46,7 +46,10 @@ export default function ImagesPage() {
     ) || [];
   return (
     <>
-      <PageHeader title={t("nav.images")} />
+      <PageHeader
+        title={t("nav.images")}
+        subtitle={t("pageDescription.images")}
+      />
       <Tabs
         items={["models", "images"].map((id) => ({
           id,

@@ -20,7 +20,10 @@ export default function VouchersPage() {
   const [selected, setSelected] = useState<Voucher | null>(null);
   return (
     <>
-      <PageHeader title={t("nav.vouchers")} />
+      <PageHeader
+        title={t("nav.vouchers")}
+        subtitle={t("pageDescription.vouchers")}
+      />
       {q.isPending ? (
         <Loading />
       ) : q.error ? (

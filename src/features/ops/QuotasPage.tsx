@@ -42,6 +42,7 @@ export default function QuotasPage() {
     <>
       <PageHeader
         title={t("nav.quotas")}
+        subtitle={t("pageDescription.quotas")}
         actions={
           <Button onClick={() => navigate("/ops/tickets?new=quota")}>
             {t("quota.request")}

@@ -91,6 +91,7 @@ export default function ScalingPage() {
     <>
       <PageHeader
         title={t("nav.scaling")}
+        subtitle={t("pageDescription.scaling")}
         actions={
           <Button
             variant="primary"

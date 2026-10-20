@@ -66,6 +66,7 @@ export default function TicketsPage() {
     <>
       <PageHeader
         title={t("nav.tickets")}
+        subtitle={t("pageDescription.tickets")}
         actions={
           <Button
             variant="primary"

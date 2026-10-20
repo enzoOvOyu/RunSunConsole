@@ -29,7 +29,10 @@ export default function AppsPage() {
   const role = useAuth((s) => s.role);
   return (
     <>
-      <PageHeader title={t("nav.apps")} />
+      <PageHeader
+        title={t("nav.apps")}
+        subtitle={t("pageDescription.apps")}
+      />
       {q.isPending ? (
         <Loading />
       ) : q.error ? (

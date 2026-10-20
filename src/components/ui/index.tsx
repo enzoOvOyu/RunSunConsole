@@ -192,7 +192,7 @@ export function PageHeader({
     <header className="page-header">
       <div>
         <h1>{title}</h1>
-        <p>{subtitle || t("common.subtitle")}</p>
+        {subtitle && <p>{subtitle}</p>}
       </div>
       <div className="row">{actions}</div>
     </header>

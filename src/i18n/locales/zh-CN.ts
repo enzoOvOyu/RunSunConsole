@@ -28,6 +28,32 @@ export default {
   "nav.pipelines": "数据预处理",
   "nav.bills": "我的账单",
   "nav.vouchers": "代金券",
+  "pageDescription.resources.gpu_vm":
+    "查看云服务器实例的状态、规格和网络配置，并进行启停与资源管理。",
+  "pageDescription.resources.gpu_baremetal":
+    "按集群查看裸金属设备明细、运行状态和分配情况。",
+  "pageDescription.resources.vgpu":
+    "查看 GPU 集群、节点池和共享资源状态，管理集群生命周期。",
+  "pageDescription.resources.inference":
+    "查看推理服务部署、模型副本与服务状态，管理服务运行配置。",
+  "pageDescription.quotas":
+    "查看当前区域的算力、内存、存储和网络配额用量及可用额度。",
+  "pageDescription.tickets":
+    "提交资源与平台问题，跟踪工单处理状态并补充沟通记录。",
+  "pageDescription.notebooks":
+    "在已运行的计算资源上创建并管理 Notebook 与 IDE 连接。",
+  "pageDescription.images":
+    "浏览可用于部署的模型和系统镜像，按模态、许可与规格筛选。",
+  "pageDescription.apps":
+    "浏览预置 AI 应用模板，查看所需资源并进入对应部署流程。",
+  "pageDescription.scaling":
+    "为计算资源配置自动伸缩规则，查看策略状态和伸缩事件。",
+  "pageDescription.cost":
+    "按项目、资源、区域或资源类型分析用量费用，并设置预算。",
+  "pageDescription.bills":
+    "查看账单用量、交易流水、发票和账户余额，按账期核对费用。",
+  "pageDescription.vouchers":
+    "查看代金券面值、余额、适用范围、有效期与使用状态。",
   "common.gpu_vm": "GPU 云服务器",
   "common.gpu_baremetal": "GPU 裸金属",
   "common.vgpu": "vGPU",
@@ -112,7 +138,6 @@ export default {
   "common.selected": "已选 {count} 项",
   "common.page": "第 {page} 页",
   "common.rows": "共 {count} 条",
-  "common.subtitle": "管理您的 GPU 算力与应用",
   "common.offline": "连接中断",
   "common.polling": "轮询已连接",
   "common.connection": "连接状态",
@@ -421,7 +446,7 @@ export default {
   "scaling.fieldHelp": "合法范围 {min}–{max}；影响可扩展规模与峰值费用",
   "project.default": "默认项目",
   "project.members": "成员",
-  "project.description": "按项目组织资源、成员与费用",
+  "project.description": "查看项目资源、成员权限、配额与费用归属",
   "project.resources": "项目资源",
   "project.settings": "项目设置",
   "project.myRole": "我的角色",

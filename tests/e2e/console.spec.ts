@@ -40,6 +40,30 @@ test("all navigation pages load without runtime errors", async ({ page }) => {
   }
   expect(errors).toEqual([]);
 });
+test("submenu pages describe their own resource and billing functions", async ({
+  page,
+}) => {
+  const pages = [
+    ["resources/servers", "查看云服务器实例的状态、规格和网络配置，并进行启停与资源管理。"],
+    ["resources/baremetal", "按集群查看裸金属设备明细、运行状态和分配情况。"],
+    ["resources/vgpu", "查看 GPU 集群、节点池和共享资源状态，管理集群生命周期。"],
+    ["resources/inference", "查看推理服务部署、模型副本与服务状态，管理服务运行配置。"],
+    ["ops/projects", "查看项目资源、成员权限、配额与费用归属"],
+    ["ops/quotas", "查看当前区域的算力、内存、存储和网络配额用量及可用额度。"],
+    ["ops/tickets", "提交资源与平台问题，跟踪工单处理状态并补充沟通记录。"],
+    ["workbench/notebooks", "在已运行的计算资源上创建并管理 Notebook 与 IDE 连接。"],
+    ["workbench/images", "浏览可用于部署的模型和系统镜像，按模态、许可与规格筛选。"],
+    ["workbench/apps", "浏览预置 AI 应用模板，查看所需资源并进入对应部署流程。"],
+    ["workbench/scaling", "为计算资源配置自动伸缩规则，查看策略状态和伸缩事件。"],
+    ["billing/cost", "按项目、资源、区域或资源类型分析用量费用，并设置预算。"],
+    ["billing/bills", "查看账单用量、交易流水、发票和账户余额，按账期核对费用。"],
+    ["billing/vouchers", "查看代金券面值、余额、适用范围、有效期与使用状态。"],
+  ];
+  for (const [route, description] of pages) {
+    await page.goto(`/${route}`);
+    await expect(page.locator(".page-header p")).toHaveText(description);
+  }
+});
 test("aggregate, locale, theme, commands and responsive navigation", async ({
   page,
 }) => {
