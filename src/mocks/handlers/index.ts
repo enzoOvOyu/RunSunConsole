@@ -99,7 +99,7 @@ const live = () => db.resources.filter((r) => !r.deletedAt);
 const limits: Record<Region, Record<Quota["metric"], number>> = {
   jp: { gpu: 528, vcpu: 8448, memory: 135168, storage: 1_000_000, ip: 24 },
   sg: { gpu: 320, vcpu: 5120, memory: 90112, storage: 500_000, ip: 12 },
-  us: { gpu: 640, vcpu: 10240, memory: 196608, storage: 1_000_000, ip: 32 },
+  us: { gpu: 768, vcpu: 12288, memory: 196608, storage: 1_000_000, ip: 32 },
 };
 const storageLimits: Record<
   Region,

@@ -83,7 +83,7 @@ const supply: Record<Region, Partial<Record<PoolCode, number>>> = {
     H200_NVL: 256,
     B200_NVL72: 144,
     B300: 128,
-    GB300_NVL72: 144,
+    GB300_NVL72: 16 * GPU_SPECS.GB300_NVL72.gpusPerNode,
   },
 };
 export const poolsFor = (region: Region): Pool[] =>
