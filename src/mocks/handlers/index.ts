@@ -113,9 +113,29 @@ const used = (region: Region, metric: Quota["metric"], exclude?: string) =>
             )
         : 0);
 const limits: Record<Region, Record<Quota["metric"], number>> = {
-  jp: { gpu: 528, vcpu: 8448, memory: 135168, storage: 30720, ip: 24 },
-  sg: { gpu: 320, vcpu: 5120, memory: 90112, storage: 16384, ip: 12 },
-  us: { gpu: 640, vcpu: 10240, memory: 196608, storage: 32768, ip: 32 },
+  jp: { gpu: 528, vcpu: 8448, memory: 135168, storage: 1_000_000, ip: 24 },
+  sg: { gpu: 320, vcpu: 5120, memory: 90112, storage: 500_000, ip: 12 },
+  us: { gpu: 640, vcpu: 10240, memory: 196608, storage: 1_000_000, ip: 32 },
+};
+const storageQuotas: Record<
+  Region,
+  { kind: "block" | "file" | "object"; usedGb: number; limitGb: number }[]
+> = {
+  jp: [
+    { kind: "block", usedGb: 360_000, limitGb: 450_000 },
+    { kind: "file", usedGb: 280_000, limitGb: 350_000 },
+    { kind: "object", usedGb: 160_000, limitGb: 200_000 },
+  ],
+  sg: [
+    { kind: "block", usedGb: 180_000, limitGb: 225_000 },
+    { kind: "file", usedGb: 140_000, limitGb: 175_000 },
+    { kind: "object", usedGb: 80_000, limitGb: 100_000 },
+  ],
+  us: [
+    { kind: "block", usedGb: 360_000, limitGb: 450_000 },
+    { kind: "file", usedGb: 260_000, limitGb: 325_000 },
+    { kind: "object", usedGb: 180_000, limitGb: 225_000 },
+  ],
 };
 const networkLimits = {
   jp: { vpc: 30, subnet: 150, security_group: 150, tunnel: 30 },
@@ -151,6 +171,9 @@ export const quotas = (): Quota[] =>
       metric,
       limitValue: limits[region][metric],
       usedValue: used(region, metric),
+      ...(metric === "storage"
+        ? { storageBreakdown: storageQuotas[region] }
+        : {}),
     })),
   );
 const period = (u: Usage, p: string) => u.usageHour.startsWith(p);

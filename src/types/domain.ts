@@ -284,6 +284,11 @@ export interface Quota {
   metric: (typeof QUOTA_METRICS)[number];
   limitValue: number;
   usedValue: number;
+  storageBreakdown?: {
+    kind: "block" | "file" | "object";
+    usedGb: number;
+    limitGb: number;
+  }[];
 }
 export interface ScalingPolicy {
   id: string;

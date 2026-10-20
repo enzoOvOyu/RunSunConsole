@@ -59,8 +59,24 @@ it("distributes allocations by region and type with comparable GPU totals and ty
 it("computes host RAM from VM, physical machine, node pool and replica allocations", async () => {
   const quotas = (await request("/quotas")).data;
   expect(quotas).toHaveLength(REGIONS.length * QUOTA_METRICS.length);
+  let allocatedStorageGb = 0;
   for (const region of REGIONS) {
     const rows = db.resources.filter((r) => r.region === region);
+    const storage = quotas.find(
+      (q: { region: string; metric: string }) =>
+        q.region === region && q.metric === "storage",
+    );
+    expect(storage.storageBreakdown.map((item: { kind: string }) => item.kind)).toEqual([
+      "block",
+      "file",
+      "object",
+    ]);
+    const regionStorageGb = storage.storageBreakdown.reduce(
+      (sum: number, item: { usedGb: number }) => sum + item.usedGb,
+      0,
+    );
+    expect(regionStorageGb).toBeGreaterThan(storage.usedValue);
+    allocatedStorageGb += regionStorageGb;
     const memory = quotas.find(
       (q: { region: string; metric: string }) =>
         q.region === region && q.metric === "memory",
@@ -73,6 +89,7 @@ it("computes host RAM from VM, physical machine, node pool and replica allocatio
     );
     expect(memory.limitValue).toBeGreaterThanOrEqual(memory.usedValue);
   }
+  expect(allocatedStorageGb).toBe(2_000_000);
   for (const r of db.resources) {
     if (r.kind === "gpu_baremetal")
       expect(allocatedMemoryGb(r)).toBe(r.spec.memoryGb * r.spec.machineCount);

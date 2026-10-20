@@ -62,15 +62,34 @@ export default function QuotasPage() {
         <div className="grid grid-4">
           {q.data
             ?.filter((quota) => quota.metric !== "ip")
-            .map((quota) => (
-              <Panel key={quota.metric} title={t("quota." + quota.metric)}>
-                <div className="stat-value">
-                  {number(quota.usedValue)}
-                  <small> / {number(quota.limitValue)}</small>
-                </div>
-                <Progress value={(quota.usedValue / quota.limitValue) * 100} />
-              </Panel>
-            ))}
+            .flatMap((quota) =>
+              quota.metric === "storage"
+                ? (quota.storageBreakdown || []).map((storage) => (
+                    <Panel
+                      key={`storage-${storage.kind}`}
+                      title={t(`quota.storage.${storage.kind}`)}
+                    >
+                      <div className="stat-value">
+                        {number(storage.usedGb / 1000)}
+                        <small> / {number(storage.limitGb / 1000)} TB</small>
+                      </div>
+                      <Progress
+                        value={(storage.usedGb / storage.limitGb) * 100}
+                      />
+                    </Panel>
+                  ))
+                : [
+                    <Panel key={quota.metric} title={t("quota." + quota.metric)}>
+                      <div className="stat-value">
+                        {number(quota.usedValue)}
+                        <small> / {number(quota.limitValue)}</small>
+                      </div>
+                      <Progress
+                        value={(quota.usedValue / quota.limitValue) * 100}
+                      />
+                    </Panel>,
+                  ],
+            )}
         </div>
       )}
       <NetworkQuotas region={region} />

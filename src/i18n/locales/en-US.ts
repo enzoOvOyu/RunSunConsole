@@ -217,6 +217,9 @@ export default {
   "quota.gpu": "GPUs",
   "quota.vcpu": "vCPU",
   "quota.storage": "Cloud storage · GB",
+  "quota.storage.block": "Block storage · TB",
+  "quota.storage.file": "File storage · TB",
+  "quota.storage.object": "Object storage · TB",
   "quota.ip": "Public IPs",
   "quota.allocated": "Allocated physical resources",
   "quota.note":

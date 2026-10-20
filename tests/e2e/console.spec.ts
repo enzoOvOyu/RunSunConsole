@@ -704,6 +704,16 @@ test("network allocations update regional quotas and prefill a quota request", a
   page,
 }) => {
   await page.goto("/ops/quotas?region=jp");
+  for (const [kind, value] of [
+    ["块存储 · TB", "360 / 450 TB"],
+    ["文件存储 · TB", "280 / 350 TB"],
+    ["对象存储 · TB", "160 / 200 TB"],
+  ]) {
+    const card = page.locator(".grid-4 .panel").filter({
+      has: page.getByRole("heading", { name: kind, exact: true }),
+    });
+    await expect(card).toContainText(value);
+  }
   const panel = page.locator(".panel").filter({
     has: page.getByRole("heading", { name: "网络资源配额", exact: true }),
   });
