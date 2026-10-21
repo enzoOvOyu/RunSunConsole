@@ -252,6 +252,7 @@ export default {
     "Sorted by spend over the last 30 days; resources and GPUs reflect current unreleased allocations.",
   "overview.projectResources": "{count} resources",
   "overview.viewProjects": "View all projects →",
+  "overview.viewCost": "Cost analysis →",
   "overview.noProjects": "No projects yet",
   "overview.metrics": "Key metrics",
   "overview.allocated": "Allocated GPUs",

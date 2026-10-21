@@ -247,6 +247,7 @@ export default {
     "按近 30 日费用排序；资源数与 GPU 卡数为当前未释放资源。",
   "overview.projectResources": "{count} 项资源",
   "overview.viewProjects": "查看全部项目 →",
+  "overview.viewCost": "查看成本分析 →",
   "overview.noProjects": "暂无项目",
   "overview.metrics": "关键指标",
   "overview.allocated": "已分配 GPU 总卡数",
