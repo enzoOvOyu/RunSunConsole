@@ -129,6 +129,10 @@
 }
 
 .overview-total-chart-center span {
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--rs-text-muted);
   font-size: var(--rs-fs-xs);
   font-weight: 600;
@@ -151,6 +155,10 @@
   gap: 12px;
   padding: 12px 0;
   border-bottom: 1px solid var(--rs-border);
+}
+
+.overview-region-row[data-active="true"] {
+  background: var(--rs-surface-2);
 }
 
 .overview-region-row:last-child {
@@ -304,16 +312,199 @@
 }
 
 .overview-operations .overview-health-list {
-  display: flex;
+  display: grid;
   flex: 1;
-  flex-direction: column;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
-.overview-operations .overview-health-row {
+.overview-health-tile {
+  display: grid;
+  min-width: 0;
+  align-content: space-between;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--rs-border);
+  border-radius: var(--rs-r-md);
+  background: var(--rs-surface);
+}
+
+.overview-health-tile-heading,
+.overview-spend-name {
   display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  color: var(--rs-text);
+  font-size: var(--rs-fs-sm);
+}
+
+.overview-health-tile-heading strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overview-health-icon {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  place-items: center;
+  border: 1px solid var(--rs-border);
+  border-radius: var(--rs-r-sm);
+  background: var(--rs-bg);
+}
+
+.overview-health-metric {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.overview-health-metric > strong {
+  color: var(--rs-text);
+  font-size: 25px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.overview-health-metric > span {
+  min-width: 0;
+  color: var(--rs-text-secondary);
+  font-size: var(--rs-fs-xs);
+}
+
+.overview-health-caption {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--rs-text-secondary);
+  font-size: var(--rs-fs-xs);
+}
+
+.overview-health-stopped {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.overview-health-metric > small {
+  margin-left: auto;
+  color: var(--rs-success);
+  font-size: var(--rs-fs-xs);
+  font-weight: 600;
+}
+
+.overview-health-tile .overview-health-track {
+  margin: 0;
+}
+
+.overview-health-tile .overview-health-statuses {
+  font-size: var(--rs-fs-xs);
+}
+
+.overview-spend-layout {
+  display: grid;
   flex: 1;
-  flex-direction: column;
-  justify-content: center;
+  grid-template-columns: 210px minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+}
+
+.overview-spend-donut {
+  position: relative;
+  width: 210px;
+  height: 210px;
+}
+
+.overview-spend-donut-center {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.overview-spend-donut-center span {
+  color: var(--rs-text-secondary);
+  font-size: var(--rs-fs-xs);
+}
+
+.overview-spend-donut-center strong {
+  max-width: 126px;
+  overflow: hidden;
+  color: var(--rs-text);
+  font-size: 14px;
+  letter-spacing: -0.04em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.overview-spend-list {
+  display: grid;
+  min-width: 0;
+}
+
+.overview-spend-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 42px;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--rs-border);
+  font-size: var(--rs-fs-sm);
+}
+
+.overview-spend-item[data-active="true"] {
+  background: var(--rs-surface-2);
+}
+
+.overview-spend-item:last-child {
+  border-bottom: 0;
+}
+
+.overview-spend-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overview-spend-name i {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+}
+
+.overview-spend-item strong,
+.overview-spend-item small {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.overview-distribution .distribution-cell {
+  width: 100%;
+  max-width: 190px;
+}
+
+.overview-distribution-track {
+  width: 100%;
+  height: 5px;
+  overflow: hidden;
+  border-radius: var(--rs-r-pill);
+  background: var(--rs-surface-2);
+}
+
+.overview-distribution-track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
 }
 
 .overview-insights > .overview-panel > [data-slot="card-content"] {
@@ -426,6 +617,22 @@
   font-size: var(--rs-fs-sm);
 }
 
+@media (width <= 1350px) {
+  .overview-operations {
+    grid-template-columns: 1fr;
+  }
+
+  .overview-operations .overview-health-list {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (width <= 1100px) {
+  .overview-operations .overview-health-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (width <= 1200px) {
   .overview-gpu-overview-content {
     gap: 12px;
@@ -460,6 +667,15 @@
 }
 
 @media (width <= 720px) {
+  .overview-spend-layout {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+
+  .overview-spend-list {
+    width: 100%;
+  }
+
   .overview-quota-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

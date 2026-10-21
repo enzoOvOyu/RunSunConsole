@@ -175,6 +175,10 @@ export default function OverviewPage() {
   const [custom, setCustom] = useState(false);
   const [grouping, setGrouping] = useState("total");
   const [expandedAlerts, setExpandedAlerts] = useState(false);
+  const [hoveredGpuRegion, setHoveredGpuRegion] = useState<Region | null>(null);
+  const [hoveredSpendKind, setHoveredSpendKind] = useState<
+    (typeof KINDS)[number] | "eip" | null
+  >(null);
   const role = useAuth((s) => s.role);
   const navigate = useNavigate();
   if (q.isPending) return <Loading />;
@@ -267,6 +271,11 @@ export default function OverviewPage() {
     .filter((row) => row.amount > 0)
     .sort((a, b) => b.amount - a.amount);
   const spendTotal = spendMix.reduce((total, row) => total + row.amount, 0);
+  const hoveredSpend = spendMix.find((item) => item.kind === hoveredSpendKind);
+  const largestDistributionCell = Math.max(
+    1,
+    ...data.distribution.map((cell) => cell.gpuCount),
+  );
   const recentResources = data.resources
     .slice()
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
@@ -362,6 +371,10 @@ export default function OverviewPage() {
                     paddingAngle={gpuRegionTotal ? 3 : 0}
                     stroke="none"
                     isAnimationActive={false}
+                    onMouseEnter={(_, index) =>
+                      setHoveredGpuRegion(REGIONS[index] ?? null)
+                    }
+                    onMouseLeave={() => setHoveredGpuRegion(null)}
                   >
                     {gpuRegionTotal ? (
                       gpuRegionChartData.map(({ region }) => (
@@ -374,31 +387,28 @@ export default function OverviewPage() {
                       <Cell fill="var(--rs-border)" />
                     )}
                   </Pie>
-                  {gpuRegionTotal > 0 && (
-                    <Tooltip
-                      contentStyle={{
-                        background: "var(--rs-bg)",
-                        border: "1px solid var(--rs-border)",
-                        borderRadius: 8,
-                      }}
-                      formatter={(value, name) => [
-                        t("overview.gpuCards", {
-                          count: number(Number(value)),
-                        }),
-                        String(name),
-                      ]}
-                    />
-                  )}
                 </PieChart>
               </ResponsiveContainer>
               <div className="overview-total-chart-center" aria-hidden="true">
-                <strong>{number(data.allocated)}</strong>
-                <span>GPU</span>
+                <strong>
+                  {number(
+                    hoveredGpuRegion
+                      ? gpuRegionTotals[hoveredGpuRegion]
+                      : data.allocated,
+                  )}
+                </strong>
+                <span>
+                  {hoveredGpuRegion ? t(`common.${hoveredGpuRegion}`) : "GPU"}
+                </span>
               </div>
             </div>
             <div className="overview-region-breakdown">
               {REGIONS.map((region) => (
-                <div className="overview-region-row" key={region}>
+                <div
+                  className="overview-region-row"
+                  data-active={hoveredGpuRegion === region}
+                  key={region}
+                >
                   <span className="overview-region-name">
                     <i className={`overview-gpu-key region-${region}`} />
                     {t(`common.${region}`)}
@@ -677,21 +687,41 @@ export default function OverviewPage() {
                   {health.map((item) => {
                     const Icon = KIND_META[item.kind].icon;
                     return (
-                      <div className="overview-health-row" key={item.kind}>
-                        <div className="between">
-                          <span className="row">
-                            <Icon
-                              size={16}
-                              style={{ color: KIND_META[item.kind].color }}
-                            />
-                            <strong>{t("common." + item.kind)}</strong>
+                      <div className="overview-health-tile" key={item.kind}>
+                        <div className="overview-health-tile-heading">
+                          <span
+                            className="overview-health-icon"
+                            style={{ color: KIND_META[item.kind].color }}
+                          >
+                            <Icon size={17} aria-hidden="true" />
                           </span>
-                          <span className="mono">
-                            {t("overview.healthCount", {
-                              running: number(item.counts.running),
-                              total: number(item.total),
-                            })}
-                          </span>
+                          <strong>{t("common." + item.kind)}</strong>
+                        </div>
+                        <div className="overview-health-metric">
+                          <strong>{number(item.counts.running)}</strong>
+                          <span>/ {number(item.total)}</span>
+                          <small className="mono">
+                            {number(
+                              item.total
+                                ? (item.counts.running / item.total) * 100
+                                : 0,
+                              1,
+                            )}
+                            %
+                          </small>
+                        </div>
+                        <div className="overview-health-caption">
+                          <span>{t("common.running")}</span>
+                          {item.counts.stopped > 0 && (
+                            <span className="overview-health-stopped">
+                              <i
+                                className="overview-status-dot"
+                                style={{ background: statusColors.stopped }}
+                              />
+                              {t("common.stopped")}{" "}
+                              {number(item.counts.stopped)}
+                            </span>
+                          )}
                         </div>
                         <div
                           className="overview-health-track"
@@ -709,21 +739,31 @@ export default function OverviewPage() {
                             ) : null,
                           )}
                         </div>
-                        <div className="overview-health-statuses">
-                          {resourceStatuses.map((status) =>
-                            item.counts[status] ? (
-                              <small key={status}>
-                                <span
-                                  className="overview-status-dot"
-                                  style={{ background: statusColors[status] }}
-                                />
-                                {t("common." + status)}{" "}
-                                {number(item.counts[status])}
-                              </small>
-                            ) : null,
-                          )}
-                          {!item.total && <small className="muted">—</small>}
-                        </div>
+                        {resourceStatuses.some(
+                          (status) =>
+                            status !== "running" &&
+                            status !== "stopped" &&
+                            item.counts[status] > 0,
+                        ) && (
+                          <div className="overview-health-statuses">
+                            {resourceStatuses
+                              .filter(
+                                (status) =>
+                                  status !== "running" &&
+                                  item.counts[status] > 0,
+                              )
+                              .map((status) => (
+                                <small key={status}>
+                                  <span
+                                    className="overview-status-dot"
+                                    style={{ background: statusColors[status] }}
+                                  />
+                                  {t("common." + status)}{" "}
+                                  {number(item.counts[status])}
+                                </small>
+                              ))}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -740,29 +780,84 @@ export default function OverviewPage() {
                 }
               >
                 {spendTotal > 0 ? (
-                  <div className="overview-spend-list">
-                    {spendMix.map((item) => (
-                      <div className="overview-spend-row" key={item.kind}>
-                        <div className="between">
-                          <span>{t("common." + item.kind)}</span>
-                          <strong className="mono">{money(item.amount)}</strong>
-                        </div>
-                        <div className="overview-spend-track">
-                          <span
-                            style={{
-                              width: `${(item.amount / spendTotal) * 100}%`,
-                              background:
-                                item.kind === "eip"
-                                  ? "var(--rs-info)"
-                                  : KIND_META[item.kind].color,
-                            }}
-                          />
-                        </div>
-                        <small className="muted mono">
-                          {number((item.amount / spendTotal) * 100, 1)}%
-                        </small>
+                  <div className="overview-spend-layout">
+                    <div
+                      className="overview-spend-donut"
+                      role="img"
+                      aria-label={
+                        t("overview.spendMix") + " " + money(spendTotal)
+                      }
+                    >
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={spendMix}
+                            dataKey="amount"
+                            nameKey="kind"
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={68}
+                            outerRadius={88}
+                            paddingAngle={2}
+                            stroke="none"
+                            isAnimationActive={false}
+                            onMouseEnter={(_, index) =>
+                              setHoveredSpendKind(spendMix[index]?.kind ?? null)
+                            }
+                            onMouseLeave={() => setHoveredSpendKind(null)}
+                          >
+                            {spendMix.map((item) => (
+                              <Cell
+                                key={item.kind}
+                                fill={
+                                  item.kind === "eip"
+                                    ? "var(--rs-info)"
+                                    : KIND_META[item.kind].color
+                                }
+                              />
+                            ))}
+                          </Pie>
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div
+                        className="overview-spend-donut-center"
+                        aria-hidden="true"
+                      >
+                        <span>
+                          {hoveredSpend
+                            ? t("common." + hoveredSpend.kind)
+                            : t("common.total")}
+                        </span>
+                        <strong>
+                          {money(hoveredSpend?.amount ?? spendTotal)}
+                        </strong>
                       </div>
-                    ))}
+                    </div>
+                    <div className="overview-spend-list">
+                      {spendMix.map((item) => (
+                        <div
+                          className="overview-spend-item"
+                          data-active={hoveredSpendKind === item.kind}
+                          key={item.kind}
+                        >
+                          <span className="overview-spend-name">
+                            <i
+                              style={{
+                                background:
+                                  item.kind === "eip"
+                                    ? "var(--rs-info)"
+                                    : KIND_META[item.kind].color,
+                              }}
+                            />
+                            {t("common." + item.kind)}
+                          </span>
+                          <strong className="mono">{money(item.amount)}</strong>
+                          <small className="mono muted">
+                            {number((item.amount / spendTotal) * 100, 1)}%
+                          </small>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ) : (
                   <Empty text={t("overview.noSpend")} />
@@ -823,6 +918,17 @@ export default function OverviewPage() {
                                   <strong className="mono">
                                     {number(cell.gpuCount)} <small>GPU</small>
                                   </strong>
+                                  <span
+                                    className="overview-distribution-track"
+                                    aria-hidden="true"
+                                  >
+                                    <span
+                                      style={{
+                                        width: `${(cell.gpuCount / largestDistributionCell) * 100}%`,
+                                        background: KIND_META[kind].color,
+                                      }}
+                                    />
+                                  </span>
                                   <small>
                                     {t("overview.units." + kind, {
                                       count: number(cell.unitCount),
