@@ -1,7 +1,7 @@
 import { useUrlState } from "../shared/useUrlState";
 import { confirmAction } from "../../components/ui/ConfirmAction";
 import { useState, lazy, Suspense } from "react";
-import { useNavigate, useParams, Link } from "react-router-dom";
+import { useNavigate, useParams, Link, useSearchParams } from "react-router-dom";
 import { Folder, Plus } from "lucide-react";
 import {
   KINDS,
@@ -11,10 +11,12 @@ import {
   type Resource,
   type Quota,
   type Role,
+  type Region,
 } from "../../types/domain";
 import { useAuth } from "../../stores/auth";
+import { useRegion } from "../../stores/region";
 import { canWrite, canManageOrg } from "../../lib/rbac";
-import { EP, post, patch, remove } from "../../lib/api-client";
+import { EP, post, patch, remove, query } from "../../lib/api-client";
 import { KIND_META, resourceLink } from "../../lib/ids";
 import { date } from "../../lib/date";
 import { useAction, useData } from "../shared/hooks";
@@ -45,9 +47,16 @@ interface ProjectSummary extends Project {
   costTrend7d: Record<string, unknown>[];
 }
 export default function ProjectsPage() {
-  const q = useData<Project[]>(["projects"], EP.projects);
+  const [params, setParams] = useSearchParams();
+  const region = useRegion((state) => state.region);
+  const setRegion = useRegion((state) => state.setRegion);
+  const q = useData<Project[]>(
+    ["projects", region],
+    EP.projects + query({ region }),
+  );
   const [newOpen, setNewOpen] = useState(false);
   const [name, setName] = useState("");
+  const [projectRegion, setProjectRegion] = useState<Region>(region);
   const [search, setSearch] = useUrlState("q");
   const { run, busy } = useAction();
   const role = useAuth((s) => s.role);
@@ -60,7 +69,10 @@ export default function ProjectsPage() {
           <Button
             variant="primary"
             disabled={!canWrite(role)}
-            onClick={() => setNewOpen(true)}
+            onClick={() => {
+              setProjectRegion(region);
+              setNewOpen(true);
+            }}
           >
             <Plus size={14} />
             {t("common.create")}
@@ -68,7 +80,7 @@ export default function ProjectsPage() {
         }
       />
       <div className="toolbar">
-        <RegionFilter org />
+        <RegionFilter />
         <input
           className="input search"
           placeholder={t("common.search")}
@@ -106,16 +118,37 @@ export default function ProjectsPage() {
               onChange={(e) => setName(e.target.value)}
             />
           </Field>
+          <Field label={t("project.defaultRegion")}>
+            <select
+              value={projectRegion}
+              onChange={(e) => setProjectRegion(e.target.value as Region)}
+            >
+              {REGIONS.map((availableRegion) => (
+                <option key={availableRegion} value={availableRegion}>
+                  {t("common." + availableRegion)}
+                </option>
+              ))}
+            </select>
+          </Field>
           <Button
             disabled={name.length < 2 || busy}
             onClick={async () => {
               const result = await run(
-                () => post<Project>(EP.projects, { name }),
+                () =>
+                  post<Project>(EP.projects, {
+                    name,
+                    defaultRegion: projectRegion,
+                  }),
                 "success.created",
               );
               if (result) {
+                setRegion(projectRegion);
+                const next = new URLSearchParams(params);
+                next.set("region", projectRegion);
+                setParams(next, { replace: true });
                 setNewOpen(false);
                 setName("");
+                setProjectRegion(projectRegion);
               }
             }}
           >
@@ -138,6 +171,10 @@ function ProjectCard({ project: p }: { project: Project }) {
         <Folder size={24} color="var(--rs-brand)" />
         <div>
           <strong>{dt(p.name)}</strong>
+          <div>
+            <small>{t("project.id")}: </small>
+            <small className="mono">{p.id}</small>
+          </div>
           <div>
             <small className="mono">{p.slug}</small>{" "}
             {p.isDefault && (
@@ -310,6 +347,7 @@ export function ProjectDetail() {
             <Panel title={t("project.profile")}>
               <dl className="project-detail-profile">
                 {[
+                  [t("project.id"), p.id],
                   [t("project.slug"), p.slug],
                   [t("project.defaultRegion"), t("common." + p.defaultRegion)],
                   [t("common.createdAt"), date(p.createdAt)],

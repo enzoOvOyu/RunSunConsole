@@ -31,7 +31,7 @@ The animations show the current preview UI and representative interactions. They
 ## Stable v1.0 scope
 
 - **Overview:** derived GPU totals and regional allocation, model availability, project spend, resource status, quota use, cost trend, recent deployments and activity.
-- **Deployment and resources:** dedicated wizards and lifecycle pages for GPU cloud servers, GPU bare metal, vGPU clusters and inference services.
+- **Deployment and resources:** dedicated wizards and lifecycle pages for GPU cloud servers, GPU bare metal, Kubernetes clusters and inference services.
 - **Workbench:** notebooks, images and model catalog, application templates and scaling policies. Model cards show publisher, model reference, parameter/context details, modality, license and deployment entry points.
 - **Network and storage:** regional VPCs/subnets, public IPs, security groups and IPsec tunnels; block, file and object storage with lifecycle management.
 - **Projects and billing:** project ownership, regional quotas, support tickets, cost analysis, bills and vouchers.
@@ -63,13 +63,13 @@ The animations show the current preview UI and representative interactions. They
 
 - **Role-aware shell** — shared navigation, command palette (`cmdk`) and locale stores (English / Chinese).
 - **Aggregate overview** — spend grouped by project or resource kind; comparable summary cards.
-- **Four resource kinds** — server instances, bare metal clusters, vGPU clusters, inference services,
+- **Four resource kinds** — server instances, bare metal clusters, Kubernetes clusters, inference services,
   each with type-specific lists, Drawers, filters and specification fields.
 - **Deployment & lifecycle** — four deployment wizards, lifecycle actions and scaling integration.
 - **Projects & Support** — projects, quotas and support tickets. **Workbench** — notebooks, image/model
   catalog, app templates and scaling policies. **Storage** — block, file and object storage. **Billing** —
   cost analysis, bills and vouchers.
-- **Runtime diagnostics** — per-machine hardware health (ECC, PCIe, IB, NVMe, power, cooling), vGPU
+- **Runtime diagnostics** — per-machine hardware health (ECC, PCIe, IB, NVMe, power, cooling), Kubernetes cluster
   node/workload diagnostics, inference replica counters and restarts.
 - **Inference governance** — weighted stable/canary releases, QPS limits, request timeouts, change review
   before save, persisted settings and audit events.
@@ -224,7 +224,7 @@ build pass. Entry JavaScript remains below the 250 KB budget.
 <details>
 <summary><strong>M4 — Diagnostics & billing consistency</strong></summary>
 
-Adds per-machine hardware health (ECC, PCIe, IB, NVMe, power and cooling), scoped vGPU
+Adds per-machine hardware health (ECC, PCIe, IB, NVMe, power and cooling), scoped Kubernetes cluster
 nodes/workloads/control-plane diagnostics, inference replica counters and restart actions, deterministic
 monitoring samples, deployment options from the API, password authentication with credentials excluded
 from persisted state, and idempotent order submission. Metering combines pools by billing unit, retains
@@ -259,7 +259,7 @@ ESLint, Stylelint and production build pass; entry JavaScript remains below 250 
 Follows the updated overview requirements: four comparable summary cards, a region-by-type allocation
 matrix with type-specific machine/cluster/replica quantities, and no independent region summary. Host RAM
 quotas derive from assigned VM memory, physical machines, node pools and inference allocations; cloud
-storage remains separate. Peak scaling preflight includes RAM. VM disk and vGPU PVC sizes are normalized
+storage remains separate. Peak scaling preflight includes RAM. VM disk and Kubernetes cluster PVC sizes are normalized
 when restoring existing Mock state, preserving saved resources, projects and historical billing.
 
 Bare metal Drawers now include every physical machine, cluster RAM/NVMe totals, and selected-machine
@@ -304,7 +304,7 @@ screenshots were inspected for network details and the expanded quota page.
 
 The fresh Mock catalog now contains 41 logical resources across all four regions and all four resource
 kinds while deriving allocated GPU totals from current resource rows. Server instances cover 1/2/4/8 GPU shapes, bare
-metal clusters vary by machine and RAID configuration, vGPU clusters vary by slicing and control-plane
+metal clusters vary by machine and RAID configuration, Kubernetes clusters vary by slicing and control-plane
 tier, and inference services vary by model, engine and quantization. Resource lists show the relevant
 specification fields and offer type-specific filters. Existing browser-saved Mock state remains intact;
 the expanded seed applies to a fresh browser state.

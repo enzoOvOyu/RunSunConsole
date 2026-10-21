@@ -621,11 +621,6 @@ tbody tr.clickable:focus-visible {
 }
 
 .dialog {
-  position: fixed;
-  z-index: 91;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
   width: min(520px, calc(100vw - 32px));
   max-height: 90vh;
   overflow: auto;

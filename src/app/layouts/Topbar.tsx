@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Search,
-  Plus,
   Bell,
   HelpCircle,
   Sun,
@@ -13,9 +12,8 @@ import {
 import { useAuth } from "../../stores/auth";
 import { useLocale } from "../../stores/locale";
 import { useTheme } from "../../stores/theme";
-import { ROLES, KINDS, type Account, type Resource } from "../../types/domain";
-import { KIND_META, resourceLink } from "../../lib/ids";
-import { canWrite } from "../../lib/rbac";
+import { ROLES, type Account, type Resource } from "../../types/domain";
+import { resourceLink } from "../../lib/ids";
 import { Button, Modal } from "../../components/ui";
 import { buildGroups } from "./navModel";
 import { t } from "../../i18n";
@@ -69,16 +67,6 @@ export function Topbar({
         <span className={styles.breadcrumb}>{item?.label()}</span>
       </div>
       <div className={styles.topRight}>
-        <Button
-          className={`${styles.newButton} ${styles.optional}`}
-          variant="primary"
-          disabled={!canWrite(role)}
-          onClick={() => toggleMenu("new")}
-        >
-          <Plus size={14} />
-          {t("header.new")}
-          <ChevronDown size={12} />
-        </Button>
         <Button
           variant="ghost"
           className="icon-btn"
@@ -136,27 +124,6 @@ export function Topbar({
           <ChevronDown size={12} />
         </Button>
       </div>
-      {menu === "new" && (
-        <div className={styles.dropdown}>
-          <div className="stack">
-            {KINDS.map((kind) => {
-              const Icon = KIND_META[kind].icon;
-              return (
-                <Button
-                  key={kind}
-                  onClick={() => {
-                    navigate(`/deployment/${KIND_META[kind].deployKey}`);
-                    setMenu("");
-                  }}
-                >
-                  <Icon size={16} style={{ color: KIND_META[kind].color }} />
-                  {t(`common.${kind}`)}
-                </Button>
-              );
-            })}
-          </div>
-        </div>
-      )}
       <Modal
         open={menu === "account"}
         onClose={() => setMenu("")}

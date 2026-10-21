@@ -2246,6 +2246,9 @@ async function dispatch(request: Request) {
       return json(
         db.projects
           .filter((p) => !p.deletedAt || qs.get("includeDeleted") === "true")
+          .filter(
+            (p) => !qs.get("region") || p.defaultRegion === qs.get("region"),
+          )
           .map((p) => ({
             ...p,
             resourceCount: live().filter((r) => r.projectId === p.id).length,
@@ -2267,7 +2270,10 @@ async function dispatch(request: Request) {
         name,
         slug,
         isDefault: false,
-        defaultRegion: "jp",
+        defaultRegion:
+          body.defaultRegion === undefined
+            ? "jp"
+            : z.enum(REGIONS).parse(body.defaultRegion),
         labels: [],
         createdAt: new Date().toISOString(),
         members: [{ userId: "enzoOvOyu", name: "enzoOvOyu", role }],

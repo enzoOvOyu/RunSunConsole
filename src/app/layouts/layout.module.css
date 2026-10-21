@@ -173,11 +173,6 @@
   color: var(--rs-text-secondary);
 }
 
-.topbar .newButton {
-  font-size: var(--rs-fs-sm);
-  min-height: 30px;
-}
-
 .statusbar {
   height: 40px;
   padding: 0 24px;
@@ -227,19 +222,6 @@
   place-items: center;
   font-size: var(--rs-fs-xs);
   font-weight: 600;
-}
-
-.dropdown {
-  position: absolute;
-  top: 48px;
-  right: 16px;
-  z-index: 60;
-  width: 290px;
-  padding: 16px;
-  box-shadow: var(--rs-shadow-md);
-  background: var(--rs-bg);
-  border: 1px solid var(--rs-border);
-  border-radius: 10px;
 }
 
 .topbar .menuButton {
@@ -323,10 +305,6 @@
 
   .breadcrumb {
     display: none;
-  }
-
-  .dropdown {
-    right: 10px;
   }
 }
 

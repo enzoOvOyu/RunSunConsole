@@ -239,9 +239,17 @@ it("creates projects, updates names and blocks deletion while referenced", async
   const result = await request("/projects", "POST", {
     name: "Evaluation Project",
     slug: "evaluation",
+    defaultRegion: "sg",
   });
   expect(result.status).toBe(201);
+  expect(result.data.defaultRegion).toBe("sg");
   const id = result.data.id;
+  const singaporeProjects = (await request("/projects?region=sg")).data;
+  const japanProjects = (await request("/projects?region=jp")).data;
+  expect(
+    singaporeProjects.map((project: { id: string }) => project.id),
+  ).toContain(id);
+  expect(japanProjects.map((project: { id: string }) => project.id)).not.toContain(id);
   expect(
     (await request("/projects/" + id, "PATCH", { name: "Evaluation Updated" }))
       .data.name,

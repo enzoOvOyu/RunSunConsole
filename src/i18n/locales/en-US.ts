@@ -35,7 +35,7 @@ export default {
   "pageDescription.resources.gpu_baremetal":
     "Inspect bare metal clusters, individual machines, allocation and operating status.",
   "pageDescription.resources.vgpu":
-    "Review GPU clusters, node pools and shared capacity, and manage cluster lifecycle.",
+    "Review Kubernetes cluster GPU node pools, Pods and runtime status, and manage cluster lifecycle.",
   "pageDescription.resources.inference":
     "Review inference deployments, model replicas and service status, and manage runtime settings.",
   "pageDescription.quotas":
@@ -58,7 +58,7 @@ export default {
     "Review voucher value, remaining balance, eligible resources, expiry and redemption status.",
   "common.gpu_vm": "GPU Cloud Server",
   "common.gpu_baremetal": "GPU Bare Metal",
-  "common.vgpu": "vGPU",
+  "common.vgpu": "Kubernetes Cluster",
   "common.inference": "Inference Service",
   "common.jp": "Japan",
   "common.sg": "Singapore",
@@ -458,7 +458,7 @@ export default {
   "scaling.gpu_baremetal":
     "Scale whole machines. Provisioning takes 5–30 minutes. Retain at least one homogeneous machine with a 10–30 minute stabilization window.",
   "scaling.vgpu":
-    "Use a fixed slice profile and fill existing GPUs first. Available NVIDIA licenses are checked before scaling.",
+    "Run Kubernetes workloads on a fixed GPU slice profile and fill existing GPUs first. Available NVIDIA licenses are checked before scaling.",
   "scaling.inference":
     "Scale service replicas. Keep a warm minimum; scaling to zero adds 30 seconds to several minutes of cold start.",
   "scaling.queue_depth": "Queue depth",
@@ -508,6 +508,7 @@ export default {
     "Usage charges for this project over the last 7 days · USD",
   "project.settings": "Project settings",
   "project.myRole": "My role",
+  "project.id": "Project ID",
   "project.slug": "Slug",
   "project.name": "Project name",
   "data.project.default": "Default project",
@@ -537,7 +538,7 @@ export default {
   "notebook.new": "New development environment",
   "notebook.host": "Host resource",
   "notebook.noHost":
-    "No eligible hosts in this region. Create a server, bare metal or vGPU resource.",
+    "No eligible hosts in this region. Create a server, bare metal or Kubernetes cluster.",
   "notebook.idle": "Idle auto-stop · minutes",
   "notebook.open": "Open environment",
   "notebook.hostHint":
@@ -1107,7 +1108,7 @@ export default {
   "data.governanceObserve": "Check request error rates and latency",
   "overview.units.gpu_vm": "{count} VMs",
   "overview.units.gpu_baremetal": "{count} machines",
-  "overview.units.vgpu": "{count} clusters",
+  "overview.units.vgpu": "{count} Kubernetes clusters",
   "overview.units.inference": "{count} replicas",
   "overview.nodes": "{count} nodes",
   "quota.memory": "Host memory · GB",

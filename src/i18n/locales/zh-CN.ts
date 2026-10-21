@@ -33,7 +33,7 @@ export default {
   "pageDescription.resources.gpu_baremetal":
     "按集群查看裸金属设备明细、运行状态和分配情况。",
   "pageDescription.resources.vgpu":
-    "查看 GPU 集群、节点池和共享资源状态，管理集群生命周期。",
+    "查看 Kubernetes 集群的 GPU 节点池、Pod 与运行状态，并管理集群生命周期。",
   "pageDescription.resources.inference":
     "查看推理服务部署、模型副本与服务状态，管理服务运行配置。",
   "pageDescription.quotas":
@@ -56,7 +56,7 @@ export default {
     "查看代金券面值、余额、适用范围、有效期与使用状态。",
   "common.gpu_vm": "GPU 云服务器",
   "common.gpu_baremetal": "GPU 裸金属",
-  "common.vgpu": "vGPU",
+  "common.vgpu": "Kubernetes 集群",
   "common.inference": "推理服务",
   "common.jp": "日本",
   "common.sg": "新加坡",
@@ -446,7 +446,7 @@ export default {
   "scaling.gpu_baremetal":
     "按整台物理机伸缩，扩容需 5–30 分钟装机；保留至少一台同构机器，缩容稳定窗口 10–30 分钟。",
   "scaling.vgpu":
-    "固定分片规格，优先填满已有卡；扩容前校验 NVIDIA License 余量。",
+    "按固定 GPU 分片规格运行 Kubernetes 工作负载，优先填满已有 GPU；扩容前校验 NVIDIA License 余量。",
   "scaling.inference":
     "按服务副本伸缩；默认保留最小副本，缩到 0 会带来 30 秒至数分钟冷启动。",
   "scaling.queue_depth": "队列深度",
@@ -491,6 +491,7 @@ export default {
   "project.costTrendScope": "当前项目近 7 日用量费用 · USD",
   "project.settings": "项目设置",
   "project.myRole": "我的角色",
+  "project.id": "项目 ID",
   "project.slug": "标识 slug",
   "project.name": "项目名称",
   "data.project.default": "默认项目",
@@ -516,7 +517,7 @@ export default {
   "data.action.retry": "检查配置后重试供给",
   "notebook.new": "新建开发环境",
   "notebook.host": "挂靠资源",
-  "notebook.noHost": "当前区域无可挂靠资源，请先创建云服务器、裸金属或 vGPU",
+  "notebook.noHost": "当前区域无可挂靠资源，请先创建云服务器、裸金属或 Kubernetes 集群",
   "notebook.idle": "闲置自动停止 · 分钟",
   "notebook.open": "打开开发环境",
   "notebook.hostHint": "GPU 继承宿主资源，删除开发环境不删除宿主",
@@ -1059,7 +1060,7 @@ export default {
   "data.governanceObserve": "核对服务请求错误率与延迟",
   "overview.units.gpu_vm": "{count} 台云服务器",
   "overview.units.gpu_baremetal": "{count} 台设备",
-  "overview.units.vgpu": "{count} 个集群",
+  "overview.units.vgpu": "{count} 个 Kubernetes 集群",
   "overview.units.inference": "{count} 个副本",
   "overview.nodes": "{count} 个节点",
   "quota.memory": "主机内存 GB",
