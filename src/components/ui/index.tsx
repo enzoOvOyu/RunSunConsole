@@ -10,6 +10,7 @@ import {
 import * as Dialog from "@radix-ui/react-dialog";
 import {
   Inbox,
+  Info,
   X,
   AlertCircle,
   ArrowUpDown,
@@ -71,7 +72,7 @@ export function Panel({
                 aria-label={hint}
                 className="muted"
               >
-                ⓘ
+                <Info size={14} aria-hidden="true" />
               </span>
             )}
           </div>

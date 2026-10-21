@@ -148,8 +148,8 @@
   gap: 10px;
   color: var(--rs-text-muted);
   border: 1px solid var(--rs-border);
-  border-radius: 6px;
-  background: var(--rs-surface);
+  border-radius: var(--rs-r-sm);
+  background: var(--rs-bg);
   padding: 6px 10px;
   min-width: 230px;
   font-size: var(--rs-fs-sm);
@@ -158,6 +158,11 @@
 
 .searchButton kbd {
   margin-left: auto;
+}
+
+.searchButton:hover {
+  background: var(--rs-surface-2);
+  color: var(--rs-text);
 }
 
 .breadcrumb {

@@ -56,6 +56,11 @@ button:disabled {
   opacity: 0.5;
 }
 
+th button:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
 svg {
   flex-shrink: 0;
 }
@@ -197,6 +202,14 @@ code {
   background: transparent;
 }
 
+.btn:disabled {
+  opacity: 1;
+  color: var(--rs-text-muted);
+  background: var(--rs-surface-2);
+  border-color: var(--rs-border);
+  box-shadow: none;
+}
+
 .icon-btn {
   padding: 8px;
   min-width: 34px;
@@ -264,6 +277,7 @@ textarea {
   min-height: var(--rs-control-height);
   max-width: 100%;
   line-height: var(--rs-lh-sm);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 
 .input {
@@ -277,6 +291,18 @@ input[type="number"] {
 textarea {
   width: 100%;
   min-height: 90px;
+}
+
+.input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  border-color: var(--rs-focus-ring);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--rs-focus-ring) 16%, transparent);
+}
+
+.btn:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--rs-focus-ring) 16%, transparent);
 }
 
 label.field {
@@ -477,12 +503,13 @@ tbody tr:last-child td {
   border-bottom: 0;
 }
 
-tbody tr:hover {
-  background: var(--rs-surface);
-}
-
 tr.clickable {
   cursor: pointer;
+}
+
+tbody tr:hover,
+tbody tr.clickable:focus-visible {
+  background: var(--rs-surface);
 }
 
 .table-footer {
@@ -502,7 +529,7 @@ tr.clickable {
 
 .progress {
   height: 6px;
-  border-radius: 5px;
+  border-radius: var(--rs-r-sm);
   background: var(--rs-surface-2);
   overflow: hidden;
 }
@@ -650,7 +677,7 @@ tr.clickable {
   background: var(--rs-bg);
   border: 1px solid var(--rs-border);
   border-left: 3px solid var(--rs-success);
-  border-radius: 8px;
+  border-radius: var(--rs-r-md);
   box-shadow: var(--rs-shadow-md);
   padding: 14px 18px;
   font-size: 13px;

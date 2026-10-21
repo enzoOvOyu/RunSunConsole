@@ -24,12 +24,12 @@
 | Token                 | 值         | 用途        |
 | --------------------- | --------- | --------- |
 | `--rs-bg`             | `#FFFFFF` | 应用背景      |
-| `--rs-surface`        | `#F6F8FB` | 卡片/面板     |
-| `--rs-surface-2`      | `#EEF2F7` | 次级面板/悬停底  |
-| `--rs-border`         | `#E3E8EF` | 描边/分割线    |
-| `--rs-text`           | `#0E1726` | 主文本（墨黑）   |
-| `--rs-text-secondary` | `#51607A` | 次级文本      |
-| `--rs-text-muted`     | `#68778E` | 占位/禁用     |
+| `--rs-surface`        | `#F8FAFC` | 卡片/面板     |
+| `--rs-surface-2`      | `#F1F5F9` | 次级面板/悬停底  |
+| `--rs-border`         | `#E2E8F0` | 描边/分割线    |
+| `--rs-text`           | `#0F172A` | 主文本（墨黑）   |
+| `--rs-text-secondary` | `#475569` | 次级文本      |
+| `--rs-text-muted`     | `#64748B` | 占位/禁用     |
 | `--rs-text-inverse`   | `#FFFFFF` | **渐变底上的文本**（消费点：§5.1 Button Primary） |
 
 ### 2.2 品牌（Sun）
@@ -38,7 +38,7 @@
 | ---------------------- | ------------------------------------------------- | ---------------- |
 | `--rs-brand`           | `#FF7A1A`                                         | 主品牌色（太阳橙）        |
 | `--rs-brand-strong`    | `#F2640A`                                         | 按压/强调            |
-| `--rs-brand-soft`      | `#FFF1E6`                                         | 品牌浅底（标签/选中）      |
+| `--rs-brand-soft`      | `#FFF3E8`                                         | 品牌浅底（标签/选中）      |
 | `--rs-brand-gradient`  | `linear-gradient(135deg,#FF9E2C 0%,#FF6A00 100%)` | 主按钮/品牌头（消费点 §5.1） |
 | `--rs-gold`            | `#FFC24B`                                         | **辅助金**（消费点：§5.11 ResourceCard 推荐/官方徽标、§5.3 星标等级） |
 
@@ -61,13 +61,13 @@
 
 | Token                     | 值                                        |
 | ------------------------- | ---------------------------------------- |
-| `--rs-bg`                 | `#0B1020`                                |
-| `--rs-surface`            | `#121A2E`                                |
-| `--rs-surface-2`          | `#1B2540`                                |
-| `--rs-border`             | `#243150`                                |
-| `--rs-text`               | `#EAF0FB`                                |
-| `--rs-text-secondary`     | `#A6B2C9`                                |
-| `--rs-text-muted`         | `#6B7894`                                |
+| `--rs-bg`                 | `#0F172A`                                |
+| `--rs-surface`            | `#111C30`                                |
+| `--rs-surface-2`          | `#1E293B`                                |
+| `--rs-border`             | `#334155`                                |
+| `--rs-text`               | `#F8FAFC`                                |
+| `--rs-text-secondary`     | `#CBD5E1`                                |
+| `--rs-text-muted`         | `#94A3B8`                                |
 | `--rs-status-terminating` | `#94A3B8`（暗色下提亮以保证对比度）                   |
 | 品牌/语义                     | 在暗色下提亮 8–12%（如 `--rs-brand` → `#FF923A`） |
 
@@ -151,7 +151,7 @@
 | Ghost     | 无底，hover 浅底                       | 文本型操作    |
 | Danger    | 红底/红字                             | 删除/下线    |
 
-- 尺寸：sm(28h) / md(34h) / lg(40h)；禁用态降透明度并禁交互；带图标时图标居左。
+- 尺寸：sm(28h) / md(34h) / lg(40h)；禁用态使用次级表面与辅助文字色、禁交互，保证亮暗主题可读；带图标时图标居左。
 
 ### 5.2 Card / Panel
 
