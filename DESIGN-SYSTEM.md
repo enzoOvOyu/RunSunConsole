@@ -118,24 +118,25 @@
 ## 3. 字体排印
 
 - **字体族**：
-  - 西文：`Inter, "Helvetica Neue", Arial, sans-serif`
-  - 中文：`"PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif`
+  - 西文：本地加载 Inter Variable（Latin 与 Latin Extended），`Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif`
+  - 中文：沿用系统中文字体，不额外下载中文字体文件。
   - 等宽（代码/指标）：`"JetBrains Mono", ui-monospace, "SFMono-Regular", monospace`
-- **字号阶梯**（base=14px 工作台密度；代码以 `--rs-fs-*` 和对应的 `--rs-lh-*` 令牌统一使用）：
+- **字号阶梯**（桌面控制台密度；页面标题、区块、卡片、正文、表格、导航和按钮共享此层级）：
+
 
 | Token          | 字号  | 行高  | 典型      |
 | -------------- | --- | --- | ------- |
 | `--rs-fs-xs`   | 12  | 16  | 辅助说明、脚注 |
-| `--rs-fs-sm`   | 13  | 18  | 列表次要信息  |
-| `--rs-fs-base` | 14  | 20  | 正文、表格   |
+| `--rs-fs-sm`   | 14  | 20  | 正文、表格、导航、按钮 |
+| `--rs-fs-base` | 14  | 20  | 正文基准   |
 | `--rs-fs-md`   | 16  | 24  | 小标题     |
-| `--rs-fs-lg`   | 18  | 26  | 卡片标题    |
-| `--rs-fs-xl`   | 20  | 28  | 区块标题    |
+| `--rs-fs-lg`   | 16  | 24  | 卡片标题    |
+| `--rs-fs-xl`   | 18  | 28  | 区块标题    |
 | `--rs-fs-2xl`  | 24  | 32  | 页面标题    |
 | `--rs-fs-3xl`  | 30  | 38  | 大数字/指标  |
 | `--rs-fs-4xl`  | 36  | 44  | Hero/大标题 |
 
-- **字重**：400（常规）、500（中）、600（半粗，标题）、700（粗，数字指标）。
+- **字重**：400（正文）、500（控件/导航）、600（标题）、700（关键指标）。辅助说明使用 12px/16px；正文、表格、导航与按钮使用 14px/20px。
 
 ---
 

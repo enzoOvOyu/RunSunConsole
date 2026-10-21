@@ -115,7 +115,8 @@
 .sideFoot {
   padding: 16px 22px;
   border-top: 1px solid var(--rs-border);
-  font-size: 11px;
+  font-size: var(--rs-fs-xs);
+  line-height: var(--rs-lh-xs);
   color: var(--rs-text-secondary);
 }
 
@@ -173,7 +174,7 @@
 }
 
 .topbar .newButton {
-  font-size: 12px;
+  font-size: var(--rs-fs-sm);
   min-height: 30px;
 }
 
@@ -224,7 +225,7 @@
   color: var(--rs-brand);
   display: grid;
   place-items: center;
-  font-size: 11px;
+  font-size: var(--rs-fs-xs);
   font-weight: 600;
 }
 
