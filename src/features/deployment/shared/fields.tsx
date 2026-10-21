@@ -27,6 +27,7 @@ import {
 } from "../../../components/ui";
 import { t, dt } from "../../../i18n";
 import { defaultScaling, normalizeSpec } from "../../../lib/config";
+import { SCALING_METRIC_LIMITS } from "../../../lib/schema";
 import { readSshKeys } from "../../../lib/ssh-keys";
 export interface WizardValues {
   projectId: string;
@@ -161,6 +162,11 @@ export function ScalingFields({
 }) {
   const node = kind !== "inference";
   const set = (part: Partial<ScalingConfig>) => onChange({ ...value, ...part });
+  const targetRange = SCALING_METRIC_LIMITS[value.trigger_metric] || {
+    min: 1,
+    max: 100000,
+    unit: "",
+  };
   const triggers = node
     ? kind === "gpu_baremetal"
       ? ["gpu_allocation_rate"]
@@ -189,17 +195,32 @@ export function ScalingFields({
             </select>
           </Field>
           <Field
-            label={t("common.target")}
-            hint={t("scaling.fieldHelp", { min: 1, max: 100000 })}
+            label={`${t("common.target")}${targetRange.unit ? ` · ${targetRange.unit}` : ""}`}
+            hint={t("scaling.fieldHelp", {
+              min: targetRange.min,
+              max: targetRange.max,
+            })}
           >
             <input
               type="number"
               className="input"
-              min={1}
-              max={100000}
+              min={targetRange.min}
+              max={targetRange.max}
+              step={1}
               value={value.target_value}
               onChange={(e) => set({ target_value: Number(e.target.value) })}
             />
+            {(!Number.isInteger(value.target_value) ||
+              value.target_value < targetRange.min ||
+              value.target_value > targetRange.max) && (
+              <small className="field-error">
+                {t("scaling.targetInvalid", {
+                  min: targetRange.min,
+                  max: targetRange.max,
+                  unit: targetRange.unit,
+                })}
+              </small>
+            )}
           </Field>
           <Field
             label={t("common.min")}
@@ -411,11 +432,32 @@ export function ScalingToggle({ kind }: { kind: Kind }) {
           }}
         />
         {spec.scaling ? (
-          <ScalingFields
-            kind={kind}
-            value={spec.scaling}
-            onChange={(scaling) => update({ scaling })}
-          />
+          <>
+            <ScalingFields
+              kind={kind}
+              value={spec.scaling}
+              onChange={(scaling) => update({ scaling })}
+            />
+            {(() => {
+              const actual =
+                "quantity" in spec
+                  ? spec.quantity
+                  : "machineCount" in spec
+                    ? spec.machineCount
+                    : "nodePools" in spec
+                      ? spec.nodePools.reduce(
+                          (sum, pool) => sum + pool.nodeCount,
+                          0,
+                        )
+                      : spec.replicas;
+              return actual < spec.scaling!.min_size ||
+                actual > spec.scaling!.max_size ? (
+                <small className="field-error">
+                  {t("scaling.rangeMustIncludeCurrent", { actual })}
+                </small>
+              ) : null;
+            })()}
+          </>
         ) : (
           <small>{t(`scaling.${kind}`)}</small>
         )}
@@ -440,19 +482,29 @@ export function ImageCards({
 }) {
   const { spec, update } = useSpec();
   const field = runtime ? "runtimeImageRef" : "imageRef";
-  const selected = field in spec ? String((spec as unknown as Record<string, unknown>)[field] || "") : "";
-  const compatible = images.filter((image) =>
-    image.type === (runtime ? "container" : os ? "os" : image.type) &&
-    (!architecture || image.architectures.includes(architecture)) &&
-    (!gpuModel || image.supportedGpuModels.includes(gpuModel)) &&
-    (!runtime || !osFamily || image.compatibleOsFamilies.includes(osFamily)),
+  const selected =
+    field in spec
+      ? String((spec as unknown as Record<string, unknown>)[field] || "")
+      : "";
+  const compatible = images.filter(
+    (image) =>
+      image.type === (runtime ? "container" : os ? "os" : image.type) &&
+      (!architecture || image.architectures.includes(architecture)) &&
+      (!gpuModel || image.supportedGpuModels.includes(gpuModel)) &&
+      (!runtime || !osFamily || image.compatibleOsFamilies.includes(osFamily)),
   );
   return (
     <section className="stack">
-      <h3>{t(runtime ? "images.runtimeTemplates" : "images.baseOperatingSystem")}</h3>
+      <h3>
+        {t(runtime ? "images.runtimeTemplates" : "images.baseOperatingSystem")}
+      </h3>
       <div className="grid grid-2">
         {runtime && (
-          <button type="button" className={`catalog-card ${selected === "" ? "selected" : ""}`} onClick={() => update({ runtimeImageRef: "" })}>
+          <button
+            type="button"
+            className={`catalog-card ${selected === "" ? "selected" : ""}`}
+            onClick={() => update({ runtimeImageRef: "" })}
+          >
             <strong>{t("images.noRuntime")}</strong>
             <small>{t("images.noRuntimeDescription")}</small>
           </button>
@@ -465,17 +517,48 @@ export function ImageCards({
             onClick={() => {
               if (runtime) update({ runtimeImageRef: image.id });
               else {
-                const activeRuntime = images.find((candidate) => candidate.id === (spec as unknown as Record<string, unknown>).runtimeImageRef);
-                const runtimeFits = activeRuntime && activeRuntime.compatibleOsFamilies.includes(image.osFamily) && (!architecture || activeRuntime.architectures.includes(architecture)) && (!gpuModel || activeRuntime.supportedGpuModels.includes(gpuModel));
-                update({ imageRef: image.id, ...(runtimeFits ? {} : { runtimeImageRef: "" }) });
+                const activeRuntime = images.find(
+                  (candidate) =>
+                    candidate.id ===
+                    (spec as unknown as Record<string, unknown>)
+                      .runtimeImageRef,
+                );
+                const runtimeFits =
+                  activeRuntime &&
+                  activeRuntime.compatibleOsFamilies.includes(image.osFamily) &&
+                  (!architecture ||
+                    activeRuntime.architectures.includes(architecture)) &&
+                  (!gpuModel ||
+                    activeRuntime.supportedGpuModels.includes(gpuModel));
+                update({
+                  imageRef: image.id,
+                  ...(runtimeFits ? {} : { runtimeImageRef: "" }),
+                });
               }
             }}
           >
             <strong>{image.name}</strong>
-            <small>{t("images.cpuArchitecture")}: {image.architectures.join(" / ")} · {image.sizeGb} GB</small>
-            <small>{t("images.gpuDriver")}: {image.driverVersion || t("images.hostDriver")} · CUDA {image.cudaVersion}</small>
-            <small>{t("images.frameworksIncluded")}: {image.frameworks.length ? image.frameworks.join(", ") : t("images.noneIncluded")}</small>
-            {runtime && <small>{t("images.compatibleOperatingSystems")}: {image.compatibleOsFamilies.join(", ")}</small>}
+            <small>
+              {t("images.cpuArchitecture")}: {image.architectures.join(" / ")} ·{" "}
+              {image.sizeGb} GB
+            </small>
+            <small>
+              {t("images.gpuDriver")}:{" "}
+              {image.driverVersion || t("images.hostDriver")} · CUDA{" "}
+              {image.cudaVersion}
+            </small>
+            <small>
+              {t("images.frameworksIncluded")}:{" "}
+              {image.frameworks.length
+                ? image.frameworks.join(", ")
+                : t("images.noneIncluded")}
+            </small>
+            {runtime && (
+              <small>
+                {t("images.compatibleOperatingSystems")}:{" "}
+                {image.compatibleOsFamilies.join(", ")}
+              </small>
+            )}
           </button>
         ))}
       </div>
@@ -751,7 +834,11 @@ export function Review() {
           [t("common.region"), t("common." + values.region)],
           [t("common.name"), values.name],
           ...Object.entries(spec)
-            .filter(([key]) => !("gpuPerInstance" in spec) || (key !== "env" && key !== "entrypoint"))
+            .filter(
+              ([key]) =>
+                !("gpuPerInstance" in spec) ||
+                (key !== "env" && key !== "entrypoint"),
+            )
             .map(([key, value]): [string, string] => [
               "gpuPerInstance" in spec && key === "vcpu"
                 ? t("images.vcpuPerInstance")

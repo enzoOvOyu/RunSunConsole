@@ -8,7 +8,7 @@ import { useAuth } from "../../stores/auth";
 import { useRegion } from "../../stores/region";
 import { canWrite } from "../../lib/rbac";
 import { t, dt } from "../../i18n";
-import { money, number } from "../../lib/money";
+import { money, number, unitMoney } from "../../lib/money";
 import { date } from "../../lib/date";
 import { resourceLink } from "../../lib/ids";
 import { useData, useAction } from "../shared/hooks";
@@ -293,7 +293,7 @@ function NetworkPage({ kind }: { kind: NetworkKind }) {
                             row,
                           }: {
                             row: { original: NetworkRecord };
-                          }) => money(row.original.hourly || 0),
+                          }) => unitMoney(row.original.hourly || 0),
                         },
                       ]
                     : kind === "security-groups"
@@ -671,10 +671,10 @@ function NetworkDrawer({
                                 t("network.bandwidth"),
                                 `${d.bandwidthMbps} Mbps`,
                               ] as [string, string],
-                              [t("common.hourly"), money(d.hourly || 0)] as [
-                                string,
-                                string,
-                              ],
+                              [
+                                t("common.hourly"),
+                                unitMoney(d.hourly || 0),
+                              ] as [string, string],
                               [
                                 t("network.binding"),
                                 d.boundName || t("network.unbound"),

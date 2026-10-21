@@ -1,7 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import { useState } from "react";
 import type { StorageProduct, StorageVolume } from "../../types/storage";
-import type { Kind, Project, Quota } from "../../types/domain";
+import type { Kind, Project, Quota, Resource } from "../../types/domain";
 import { EP, post, query, remove } from "../../lib/api-client";
 import { resourceLink } from "../../lib/ids";
 import { useRegion } from "../../stores/region";
@@ -43,6 +43,8 @@ export default function VolumePage() {
   const [projectId, setProjectId] = useState(activeProject);
   const [tier, setTier] = useState("");
   const [sizeGb, setSizeGb] = useState(100);
+  const [targetResource, setTargetResource] = useState("");
+  const [mountPath, setMountPath] = useState("/mnt/storage");
   const { id, setId } = useDrawer();
   const list = useData<VolumeRow[]>(
     ["storage-volumes", region],
@@ -58,6 +60,19 @@ export default function VolumePage() {
     EP.storageProducts,
   );
   const projects = useData<Project[]>(["projects"], EP.projects);
+  const resources = useData<{ items: Resource[] }>(
+    [
+      "storage-attachable-resources",
+      region,
+      detail.data?.projectId || projectId,
+    ],
+    EP.resources +
+      query({
+        region,
+        project_id: detail.data?.projectId || projectId,
+        size: 1000,
+      }),
+  );
   const quotas = useData<Quota[]>(
     ["storage-quotas", region],
     EP.quotas + query({ region }),
@@ -79,6 +94,14 @@ export default function VolumePage() {
         .includes(search.toLowerCase()),
   );
   const v = detail.data;
+  const attachable = (resources.data?.items || []).filter(
+    (resource) =>
+      resource.projectId === v?.projectId &&
+      resource.region === v?.region &&
+      (kind === "block"
+        ? resource.kind === "gpu_vm"
+        : ["gpu_vm", "inference", "vgpu"].includes(resource.kind)),
+  );
   const projectName = (value: string) =>
     dt(projects.data?.find((project) => project.id === value)?.name || value);
   const openCreate = () => {
@@ -106,22 +129,42 @@ export default function VolumePage() {
         }
       />
       <div className="grid grid-3 resource-summary-grid">
-        <Panel title={t("storage.volumeList")} className="resource-summary-card">
+        <Panel
+          title={t("storage.volumeList")}
+          className="resource-summary-card"
+        >
           <div className="resource-summary-value">{rows.length}</div>
           <small>{t("storage.kind." + kind)}</small>
         </Panel>
-        <Panel title={t("storage.allocatedCapacity")} className="resource-summary-card">
-          <div className="resource-summary-value">{capacity?.usedGb.toLocaleString() || "—"}<span className="resource-unit">GB</span></div>
+        <Panel
+          title={t("storage.allocatedCapacity")}
+          className="resource-summary-card"
+        >
+          <div className="resource-summary-value">
+            {capacity?.usedGb.toLocaleString() || "—"}
+            <span className="resource-unit">GB</span>
+          </div>
           <small>{t("storage.allocatedCapacity")}</small>
         </Panel>
-        <Panel title={t("storage.availableCapacity")} className="resource-summary-card">
+        <Panel
+          title={t("storage.availableCapacity")}
+          className="resource-summary-card"
+        >
           <div className="resource-summary-value">
-            {capacity ? (capacity.limitGb - capacity.usedGb).toLocaleString() : "—"}<span className="resource-unit">GB</span>
+            {capacity
+              ? (capacity.limitGb - capacity.usedGb).toLocaleString()
+              : "—"}
+            <span className="resource-unit">GB</span>
           </div>
-          {capacity && <div className="resource-summary-progress">
-            <Progress value={(capacity.usedGb / capacity.limitGb) * 100} />
-            <small>{capacity.usedGb.toLocaleString()} / {capacity.limitGb.toLocaleString()} GB</small>
-          </div>}
+          {capacity && (
+            <div className="resource-summary-progress">
+              <Progress value={(capacity.usedGb / capacity.limitGb) * 100} />
+              <small>
+                {capacity.usedGb.toLocaleString()} /{" "}
+                {capacity.limitGb.toLocaleString()} GB
+              </small>
+            </div>
+          )}
         </Panel>
       </div>
       <div className="toolbar">
@@ -237,6 +280,81 @@ export default function VolumePage() {
                 </Link>
               )}
             </Panel>
+            {v.role === "custom" && !v.resourceUuid && (
+              <Panel title={t("storage.useVolume")}>
+                <div className="stack">
+                  <Field label={t("nav.resources")}>
+                    <select
+                      value={targetResource}
+                      onChange={(event) =>
+                        setTargetResource(event.target.value)
+                      }
+                    >
+                      <option value="">{t("storage.selectTarget")}</option>
+                      {attachable.map((resource) => (
+                        <option
+                          key={resource.resourceUuid}
+                          value={resource.resourceUuid}
+                        >
+                          {dt(resource.name)} · {resource.displayId}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field
+                    label={t("storage.mountPath")}
+                    hint={t("storage.mountPathHint")}
+                  >
+                    <input
+                      className="input"
+                      value={mountPath}
+                      aria-invalid={
+                        !/^\/[A-Za-z0-9/._-]+$/.test(mountPath.trim())
+                      }
+                      onChange={(event) => setMountPath(event.target.value)}
+                    />
+                    {!/^\/[A-Za-z0-9/._-]+$/.test(mountPath.trim()) && (
+                      <small className="field-error">
+                        {t("storage.mountPathInvalid")}
+                      </small>
+                    )}
+                  </Field>
+                  <Button
+                    variant="primary"
+                    disabled={
+                      !canWrite(role) ||
+                      busy ||
+                      !targetResource ||
+                      !/^\/[A-Za-z0-9/._-]+$/.test(mountPath.trim())
+                    }
+                    onClick={async () => {
+                      const result = await run(() =>
+                        post(`${EP.storageVolumes}/${v.id}/attach`, {
+                          resourceUuid: targetResource,
+                          mountPath: mountPath.trim(),
+                        }),
+                      );
+                      if (result) setTargetResource("");
+                    }}
+                  >
+                    {t("storage.attach")}
+                  </Button>
+                </div>
+              </Panel>
+            )}
+            {v.resourceUuid && v.role === "custom" && (
+              <Button
+                disabled={!canWrite(role) || busy}
+                onClick={async () => {
+                  const result = await run(() =>
+                    post(`${EP.storageVolumes}/${v.id}/detach`, {}),
+                  );
+                  if (result) setTargetResource("");
+                }}
+              >
+                {t("storage.detach")}
+              </Button>
+            )}
             <Panel title={t("storage.lifecycleSummary")}>
               <KeyValues
                 items={[
@@ -295,9 +413,13 @@ export default function VolumePage() {
             <input
               className="input"
               value={name}
-              maxLength={64}
+              maxLength={63}
+              aria-invalid={name.trim().length < 3 || name.trim().length > 63}
               onChange={(event) => setName(event.target.value)}
             />
+            {(name.trim().length < 3 || name.trim().length > 63) && (
+              <small className="field-error">{t("storage.nameInvalid")}</small>
+            )}
           </Field>
           <div className="form-grid">
             <Field label={t("common.project")}>
@@ -378,7 +500,8 @@ export default function VolumePage() {
               busy ||
               !selectedPlan ||
               !projectId ||
-              name.trim().length < 2 ||
+              name.trim().length < 3 ||
+              name.trim().length > 63 ||
               sizeGb < selectedPlan.minGb ||
               sizeGb > selectedPlan.maxGb ||
               sizeGb % selectedPlan.stepGb !== 0 ||

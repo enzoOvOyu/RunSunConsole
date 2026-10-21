@@ -193,6 +193,8 @@ export default {
   "price.monthly": "Estimated month · 730 hours",
   "price.floor": "Minimum monthly",
   "price.peak": "Maximum monthly",
+  "price.haControlPlaneNote":
+    "HA pricing includes three control plane nodes and is billed as one cluster.",
   "price.breakdown": "Cost breakdown",
   "price.on_demand": "On demand",
   "price.spot": "Spot · −45%",
@@ -331,6 +333,10 @@ export default {
   "resource.nodeCount": "Node count",
   "resource.slicing": "Slicing policy",
   "resource.model": "Model",
+  "inference.textModalityOnly":
+    "This inference service exposes a text chat API. Chat examples, text-token monitoring, and governance settings are unavailable for this model modality.",
+  "images.textOnlyServing":
+    "The current inference service supports text modality models only.",
   "resource.engine": "Inference engine",
   "resource.replicas": "Replicas",
   "resource.released": "Show released resources",
@@ -440,11 +446,32 @@ export default {
   "wizard.auth": "Enable API key authentication",
   "wizard.apiPublic": "Public API server",
   "wizard.cidr": "Authorized CIDR",
+  "wizard.hostnameHint":
+    "Use lowercase letters, digits, and hyphens. The platform appends the resource ID and node index; prefix limit is 45 characters.",
+  "wizard.hostnameInvalid":
+    "Use a lowercase alphanumeric start and end, with only lowercase letters, digits, or hyphens, up to 45 characters.",
   "wizard.hostname": "Hostname prefix",
   "wizard.firmware": "Firmware baseline",
   "wizard.addPool": "Add node pool · up to 5",
   "wizard.removePool": "Remove node pool",
   "wizard.license": "Available NVIDIA licenses: {count}",
+  "wizard.inferenceConfigGroup": "Model and compute configuration",
+  "wizard.textModelsOnly":
+    "This inference service uses a text generation API and supports text modality models only.",
+  "wizard.selectModel": "Select a model",
+  "wizard.textModelRequired":
+    "Select a text modality model. Image and other modalities cannot use this chat inference service.",
+  "wizard.gpuPool": "GPU model",
+  "wizard.gpuPerReplicaSummary":
+    "{count} GPUs per replica · total GPUs scale with replica count",
+  "wizard.contextAutoChanged":
+    "Context length was adjusted from {previous} to {next}; review the VRAM estimate.",
+  "wizard.precisionAutoChanged":
+    "A dependency changed, so precision was adjusted from {previous} to {next}. Review the VRAM estimate.",
+  "wizard.memoryChecking":
+    "Rechecking VRAM for the current model, engine, GPU model, precision, and GPUs per replica…",
+  "wizard.memoryCheckFailed":
+    "VRAM validation failed. Review the model and deployment configuration, then retry.",
   "wizard.quantization": "Serving precision",
   "wizard.precisionHint":
     "Serving precision depends on GPU architecture and engine. NVFP4 requires Blackwell. Memory is an estimate.",
@@ -535,6 +562,14 @@ export default {
   "scaling.scale_in": "Scale in",
   "scaling.empty": "No policies yet · select a resource to create one",
   "scaling.unique": "A resource can have one scaling policy",
+  "scaling.targetInvalid":
+    "Threshold must be an integer from {min} to {max} {unit}.",
+  "storage.mountPathInvalid":
+    "Enter a valid Linux mount path starting with / and containing no spaces.",
+  "scaling.rangeMustIncludeCurrent":
+    "The scaling range must include the current size ({actual}).",
+  "scaling.rangeAdjusted":
+    "Current resource size is {actual}. The scaling range was adjusted to include it; review and save.",
   "scaling.fieldHelp":
     "Valid range {min}–{max}; controls capacity and maximum cost",
   "project.default": "Default project",
@@ -771,6 +806,13 @@ export default {
   "storage.quotaGb": "Quota GB",
   "storage.sizeGb": "Capacity GB",
   "storage.count": "Count",
+  "storage.nameInvalid":
+    "Name must be 3–63 characters after trimming whitespace.",
+  "storage.useVolume": "Use this storage",
+  "storage.selectTarget": "Select a resource in the same project and region",
+  "storage.mountPathHint": "Linux mount path, for example /mnt/data.",
+  "storage.attach": "Attach to resource",
+  "storage.detach": "Detach from resource",
   "storage.mountPath": "Mount path",
   "storage.objectBilling":
     "Object storage tracks actual usage; this capacity is a limit. This order does not precharge object storage.",
@@ -874,6 +916,11 @@ export default {
   "billing.setBudget": "Save budget",
   "billing.todayBasis": "Totals use UTC",
   "tickets.new": "New ticket",
+  "tickets.resourceRequired": "Select a related resource.",
+  "tickets.titleRequired":
+    "Enter at least 3 non-whitespace characters for the title.",
+  "tickets.messageRequired":
+    "Enter at least 3 non-whitespace characters for the description.",
   "tickets.title": "Ticket title",
   "tickets.priority": "Priority",
   "tickets.reply": "Reply",
@@ -916,6 +963,12 @@ export default {
   "error.BUCKET_IN_USE": "Bucket is in use and cannot be deleted",
   "error.UNSUPPORTED_PRECISION":
     "The selected model weight format is incompatible with this GPU or engine",
+  "error.MODEL_MODALITY_UNSUPPORTED":
+    "This model is not text modality and cannot be deployed as a chat inference service.",
+  "wizard.lifecycleDaysInvalid":
+    "Lifecycle days must be an integer from 1 to 3650.",
+  "wizard.shareExpiryInvalid":
+    "Share expiry must be an integer from 60 to 604800 seconds.",
   "error.MODEL_MEMORY_EXCEEDED":
     "Model VRAM requirements exceed selected GPU capacity",
   "error.LICENSE_EXCEEDED": "Insufficient available NVIDIA licenses",
@@ -1374,7 +1427,8 @@ export default {
   "images.baseOperatingSystem": "Base operating system",
   "images.runtimeTemplates": "AI container templates (optional)",
   "images.noRuntime": "Base OS only",
-  "images.noRuntimeDescription": "No AI framework or interactive entry point is preinstalled.",
+  "images.noRuntimeDescription":
+    "No AI framework or interactive entry point is preinstalled.",
   "images.gpuDriver": "NVIDIA driver",
   "images.frameworksIncluded": "Included in image",
   "images.noneIncluded": "None preinstalled",
@@ -1400,9 +1454,11 @@ export default {
   "common.unschedulable": "Scheduling stopped",
   "cluster.nodeCordonedEvent": "Node {node} stopped accepting new Pods",
   "cluster.nodeUncordonedEvent": "Node {node} resumed scheduling",
-  "cluster.nodePoolResizedEvent": "Node pool {pool} changed from {before} to {after} nodes",
+  "cluster.nodePoolResizedEvent":
+    "Node pool {pool} changed from {before} to {after} nodes",
   "cluster.nodeCordonedAction": "Review scheduling for affected workloads",
   "cluster.nodeUncordonedAction": "Confirm the node is ready for new Pods",
-  "cluster.nodePoolResizedAction": "Review pool capacity, workload scheduling and cost change",
+  "cluster.nodePoolResizedAction":
+    "Review pool capacity, workload scheduling and cost change",
   "images.hostDriver": "Provided by the base OS",
 } as const;

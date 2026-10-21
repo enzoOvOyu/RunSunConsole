@@ -307,11 +307,20 @@ function precheck(r: Resource, exclude?: string) {
         requested: amount,
       });
   }
+  const resourceVolumes = volumesForResource(r);
   const requestedStorage = {
-    block: volumesForResource(r)
+    block: resourceVolumes
       .filter((volume) => volume.kind === "block")
-      .reduce((total, volume) => total + volume.sizeGb, 0),
-    file: volumesForResource(r)
+      .reduce(
+        (total, volume) =>
+          total +
+          volume.sizeGb *
+            (r.kind === "gpu_vm" && ["system", "data"].includes(volume.role)
+              ? multiplier
+              : 1),
+        0,
+      ),
+    file: resourceVolumes
       .filter((volume) => volume.kind === "file")
       .reduce((total, volume) => total + volume.sizeGb, 0),
     object: (r.spec.storageSelections || [])
@@ -333,6 +342,7 @@ function precheck(r: Resource, exclude?: string) {
     const model =
       db.models.find((m) => m.id === r.spec.modelRef) ||
       fail(422, "VALIDATION_ERROR");
+    if (model.modality !== "text") fail(422, "MODEL_MODALITY_UNSUPPORTED");
     if (r.spec.maxModelLen > model.context) fail(422, "VALIDATION_ERROR");
     if (
       !compatiblePrecisions(model, r.nodePool, r.spec.engine).includes(
@@ -348,23 +358,27 @@ function precheck(r: Resource, exclude?: string) {
   }
   if (r.kind === "gpu_vm" || r.kind === "gpu_baremetal") {
     const image = IMAGES.find((i) => i.id === r.spec.imageRef);
-    const runtimeImage = r.kind === "gpu_vm" && r.spec.runtimeImageRef
-      ? IMAGES.find((i) => i.id === r.spec.runtimeImageRef)
-      : undefined;
+    const runtimeImage =
+      r.kind === "gpu_vm" && r.spec.runtimeImageRef
+        ? IMAGES.find((i) => i.id === r.spec.runtimeImageRef)
+        : undefined;
     const poolSpec = GPU_SPECS[r.nodePool];
     if (
-      !image || image.type !== "os" ||
+      !image ||
+      image.type !== "os" ||
       !image.supportedGpuModels.includes(r.nodePool) ||
       !image.architectures.includes(poolSpec.cpuArchitecture) ||
       (r.kind === "gpu_baremetal" && image.sizeGb > r.spec.storageGb) ||
-      (r.kind === "gpu_vm" && (
-        image.sizeGb + (runtimeImage?.sizeGb || 0) > r.spec.systemDiskGb ||
-        (r.spec.runtimeImageRef && (!runtimeImage || runtimeImage.type !== "container" ||
-          !runtimeImage.supportedGpuModels.includes(r.nodePool) ||
-          !runtimeImage.architectures.includes(poolSpec.cpuArchitecture) ||
-          !runtimeImage.compatibleOsFamilies.includes(image.osFamily)))
-      ))
-    ) fail(422, "VALIDATION_ERROR");
+      (r.kind === "gpu_vm" &&
+        (image.sizeGb + (runtimeImage?.sizeGb || 0) > r.spec.systemDiskGb ||
+          (r.spec.runtimeImageRef &&
+            (!runtimeImage ||
+              runtimeImage.type !== "container" ||
+              !runtimeImage.supportedGpuModels.includes(r.nodePool) ||
+              !runtimeImage.architectures.includes(poolSpec.cpuArchitecture) ||
+              !runtimeImage.compatibleOsFamilies.includes(image.osFamily)))))
+    )
+      fail(422, "VALIDATION_ERROR");
   }
   if (
     r.kind === "vgpu" &&
@@ -1515,7 +1529,7 @@ async function dispatch(request: Request) {
         )
       )
         fail(422, "VALIDATION_ERROR");
-      const name = z.string().trim().min(2).max(64).parse(body.name);
+      const name = z.string().trim().min(3).max(63).parse(body.name);
       if (
         db.volumes.some(
           (volume) =>
@@ -1554,6 +1568,76 @@ async function dispatch(request: Request) {
       persist();
       return json(volume, 201);
     }
+  }
+  const volumeActionMatch = path.match(
+    /^\/api\/storage\/volumes\/([^/]+)\/(attach|detach)$/,
+  );
+  if (volumeActionMatch && method === "POST") {
+    if (!canWrite(role)) fail(403, "FORBIDDEN");
+    const volume =
+      db.volumes.find(
+        (item) => item.id === volumeActionMatch[1] && !item.deletedAt,
+      ) || fail(404, "NOT_FOUND");
+    if (volume.role !== "custom") fail(409, "HAS_DEPENDENCIES");
+    const action = volumeActionMatch[2];
+    if (action === "attach") {
+      if (volume.resourceUuid) fail(409, "HAS_DEPENDENCIES");
+      const resourceUuid = z.string().min(1).parse(body.resourceUuid);
+      const mountPath = z
+        .string()
+        .trim()
+        .regex(/^\/[A-Za-z0-9/._-]+$/)
+        .max(240)
+        .parse(body.mountPath);
+      const target =
+        db.resources.find(
+          (item) => item.resourceUuid === resourceUuid && !item.deletedAt,
+        ) || fail(404, "NOT_FOUND");
+      if (
+        target.projectId !== volume.projectId ||
+        target.region !== volume.region ||
+        (volume.kind === "block"
+          ? target.kind !== "gpu_vm"
+          : !["gpu_vm", "inference", "vgpu"].includes(target.kind))
+      )
+        fail(422, "VALIDATION_ERROR");
+      const selections = target.spec.storageSelections || [];
+      if (selections.some((row) => row.mountPath === mountPath))
+        fail(409, "VALIDATION_ERROR");
+      target.spec.storageSelections = [
+        ...selections,
+        {
+          key: `attached_${volume.id}`,
+          kind: volume.kind,
+          tier: volume.tier,
+          name: volume.name,
+          sizeGb: volume.sizeGb,
+          count: 1,
+          mountPath,
+        },
+      ];
+      target.spec.storageGb += volume.sizeGb;
+      volume.resourceUuid = target.resourceUuid;
+      volume.mountPath = mountPath;
+    } else {
+      if (!volume.resourceUuid) fail(409, "HAS_DEPENDENCIES");
+      const target = db.resources.find(
+        (item) => item.resourceUuid === volume.resourceUuid,
+      );
+      if (target) {
+        target.spec.storageSelections = (
+          target.spec.storageSelections || []
+        ).filter((row) => row.key !== `attached_${volume.id}`);
+        target.spec.storageGb = Math.max(
+          0,
+          target.spec.storageGb - volume.sizeGb,
+        );
+      }
+      volume.resourceUuid = null;
+      volume.mountPath = "";
+    }
+    persist();
+    return json(volume);
   }
   const volumeMatch = path.match(/^\/api\/storage\/volumes\/([^/]+)$/);
   if (volumeMatch) {
@@ -1966,20 +2050,29 @@ async function dispatch(request: Request) {
           ? 0
           : r.spec.gpuPerInstance * r.spec.quantity;
       } else if (action === "cordon" || action === "uncordon") {
-        if (r.kind !== "vgpu" || r.status !== "running") fail(422, "VALIDATION_ERROR");
+        if (r.kind !== "vgpu" || r.status !== "running")
+          fail(422, "VALIDATION_ERROR");
         const nodeUuid = z.string().min(1).parse(body.nodeUuid);
-        const match = nodeUuid.match(new RegExp(`^${r.resourceUuid}-(\\d+)-(\\d+)$`));
+        const match = nodeUuid.match(
+          new RegExp(`^${r.resourceUuid}-(\\d+)-(\\d+)$`),
+        );
         if (!match) fail(422, "INVALID_NODE_TARGET");
         const poolIndex = Number(match[1]);
         const nodeIndex = Number(match[2]);
         const pool = r.spec.nodePools[poolIndex];
-        if (!pool || nodeIndex < 0 || nodeIndex >= pool.nodeCount) fail(404, "NODE_NOT_FOUND");
+        if (!pool || nodeIndex < 0 || nodeIndex >= pool.nodeCount)
+          fail(404, "NODE_NOT_FOUND");
         const nodeLabel = `cluster-node:${nodeUuid}:cordoned`;
         const isCordon = r.labels.includes(nodeLabel);
-        if ((action === "cordon" && isCordon) || (action === "uncordon" && !isCordon)) fail(409, "INVALID_NODE_STATE");
-        r.labels = action === "cordon"
-          ? [...r.labels, nodeLabel]
-          : r.labels.filter((label) => label !== nodeLabel);
+        if (
+          (action === "cordon" && isCordon) ||
+          (action === "uncordon" && !isCordon)
+        )
+          fail(409, "INVALID_NODE_STATE");
+        r.labels =
+          action === "cordon"
+            ? [...r.labels, nodeLabel]
+            : r.labels.filter((label) => label !== nodeLabel);
       } else if (action === "governance") {
         if (r.kind !== "inference") fail(404, "NOT_FOUND");
         if (r.status !== "running") fail(409, "INVALID_STATE");
@@ -2007,7 +2100,12 @@ async function dispatch(request: Request) {
         db.replicaRestarts[r.resourceUuid][String(index)] =
           (db.replicaRestarts[r.resourceUuid][String(index)] || 0) + 1;
       } else if (action === "resize") {
-        const count = z.number().int().min(1).max(r.kind === "vgpu" ? 64 : 32).parse(body.count);
+        const count = z
+          .number()
+          .int()
+          .min(1)
+          .max(r.kind === "vgpu" ? 64 : 32)
+          .parse(body.count);
         if (r.kind === "inference") {
           const next = {
             ...r,
@@ -2021,11 +2119,25 @@ async function dispatch(request: Request) {
           r.spec = next.spec;
         } else if (r.kind === "vgpu") {
           const next = structuredClone(r);
-          const poolIndex = z.number().int().min(0).max(next.spec.nodePools.length - 1).parse(body.poolIndex);
+          const poolIndex = z
+            .number()
+            .int()
+            .min(0)
+            .max(next.spec.nodePools.length - 1)
+            .parse(body.poolIndex);
           resizePreviousCount = next.spec.nodePools[poolIndex].nodeCount;
-          next.spec.nodePools[poolIndex].nodeCount = z.number().int().min(1).max(64).parse(body.count);
-          next.spec.nodePools[poolIndex].gpuPerNode = GPU_SPECS[next.spec.nodePools[poolIndex].poolCode].gpusPerNode;
-          next.spec.gpuCount = next.spec.nodePools.reduce((a, p) => a + p.nodeCount * p.gpuPerNode, 0);
+          next.spec.nodePools[poolIndex].nodeCount = z
+            .number()
+            .int()
+            .min(1)
+            .max(64)
+            .parse(body.count);
+          next.spec.nodePools[poolIndex].gpuPerNode =
+            GPU_SPECS[next.spec.nodePools[poolIndex].poolCode].gpusPerNode;
+          next.spec.gpuCount = next.spec.nodePools.reduce(
+            (a, p) => a + p.nodeCount * p.gpuPerNode,
+            0,
+          );
           precheck(next, r.resourceUuid);
           r.spec = next.spec;
         } else fail(422, "VALIDATION_ERROR");
@@ -2041,15 +2153,22 @@ async function dispatch(request: Request) {
           before: action === "cordon" ? "ready" : "unschedulable",
           after: action === "cordon" ? "unschedulable" : "ready",
           metric: "scheduler_pending_pods",
-          value: clusterView(r).scheduling.reduce((sum, item) => sum + item.count, 0),
+          value: clusterView(r).scheduling.reduce(
+            (sum, item) => sum + item.count,
+            0,
+          ),
         });
       }
       if (r.kind === "vgpu" && action === "resize") {
         Object.assign(db.events[0], {
-          type: "NODE_POOL_RESIZED", component: "node-pool",
+          type: "NODE_POOL_RESIZED",
+          component: "node-pool",
           reason: r.spec.nodePools[Number(body.poolIndex)].poolCode,
           action: "NODE_POOL_RESIZED",
-          before: String(resizePreviousCount ?? "—"), after: String(body.count), metric: "gpu_count", value: r.spec.gpuCount,
+          before: String(resizePreviousCount ?? "—"),
+          after: String(body.count),
+          metric: "gpu_count",
+          value: r.spec.gpuCount,
         });
       }
       if (
@@ -2671,7 +2790,7 @@ async function dispatch(request: Request) {
       const r = resource(String(body.resourceUuid));
       const t = {
         id: crypto.randomUUID(),
-        title: z.string().min(3).max(120).parse(body.title),
+        title: z.string().trim().min(3).max(120).parse(body.title),
         resourceUuid: r.resourceUuid,
         status: "open",
         priority: z.enum(["normal", "high"]).parse(body.priority),
@@ -2679,7 +2798,7 @@ async function dispatch(request: Request) {
         messages: [
           {
             actor: "enzoOvOyu",
-            body: z.string().min(3).parse(body.message),
+            body: z.string().trim().min(3).max(10000).parse(body.message),
             at: new Date().toISOString(),
           },
         ],
@@ -2947,6 +3066,7 @@ async function dispatch(request: Request) {
       const o = b.objects.find((o) => o.key === key) || fail(404, "NOT_FOUND");
       const expires = z.coerce
         .number()
+        .int()
         .min(60)
         .max(604800)
         .parse(qs.get("expires") || 3600);

@@ -191,6 +191,8 @@ export default {
   "price.monthly": "预估月度 · 730 小时",
   "price.floor": "保底月度",
   "price.peak": "峰值月度",
+  "price.haControlPlaneNote":
+    "高可用价格包含 3 个控制面节点，按 1 个集群计价。",
   "price.breakdown": "费用明细",
   "price.on_demand": "按需",
   "price.spot": "抢占式 · −45%",
@@ -324,6 +326,9 @@ export default {
   "resource.nodeCount": "节点数",
   "resource.slicing": "切片策略",
   "resource.model": "模型",
+  "inference.textModalityOnly":
+    "当前推理服务仅提供文本聊天接口；该模型模态不支持文本 Token 监控、聊天请求示例或治理设置。",
+  "images.textOnlyServing": "当前推理服务仅支持文本模态模型。",
   "resource.engine": "推理引擎",
   "resource.replicas": "副本数",
   "resource.released": "显示已释放",
@@ -428,11 +433,30 @@ export default {
   "wizard.auth": "启用 API Key 鉴权",
   "wizard.apiPublic": "公开 API Server",
   "wizard.cidr": "授权网段 CIDR",
+  "wizard.hostnameHint":
+    "仅允许小写字母、数字和连字符；会与平台资源 ID 和节点序号拼接，前缀最多 45 个字符。",
+  "wizard.hostnameInvalid":
+    "前缀须以小写字母或数字开头和结尾，且总长不超过 45 个字符。",
   "wizard.hostname": "主机名前缀",
   "wizard.firmware": "固件基线",
   "wizard.addPool": "添加节点池 · 最多 5 个",
   "wizard.removePool": "移除此节点池",
   "wizard.license": "NVIDIA License 余量：{count}",
+  "wizard.inferenceConfigGroup": "模型与算力配置",
+  "wizard.textModelsOnly": "此推理服务使用文本生成接口，仅支持文本模态模型。",
+  "wizard.selectModel": "选择模型",
+  "wizard.textModelRequired":
+    "请选择文本模态模型；图像等其他模态不能用于此聊天推理服务。",
+  "wizard.gpuPool": "GPU 机型",
+  "wizard.gpuPerReplicaSummary":
+    "每副本 {count} 张 GPU · 总 GPU 数随副本数计算",
+  "wizard.contextAutoChanged":
+    "上下文长度已从 {previous} 自动调整为 {next}，请复核显存估算。",
+  "wizard.precisionAutoChanged":
+    "依赖配置变化，精度已从 {previous} 自动调整为 {next}；请复核显存估算。",
+  "wizard.memoryChecking":
+    "正在按当前模型、引擎、机型、精度和每副本 GPU 重新校验显存…",
+  "wizard.memoryCheckFailed": "显存校验失败，请检查模型与部署配置后重试。",
   "wizard.quantization": "部署精度",
   "wizard.precisionHint":
     "部署精度受 GPU 架构和推理引擎约束；NVFP4 仅适用于 Blackwell。显存为估算值。",
@@ -517,6 +541,12 @@ export default {
   "scaling.scale_in": "缩容",
   "scaling.empty": "暂无策略 · 绑定资源并创建弹性策略",
   "scaling.unique": "每个资源只可绑定一条策略",
+  "scaling.targetInvalid": "阈值须为 {min}–{max} {unit} 范围内的整数。",
+  "storage.mountPathInvalid":
+    "请输入以 / 开头且不含空格的有效 Linux 挂载路径。",
+  "scaling.rangeMustIncludeCurrent": "弹性区间必须包含当前规模 {actual}。",
+  "scaling.rangeAdjusted":
+    "当前资源规模为 {actual}，已自动调整弹性区间以包含当前规模；请复核并保存。",
   "scaling.fieldHelp": "合法范围 {min}–{max}；影响可扩展规模与峰值费用",
   "project.default": "默认项目",
   "project.members": "成员",
@@ -743,6 +773,12 @@ export default {
   "storage.quotaGb": "容量上限 GB",
   "storage.sizeGb": "容量 GB",
   "storage.count": "数量",
+  "storage.nameInvalid": "名称去除首尾空格后须为 3–63 个字符。",
+  "storage.useVolume": "使用此存储",
+  "storage.selectTarget": "选择同项目、同区域的资源",
+  "storage.mountPathHint": "Linux 挂载路径，例如 /mnt/data。",
+  "storage.attach": "挂载到资源",
+  "storage.detach": "从资源卸载",
   "storage.mountPath": "挂载路径",
   "storage.objectBilling":
     "对象存储按实际使用量统计，容量为上限；当前订单不预收对象费用。",
@@ -840,6 +876,9 @@ export default {
   "billing.setBudget": "保存预算",
   "billing.todayBasis": "按 UTC 时区汇总",
   "tickets.new": "新建工单",
+  "tickets.resourceRequired": "请选择关联资源。",
+  "tickets.titleRequired": "标题去除首尾空格后至少需要 3 个字符。",
+  "tickets.messageRequired": "描述去除首尾空格后至少需要 3 个字符。",
   "tickets.title": "工单标题",
   "tickets.priority": "优先级",
   "tickets.reply": "回复",
@@ -874,6 +913,10 @@ export default {
   "error.DATASET_IN_USE": "数据集正在被引用，无法删除",
   "error.BUCKET_IN_USE": "存储桶正在被引用，无法删除",
   "error.UNSUPPORTED_PRECISION": "所选模型权重格式与 GPU 或推理引擎不兼容",
+  "error.MODEL_MODALITY_UNSUPPORTED":
+    "该模型不是文本模态，不能创建聊天推理服务。",
+  "wizard.lifecycleDaysInvalid": "生命周期天数必须是 1–3650 范围内的整数。",
+  "wizard.shareExpiryInvalid": "分享有效期必须是 60–604800 秒范围内的整数。",
   "error.MODEL_MEMORY_EXCEEDED": "模型显存需求超过所选 GPU 容量",
   "error.LICENSE_EXCEEDED": "NVIDIA License 余量不足",
   "error.INVALID_FILE": "文件格式或大小不符合要求",
@@ -1333,7 +1376,8 @@ export default {
   "common.unschedulable": "停止调度",
   "cluster.nodeCordonedEvent": "节点 {node} 已停止接收新 Pod",
   "cluster.nodeUncordonedEvent": "节点 {node} 已恢复调度",
-  "cluster.nodePoolResizedEvent": "节点池 {pool} 节点数由 {before} 调整为 {after}",
+  "cluster.nodePoolResizedEvent":
+    "节点池 {pool} 节点数由 {before} 调整为 {after}",
   "cluster.nodeCordonedAction": "检查受影响的工作负载调度状态",
   "cluster.nodeUncordonedAction": "确认节点已恢复并接收新 Pod",
   "cluster.nodePoolResizedAction": "检查节点池容量、工作负载调度与费用变化",

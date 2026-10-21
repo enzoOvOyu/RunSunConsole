@@ -43,6 +43,7 @@ export default function ScalingPage() {
   const [open, setOpen] = useState(false);
   const [resource, setResource] = useState("");
   const [config, setConfig] = useState<ScalingConfig>(defaultScaling(kind));
+  const [configNotice, setConfigNotice] = useState("");
   const [direction, setDirection] = useUrlState("direction");
   const policies = useData<ScalingPolicy[]>(
     ["policies", region],
@@ -70,8 +71,19 @@ export default function ScalingPage() {
       !policies.data?.some((p) => p.resourceUuid === r.resourceUuid),
   );
   const target = rs.find((r) => r.resourceUuid === resource);
+  const targetSize = target
+    ? "quantity" in target.spec
+      ? target.spec.quantity
+      : "machineCount" in target.spec
+        ? target.spec.machineCount
+        : "nodePools" in target.spec
+          ? target.spec.nodePools.reduce((sum, item) => sum + item.nodeCount, 0)
+          : target.spec.replicas
+    : null;
   const valid =
     scalingSchema.safeParse(config).success &&
+    (targetSize === null ||
+      (config.min_size <= targetSize && targetSize <= config.max_size)) &&
     (kind === "inference" || config.min_size >= 1) &&
     (kind !== "gpu_baremetal" ||
       (config.cooldown_s >= 600 && config.cooldown_s <= 1800));
@@ -100,6 +112,7 @@ export default function ScalingPage() {
               setEditing(null);
               setResource("");
               setConfig(defaultScaling(kind));
+              setConfigNotice("");
               setOpen(true);
             }}
           >
@@ -119,6 +132,7 @@ export default function ScalingPage() {
         onChange={(k) => {
           setKind(k as Kind);
           setConfig(defaultScaling(k as Kind));
+          setConfigNotice("");
         }}
       />
       <div className="notice warning" style={{ marginBottom: 20 }}>
@@ -140,7 +154,28 @@ export default function ScalingPage() {
               onRow={(p) => {
                 setEditing(p);
                 setResource(p.resourceUuid);
-                setConfig(structuredClone(p.config));
+                const linked = rs.find(
+                  (item) => item.resourceUuid === p.resourceUuid,
+                );
+                const actual = linked
+                  ? "quantity" in linked.spec
+                    ? linked.spec.quantity
+                    : "machineCount" in linked.spec
+                      ? linked.spec.machineCount
+                      : "nodePools" in linked.spec
+                        ? linked.spec.nodePools.reduce(
+                            (sum, item) => sum + item.nodeCount,
+                            0,
+                          )
+                        : linked.spec.replicas
+                  : p.config.min_size;
+                const adjusted = structuredClone(p.config);
+                if (actual < adjusted.min_size || actual > adjusted.max_size) {
+                  adjusted.min_size = Math.min(adjusted.min_size, actual);
+                  adjusted.max_size = Math.max(adjusted.max_size, actual);
+                  setConfigNotice(t("scaling.rangeAdjusted", { actual }));
+                } else setConfigNotice("");
+                setConfig(adjusted);
                 setOpen(true);
               }}
               columns={[
@@ -269,7 +304,36 @@ export default function ScalingPage() {
             <select
               disabled={!!editing}
               value={resource}
-              onChange={(e) => setResource(e.target.value)}
+              onChange={(e) => {
+                const nextId = e.target.value;
+                setResource(nextId);
+                const selected = rs.find(
+                  (item) => item.resourceUuid === nextId,
+                );
+                if (selected) {
+                  const actual =
+                    "quantity" in selected.spec
+                      ? selected.spec.quantity
+                      : "machineCount" in selected.spec
+                        ? selected.spec.machineCount
+                        : "nodePools" in selected.spec
+                          ? selected.spec.nodePools.reduce(
+                              (sum, item) => sum + item.nodeCount,
+                              0,
+                            )
+                          : selected.spec.replicas;
+                  setConfig((current) => ({
+                    ...current,
+                    min_size: actual,
+                    max_size: Math.min(
+                      kind === "inference" || kind === "gpu_baremetal"
+                        ? 32
+                        : 64,
+                      Math.max(actual, actual * 2),
+                    ),
+                  }));
+                }
+              }}
             >
               <option value="">{t("nav.resources")}</option>
               {(editing
@@ -285,6 +349,7 @@ export default function ScalingPage() {
           {target && (
             <Link to={resourceLink(target)}>{t("common.details")}</Link>
           )}
+          {configNotice && <p className="notice">{configNotice}</p>}
           <ScalingFields kind={kind} full value={config} onChange={setConfig} />
           {kind === "vgpu" && (
             <div className="notice">
@@ -304,6 +369,12 @@ export default function ScalingPage() {
               ]}
             />
           </Panel>
+          {targetSize !== null &&
+            (targetSize < config.min_size || targetSize > config.max_size) && (
+              <div className="field-error">
+                {t("scaling.rangeMustIncludeCurrent", { actual: targetSize })}
+              </div>
+            )}
           {!valid && <div className="field-error">{t("wizard.invalid")}</div>}
           <div className="row">
             <Button

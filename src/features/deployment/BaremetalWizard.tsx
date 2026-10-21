@@ -50,8 +50,14 @@ function BaremetalForm({ step, pools, images }: FormContext) {
       onSelect={(p) => {
         form.setValue("nodePool", p.code);
         const currentImage = images.find((image) => image.id === spec.imageRef);
-        const compatible = (image: (typeof images)[number]) => image.type === "os" && image.supportedGpuModels.includes(p.code) && image.architectures.includes(p.cpuArchitecture);
-        const nextImage = currentImage && compatible(currentImage) ? currentImage : images.find(compatible);
+        const compatible = (image: (typeof images)[number]) =>
+          image.type === "os" &&
+          image.supportedGpuModels.includes(p.code) &&
+          image.architectures.includes(p.cpuArchitecture);
+        const nextImage =
+          currentImage && compatible(currentImage)
+            ? currentImage
+            : images.find(compatible);
         update({
           machineType: p.code,
           imageRef: nextImage?.id || "",
@@ -109,44 +115,33 @@ function BaremetalForm({ step, pools, images }: FormContext) {
   ) : step === 3 ? (
     <div className="stack">
       <NetworkFields dedicatedBaremetal />
-      <section className="panel">
-        <div className="panel-body stack">
-          <h3>{t("baremetal.networkSpecs")}</h3>
-          <div className="form-grid">
-            <Field label={t("baremetal.networkTechnology")}>
-              <input
-                className="input"
-                value={pool.networkTechnology || pool.network}
-                readOnly
-              />
-            </Field>
-            <Field label={t("baremetal.networkPorts")}>
-              <input
-                className="input"
-                value={pool.networkPorts ?? "—"}
-                readOnly
-              />
-            </Field>
-            <Field label={t("baremetal.networkSpeed")}>
-              <input
-                className="input"
-                value={
-                  pool.networkSpeedGbps
-                    ? `${pool.networkSpeedGbps} Gb/s`
-                    : pool.network
-                }
-                readOnly
-              />
-            </Field>
-          </div>
-          <small>{t("baremetal.networkPlatformManaged")}</small>
-        </div>
-      </section>
     </div>
   ) : (
     <div className="stack">
-      <ImageCards images={images} os architecture={pool.cpuArchitecture} gpuModel={pool.code} />
-      <SpecText name="hostnamePrefix" label={t("wizard.hostname")} />
+      <ImageCards
+        images={images}
+        os
+        architecture={pool.cpuArchitecture}
+        gpuModel={pool.code}
+      />
+      <Field label={t("wizard.hostname")} hint={t("wizard.hostnameHint")}>
+        <input
+          className="input"
+          value={spec.hostnamePrefix}
+          aria-invalid={
+            !/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(
+              spec.hostnamePrefix.trim(),
+            ) || spec.hostnamePrefix.trim().length > 45
+          }
+          onChange={(event) => update({ hostnamePrefix: event.target.value })}
+        />
+        {(!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(
+          spec.hostnamePrefix.trim(),
+        ) ||
+          spec.hostnamePrefix.trim().length > 45) && (
+          <small className="field-error">{t("wizard.hostnameInvalid")}</small>
+        )}
+      </Field>
       <SpecText name="sshPubkey" label={t("wizard.sshKey")} area />
       <SpecSelect
         name="firmwareBaseline"

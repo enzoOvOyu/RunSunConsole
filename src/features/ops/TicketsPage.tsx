@@ -50,6 +50,7 @@ export default function TicketsPage() {
   const [message, setMessage] = useState("");
   const [priority, setPriority] = useState("normal");
   const [resource, setResource] = useState("");
+  const [attempted, setAttempted] = useState(false);
   const [status, setStatus] = useUrlState("status");
   const [search, setSearch] = useUrlState("q");
   const q = useData<Ticket[]>(
@@ -145,7 +146,13 @@ export default function TicketsPage() {
               className="input"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              aria-invalid={attempted && title.trim().length < 3}
             />
+            {attempted && title.trim().length < 3 && (
+              <small className="field-error">
+                {t("tickets.titleRequired")}
+              </small>
+            )}
           </Field>
           <Field label={t("nav.resources")}>
             <select
@@ -159,6 +166,11 @@ export default function TicketsPage() {
                 </option>
               ))}
             </select>
+            {attempted && !resource && (
+              <small className="field-error">
+                {t("tickets.resourceRequired")}
+              </small>
+            )}
           </Field>
           <Field label={t("tickets.priority")}>
             <select
@@ -176,25 +188,37 @@ export default function TicketsPage() {
             <textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
+              aria-invalid={attempted && message.trim().length < 3}
             />
+            {attempted && message.trim().length < 3 && (
+              <small className="field-error">
+                {t("tickets.messageRequired")}
+              </small>
+            )}
           </Field>
           <Button
-            disabled={
-              !resource || title.length < 3 || message.length < 3 || busy
-            }
+            disabled={!canWrite(role) || busy}
             onClick={async () => {
+              setAttempted(true);
+              if (
+                !resource ||
+                title.trim().length < 3 ||
+                message.trim().length < 3
+              )
+                return;
               const result = await run(
                 () =>
                   post<Ticket>(EP.tickets, {
-                    title,
+                    title: title.trim(),
                     resourceUuid: resource,
                     priority,
-                    message,
+                    message: message.trim(),
                   }),
                 "success.created",
               );
               if (result) {
                 setOpen(false);
+                setAttempted(false);
                 navigate("/ops/tickets/" + result.id);
               }
             }}

@@ -1,11 +1,24 @@
 import { z } from "zod";
 import { REGIONS, POOLS } from "../types/domain";
 import { storageProduct } from "./storage";
+export const SCALING_METRIC_LIMITS: Record<
+  string,
+  { min: number; max: number; unit: string }
+> = {
+  gpu_allocation_rate: { min: 1, max: 100, unit: "%" },
+  kv_cache_usage: { min: 1, max: 100, unit: "%" },
+  ttft_p99: { min: 1, max: 300000, unit: "ms" },
+  qpm: { min: 1, max: 100000, unit: "QPM" },
+  queue_depth: { min: 1, max: 100000, unit: "requests" },
+  pending_pods: { min: 1, max: 100000, unit: "pods" },
+  concurrency: { min: 1, max: 100000, unit: "requests" },
+  requests_waiting: { min: 1, max: 100000, unit: "requests" },
+};
 export const scalingSchema = z
   .object({
     strategy_model: z.enum(["node_pool", "replica"]),
     trigger_metric: z.string().min(1),
-    target_value: z.number().positive(),
+    target_value: z.number().int().positive(),
     min_size: z.number().int().min(0),
     max_size: z.number().int().min(1).max(64),
     scale_to_zero: z.boolean(),
@@ -19,7 +32,11 @@ export const scalingSchema = z
     maintenance_window: z.string(),
   })
   .superRefine((s, ctx) => {
+    const targetRange = SCALING_METRIC_LIMITS[s.trigger_metric];
     if (
+      !targetRange ||
+      s.target_value < targetRange.min ||
+      s.target_value > targetRange.max ||
       s.min_size > s.max_size ||
       (s.min_size === 0 && (!s.scale_to_zero || s.strategy_model !== "replica"))
     )
@@ -135,7 +152,12 @@ export const baremetalSchema = z.object({
   ipmiEnabled: z.boolean(),
   bmcNetwork: z.enum(["shared", "dedicated"]),
   imageRef: z.string().min(1),
-  hostnamePrefix: z.string().min(1),
+  hostnamePrefix: z
+    .string()
+    .trim()
+    .min(1)
+    .max(45)
+    .regex(/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/, "INVALID_HOSTNAME_PREFIX"),
   sshPubkey: z.string().regex(/^ssh-(ed25519|rsa)\s+[A-Za-z0-9+/=]+/),
   firmwareBaseline: z.string(),
   vpc: z.string(),

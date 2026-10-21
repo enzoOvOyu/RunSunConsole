@@ -311,7 +311,12 @@ export default function ImagesPage() {
                   </Button>
                   <Button
                     variant="primary"
-                    disabled={!canWrite(role)}
+                    disabled={!canWrite(role) || item.modality !== "text"}
+                    title={
+                      item.modality === "text"
+                        ? undefined
+                        : t("images.textOnlyServing")
+                    }
                     onClick={() =>
                       navigate("/deployment/inference?model=" + item.id)
                     }
@@ -328,33 +333,94 @@ export default function ImagesPage() {
       ) : (
         <>
           <div className="row">
-            <Button variant={imageKind === "os" ? "primary" : "ghost"} onClick={() => setImageKind("os")}>{t("images.operatingSystems")}</Button>
-            <Button variant={imageKind === "container" ? "primary" : "ghost"} onClick={() => setImageKind("container")}>{t("images.runtimeTemplates")}</Button>
-            <select aria-label={t("images.cpuArchitecture")} value={imageArchitecture} onChange={(event) => setImageArchitecture(event.target.value)}>
+            <Button
+              variant={imageKind === "os" ? "primary" : "ghost"}
+              onClick={() => setImageKind("os")}
+            >
+              {t("images.operatingSystems")}
+            </Button>
+            <Button
+              variant={imageKind === "container" ? "primary" : "ghost"}
+              onClick={() => setImageKind("container")}
+            >
+              {t("images.runtimeTemplates")}
+            </Button>
+            <select
+              aria-label={t("images.cpuArchitecture")}
+              value={imageArchitecture}
+              onChange={(event) => setImageArchitecture(event.target.value)}
+            >
               <option value="">{t("images.allArchitectures")}</option>
               <option value="x86_64">x86_64</option>
               <option value="aarch64">aarch64</option>
             </select>
           </div>
-          {images.data?.filter((item) => item.type === imageKind && (!imageArchitecture || item.architectures.includes(imageArchitecture as "x86_64" | "aarch64")) && item.name.toLowerCase().includes(search.toLowerCase())).length ? (
+          {images.data?.filter(
+            (item) =>
+              item.type === imageKind &&
+              (!imageArchitecture ||
+                item.architectures.includes(
+                  imageArchitecture as "x86_64" | "aarch64",
+                )) &&
+              item.name.toLowerCase().includes(search.toLowerCase()),
+          ).length ? (
             <div className="grid grid-3">
-              {images.data.filter((item) => item.type === imageKind && (!imageArchitecture || item.architectures.includes(imageArchitecture as "x86_64" | "aarch64")) && item.name.toLowerCase().includes(search.toLowerCase())).map((item) => (
-                <article className="catalog-card" key={item.id}>
-                  <Box size={26} color="var(--rs-brand)" />
-                  <strong>{item.name}</strong>
-                  <small>{item.architectures.join(" / ")} · {t("images.gpuDriver")} {item.driverVersion || t("images.hostDriver")}</small>
-                  <small>CUDA {item.cudaVersion} · {item.sizeGb} GB</small>
-                  <small>{t("images.frameworksIncluded")}: {item.frameworks.length ? item.frameworks.join(", ") : t("images.noneIncluded")}</small>
-                  <div className="model-catalog-tags">{item.supportedGpuModels.map((gpu) => <span className="chip" key={gpu}>{poolDisplayName(gpu)}</span>)}</div>
-                  <span className="chip">{item.source}</span>
-                  <div className="between">
-                    <Button onClick={() => setImage(item)}>{t("common.details")}</Button>
-                    <Button disabled={!canWrite(role)} onClick={() => navigate(`/deployment/server?${item.type === "os" ? "image" : "runtime"}=${item.id}`)}>{t("images.deploy")}</Button>
-                  </div>
-                </article>
-              ))}
+              {images.data
+                .filter(
+                  (item) =>
+                    item.type === imageKind &&
+                    (!imageArchitecture ||
+                      item.architectures.includes(
+                        imageArchitecture as "x86_64" | "aarch64",
+                      )) &&
+                    item.name.toLowerCase().includes(search.toLowerCase()),
+                )
+                .map((item) => (
+                  <article className="catalog-card" key={item.id}>
+                    <Box size={26} color="var(--rs-brand)" />
+                    <strong>{item.name}</strong>
+                    <small>
+                      {item.architectures.join(" / ")} · {t("images.gpuDriver")}{" "}
+                      {item.driverVersion || t("images.hostDriver")}
+                    </small>
+                    <small>
+                      CUDA {item.cudaVersion} · {item.sizeGb} GB
+                    </small>
+                    <small>
+                      {t("images.frameworksIncluded")}:{" "}
+                      {item.frameworks.length
+                        ? item.frameworks.join(", ")
+                        : t("images.noneIncluded")}
+                    </small>
+                    <div className="model-catalog-tags">
+                      {item.supportedGpuModels.map((gpu) => (
+                        <span className="chip" key={gpu}>
+                          {poolDisplayName(gpu)}
+                        </span>
+                      ))}
+                    </div>
+                    <span className="chip">{item.source}</span>
+                    <div className="between">
+                      <Button onClick={() => setImage(item)}>
+                        {t("common.details")}
+                      </Button>
+                      <Button
+                        disabled={!canWrite(role)}
+                        onClick={() =>
+                          navigate(
+                            `/deployment/server?${item.type === "os" ? "image" : "runtime"}=${item.id}`,
+                          )
+                        }
+                      >
+                        {t("images.deploy")}
+                      </Button>
+                    </div>
+                  </article>
+                ))}
             </div>
-          ) : <Empty text={t("images.noMatches")} />}
+          ) : (
+            <Empty text={t("images.noMatches")} />
+          )}
         </>
       )}
       <Modal
@@ -445,7 +511,12 @@ export default function ImagesPage() {
             <div className="row">
               <Button
                 variant="primary"
-                disabled={!canWrite(role)}
+                disabled={!canWrite(role) || model.modality !== "text"}
+                title={
+                  model.modality === "text"
+                    ? undefined
+                    : t("images.textOnlyServing")
+                }
                 onClick={() =>
                   navigate("/deployment/inference?model=" + model.id)
                 }
@@ -465,13 +536,34 @@ export default function ImagesPage() {
             <Panel title={t("common.details")}>
               <KeyValues
                 items={[
-                  [t("images.imageType"), t(image.type === "os" ? "images.operatingSystems" : "images.runtimeTemplates")],
-                  [t("images.operatingSystem"), image.osFamily + " " + image.osVersion],
+                  [
+                    t("images.imageType"),
+                    t(
+                      image.type === "os"
+                        ? "images.operatingSystems"
+                        : "images.runtimeTemplates",
+                    ),
+                  ],
+                  [
+                    t("images.operatingSystem"),
+                    image.osFamily + " " + image.osVersion,
+                  ],
                   [t("images.cpuArchitecture"), image.architectures.join(", ")],
-                  [t("images.gpuDriver"), image.driverVersion || t("images.hostDriver")],
+                  [
+                    t("images.gpuDriver"),
+                    image.driverVersion || t("images.hostDriver"),
+                  ],
                   ["CUDA", image.cudaVersion],
-                  [t("images.frameworksIncluded"), image.frameworks.length ? image.frameworks.join(", ") : t("images.noneIncluded")],
-                  [t("images.compatibleGpuModels"), image.supportedGpuModels.join(", ")],
+                  [
+                    t("images.frameworksIncluded"),
+                    image.frameworks.length
+                      ? image.frameworks.join(", ")
+                      : t("images.noneIncluded"),
+                  ],
+                  [
+                    t("images.compatibleGpuModels"),
+                    image.supportedGpuModels.join(", "),
+                  ],
                   [t("common.size"), image.sizeGb + " GB"],
                   [t("common.source"), image.source],
                   [t("common.description"), image.description],
@@ -480,7 +572,11 @@ export default function ImagesPage() {
             </Panel>
             <Button
               disabled={!canWrite(role)}
-              onClick={() => navigate(`/deployment/server?${image.type === "os" ? "image" : "runtime"}=${image.id}`)}
+              onClick={() =>
+                navigate(
+                  `/deployment/server?${image.type === "os" ? "image" : "runtime"}=${image.id}`,
+                )
+              }
             >
               {t("common.gpu_vm")}
             </Button>

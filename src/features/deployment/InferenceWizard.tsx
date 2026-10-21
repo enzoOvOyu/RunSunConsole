@@ -1,5 +1,5 @@
 import { StorageRows } from "./shared/StorageRows";
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { InferenceSpec } from "../../types/domain";
 import { t } from "../../i18n";
@@ -17,7 +17,6 @@ import {
   SpecNumber,
   SpecText,
   SpecCheck,
-  SpecSelect,
   Review,
   ScalingToggle,
   type FormContext,
@@ -45,107 +44,292 @@ function validate(v: WizardValues, step: number) {
 }
 function InferenceForm({ step, pools, models }: FormContext) {
   const { spec, update, form } = useSpec<InferenceSpec>();
-  const model = models.find((m) => m.id === spec.modelRef) || models[0];
+  const textModels = useMemo(
+    () => models.filter((item) => item.modality === "text"),
+    [models],
+  );
+  const selectedModel = textModels.find((item) => item.id === spec.modelRef);
+  const model = selectedModel;
   const selectedPool = form.watch("nodePool");
-  const precisions = compatiblePrecisions(model, selectedPool, spec.engine);
+  const pool = pools.find((item) => item.code === selectedPool) || pools[0];
+  const precisions = useMemo(
+    () => (model ? compatiblePrecisions(model, selectedPool, spec.engine) : []),
+    [model, selectedPool, spec.engine],
+  );
+  const [autoNotice, setAutoNotice] = useState("");
   const memory = useQuery({
     queryKey: [
       "model-memory",
-      spec.modelRef,
+      model?.id,
+      spec.engine,
+      selectedPool,
       spec.quantization,
+      spec.gpuPerReplica,
       spec.maxModelLen,
     ],
+    enabled: !!selectedModel,
     queryFn: () =>
       post<{ requiredGb: number; weightsGb: number; kvGb: number }>(
         EP.models + "/memory",
         {
-          modelRef: spec.modelRef,
+          modelRef: selectedModel!.id,
           quantization: spec.quantization,
           context: spec.maxModelLen,
         },
       ),
   });
-  const pool = pools.find((p) => p.code === form.watch("nodePool"))!;
-  const required = memory.data?.requiredGb || 0;
-  const capacity = pool.memoryGb * spec.gpuPerReplica;
+  const required = memory.data?.requiredGb;
+  const capacity = (pool?.memoryGb || 0) * spec.gpuPerReplica;
+  const precisionOptions = (
+    nextModel: (typeof textModels)[number],
+    nextPool = selectedPool,
+    nextEngine = spec.engine,
+  ) => compatiblePrecisions(nextModel, nextPool, nextEngine);
+  const setDependencies = (
+    patch: Partial<InferenceSpec>,
+    nextModel = model,
+    nextPool = selectedPool,
+    nextEngine = spec.engine,
+  ) => {
+    if (!nextModel) return;
+    const available = precisionOptions(nextModel, nextPool, nextEngine);
+    const nextPrecision = available.includes(
+      patch.quantization || spec.quantization,
+    )
+      ? patch.quantization || spec.quantization
+      : available[0];
+    const changedPrecision = nextPrecision !== spec.quantization;
+    const nextContext = patch.maxModelLen ?? spec.maxModelLen;
+    const changedContext = nextContext !== spec.maxModelLen;
+    update({ ...patch, quantization: nextPrecision });
+    setAutoNotice(
+      [
+        changedPrecision
+          ? t("wizard.precisionAutoChanged", {
+              previous: spec.quantization.toUpperCase(),
+              next: nextPrecision ? nextPrecision.toUpperCase() : "—",
+            })
+          : "",
+        changedContext
+          ? t("wizard.contextAutoChanged", {
+              previous: spec.maxModelLen,
+              next: nextContext,
+            })
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" "),
+    );
+  };
+  useEffect(() => {
+    if (model && precisions.length && !precisions.includes(spec.quantization)) {
+      const nextPrecision = precisions[0];
+      update({ quantization: nextPrecision });
+      setAutoNotice(
+        t("wizard.precisionAutoChanged", {
+          previous: spec.quantization.toUpperCase(),
+          next: nextPrecision.toUpperCase(),
+        }),
+      );
+    }
+  }, [model, precisions, selectedPool, spec.engine, spec.quantization, update]);
   const { setError, clearErrors } = form;
   useEffect(() => {
-    if (step === 2 && (memory.isPending || required > capacity))
-      setError("spec", { type: "memory", message: "MODEL_MEMORY_EXCEEDED" });
-    else clearErrors("spec");
-  }, [step, memory.isPending, required, capacity, setError, clearErrors]);
+    if (
+      step === 1 &&
+      (!selectedModel || !required || required > capacity || memory.isError)
+    ) {
+      setError("spec", {
+        type: "memory",
+        message: !selectedModel
+          ? "MODEL_MODALITY_UNSUPPORTED"
+          : memory.isError
+            ? "MODEL_MEMORY_CHECK_FAILED"
+            : "MODEL_MEMORY_EXCEEDED",
+      });
+    } else clearErrors("spec");
+  }, [
+    step,
+    selectedModel,
+    required,
+    capacity,
+    memory.isError,
+    setError,
+    clearErrors,
+  ]);
+  const modelGroups = useMemo(() => {
+    const groups = new Map<string, typeof textModels>();
+    for (const item of textModels) {
+      const publisher = item.publisher || t("images.unknownPublisher");
+      groups.set(publisher, [...(groups.get(publisher) || []), item]);
+    }
+    return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [textModels]);
+
   return step === 1 ? (
     <div className="stack">
-      <div className="grid grid-2">
-        {models.map((m) => (
-          <button
-            type="button"
-            className={`catalog-card ${spec.modelRef === m.id ? "selected" : ""}`}
-            key={m.id}
-            onClick={() =>
-              update({
-                modelRef: m.id,
-                quantization: compatiblePrecisions(
-                  m,
-                  selectedPool,
-                  spec.engine,
-                )[0],
-                maxModelLen: Math.min(spec.maxModelLen, m.context),
-              })
-            }
-          >
-            <strong>{m.name}</strong>
-            <small>
-              {m.paramsB}B · {m.license} · {m.modality}
-            </small>
-          </button>
-        ))}
-      </div>
-      <div className="form-grid">
-        <SpecSelect
-          name="quantization"
-          label={t("wizard.quantization")}
-          options={precisions.map((precision) => ({
-            value: precision,
-            label: precisionLabel(precision),
-          }))}
-        />
-        <SpecNumber
-          name="maxModelLen"
-          label={t("wizard.context")}
-          min={4096}
-          max={model.context}
-        />
-      </div>
-      <div className="notice">{t("wizard.precisionHint")}</div>
-      <div className="notice">
-        {t("wizard.memoryRequired", {
-          required: required.toFixed(1),
-          capacity,
-        })}
-      </div>
+      <section className="stack">
+        <strong>{t("wizard.inferenceConfigGroup")}</strong>
+        <p className="muted">{t("wizard.textModelsOnly")}</p>
+        <div className="stack">
+          {modelGroups.map(([publisher, items]) => (
+            <details
+              key={publisher}
+              open={items.some((item) => item.id === spec.modelRef)}
+              className="panel"
+            >
+              <summary className="between">
+                <strong>{publisher}</strong>
+                <span className="muted">
+                  {items.length} ·{" "}
+                  {items.some((item) => item.id === spec.modelRef)
+                    ? model?.name
+                    : ""}
+                </span>
+              </summary>
+              <Field label={t("wizard.selectModel")}>
+                <select
+                  value={
+                    items.some((item) => item.id === spec.modelRef)
+                      ? spec.modelRef
+                      : ""
+                  }
+                  onChange={(event) => {
+                    const nextModel = items.find(
+                      (item) => item.id === event.target.value,
+                    );
+                    if (nextModel)
+                      setDependencies(
+                        {
+                          modelRef: nextModel.id,
+                          maxModelLen: Math.min(
+                            spec.maxModelLen,
+                            nextModel.context,
+                          ),
+                        },
+                        nextModel,
+                      );
+                  }}
+                >
+                  <option value="">{t("common.select")}</option>
+                  {items.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name} · {item.paramsB}B
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </details>
+          ))}
+        </div>
+        {!selectedModel && (
+          <p className="field-error">{t("wizard.textModelRequired")}</p>
+        )}
+        {model && (
+          <div className="form-grid">
+            <Field label={t("resource.engine")}>
+              <select
+                value={spec.engine}
+                onChange={(event) =>
+                  setDependencies({}, model, selectedPool, event.target.value)
+                }
+              >
+                {["vllm", "sglang", "trt-llm"].map((engine) => (
+                  <option key={engine} value={engine}>
+                    {engine}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label={t("wizard.quantization")}>
+              <select
+                value={
+                  precisions.includes(spec.quantization)
+                    ? spec.quantization
+                    : ""
+                }
+                onChange={(event) => {
+                  update({ quantization: event.target.value });
+                  setAutoNotice("");
+                }}
+              >
+                {precisions.map((precision) => (
+                  <option key={precision} value={precision}>
+                    {precisionLabel(precision)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label={t("resource.gpu")}>
+              <select
+                value={spec.gpuPerReplica}
+                onChange={(event) =>
+                  update({
+                    gpuPerReplica: Number(event.target.value),
+                    gpuCount: Number(event.target.value) * spec.replicas,
+                  })
+                }
+              >
+                {[1, 2, 4, 8].map((count) => (
+                  <option key={count} value={count}>
+                    {count} GPU
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <SpecNumber
+              name="maxModelLen"
+              label={t("wizard.context")}
+              min={4096}
+              max={model.context}
+            />
+          </div>
+        )}
+        {autoNotice && <p className="notice">{autoNotice}</p>}
+        <p className="notice">{t("wizard.precisionHint")}</p>
+        <div className="stack">
+          <strong>{t("wizard.gpuPool")}</strong>
+          <PoolCards
+            kind="inference"
+            pools={pools.map((item) => ({
+              ...item,
+              available:
+                item.available &&
+                (!required || item.memoryGb * spec.gpuPerReplica >= required) &&
+                !!model &&
+                compatiblePrecisions(model, item.code, spec.engine).length > 0,
+            }))}
+            selected={selectedPool}
+            onSelect={(item) => {
+              form.setValue("nodePool", item.code, { shouldDirty: true });
+              if (model) setDependencies({}, model, item.code);
+            }}
+          />
+        </div>
+        <p
+          className={
+            memory.isError || (required !== undefined && required > capacity)
+              ? "field-error"
+              : "notice"
+          }
+        >
+          {memory.isError
+            ? t("wizard.memoryCheckFailed")
+            : !selectedModel
+              ? t("wizard.textModelRequired")
+              : required === undefined
+                ? t("wizard.memoryChecking")
+                : required > capacity
+                  ? t("wizard.memoryError")
+                  : t("wizard.memoryRequired", {
+                      required: required.toFixed(1),
+                      capacity,
+                    })}
+        </p>
+      </section>
     </div>
   ) : step === 2 ? (
     <div className="stack">
-      <PoolCards
-        kind="inference"
-        pools={pools.map((p) => ({
-          ...p,
-          available:
-            p.available &&
-            p.memoryGb * 8 >= required &&
-            compatiblePrecisions(model, p.code, spec.engine).includes(
-              spec.quantization,
-            ),
-        }))}
-        selected={form.watch("nodePool")}
-        onSelect={(p) => {
-          form.setValue("nodePool", p.code);
-          const available = compatiblePrecisions(model, p.code, spec.engine);
-          if (!available.includes(spec.quantization))
-            update({ quantization: available[0] });
-        }}
-      />
       <div className="form-grid">
         <Field label={t("resource.replicas") + " · 1–32"}>
           <input
@@ -160,64 +344,16 @@ function InferenceForm({ step, pools, models }: FormContext) {
             }}
           />
         </Field>
-        <Field label={t("resource.gpu")}>
-          <select
-            value={spec.gpuPerReplica}
-            onChange={(e) => {
-              const gpuPerReplica = Number(e.target.value);
-              update({
-                gpuPerReplica,
-                gpuCount: gpuPerReplica * spec.replicas,
-              });
-            }}
-          >
-            {[1, 2, 4, 8].map((n) => (
-              <option key={n} value={n} disabled={pool.memoryGb * n < required}>
-                {n} GPU
-              </option>
-            ))}
-          </select>
-        </Field>
+        <div className="notice">
+          {t("wizard.gpuPerReplicaSummary", { count: spec.gpuPerReplica })}
+        </div>
       </div>
-      <p className={required > capacity ? "field-error" : "notice"}>
-        {required > capacity
-          ? t("wizard.memoryError")
-          : t("wizard.memoryRequired", {
-              required: required.toFixed(1),
-              capacity,
-            })}
-      </p>
       <ScalingToggle kind="inference" />
     </div>
   ) : step === 3 ? (
     <div className="stack">
       <NetworkFields />
       <div className="form-grid">
-        <Field label={t("resource.engine")}>
-          <select
-            value={spec.engine}
-            onChange={(e) => {
-              const engine = e.target.value;
-              const available = compatiblePrecisions(
-                model,
-                selectedPool,
-                engine,
-              );
-              update({
-                engine,
-                quantization: available.includes(spec.quantization)
-                  ? spec.quantization
-                  : available[0],
-              });
-            }}
-          >
-            {["vllm", "sglang", "trt-llm"].map((engine) => (
-              <option key={engine} value={engine}>
-                {engine}
-              </option>
-            ))}
-          </select>
-        </Field>
         <SpecNumber name="port" label="Port · 1–65535" min={1} max={65535} />
         <SpecNumber
           name="maxBatchSize"

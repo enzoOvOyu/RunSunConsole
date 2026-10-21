@@ -1,7 +1,7 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import type { ResourceOf } from "../../../types/domain";
 import { ResourceListShell, ResourceName } from "../shared/ResourceListShell";
-import { money } from "../../../lib/money";
+import { unitMoney } from "../../../lib/money";
 import { Badge } from "../../../components/ui";
 import { t } from "../../../i18n";
 import { size } from "../../../lib/money";
@@ -72,7 +72,7 @@ export default function BaremetalPage() {
     {
       id: "hourly",
       header: t("common.price") + " / " + t("unit.per_machine_hour"),
-      cell: ({ row }) => money(row.original.cost?.unitPrice || 0),
+      cell: ({ row }) => unitMoney(row.original.cost?.unitPrice || 0),
     },
   ];
   return (

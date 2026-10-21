@@ -139,22 +139,44 @@ export default function StoragePage() {
         }
       />
       <div className="grid grid-3 resource-summary-grid">
-        <Panel title={t("storage.bucketCount")} className="resource-summary-card">
+        <Panel
+          title={t("storage.bucketCount")}
+          className="resource-summary-card"
+        >
           <div className="resource-summary-value">{q.data?.length ?? "—"}</div>
           <small>{t("nav.object")}</small>
         </Panel>
-        <Panel title={t("storage.allocatedCapacity")} className="resource-summary-card">
-          <div className="resource-summary-value">{objectQuota?.usedGb.toLocaleString() || "—"}<span className="resource-unit">GB</span></div>
+        <Panel
+          title={t("storage.allocatedCapacity")}
+          className="resource-summary-card"
+        >
+          <div className="resource-summary-value">
+            {objectQuota?.usedGb.toLocaleString() || "—"}
+            <span className="resource-unit">GB</span>
+          </div>
           <small>{t("storage.allocatedCapacity")}</small>
         </Panel>
-        <Panel title={t("storage.availableCapacity")} className="resource-summary-card">
+        <Panel
+          title={t("storage.availableCapacity")}
+          className="resource-summary-card"
+        >
           <div className="resource-summary-value">
-            {objectQuota ? (objectQuota.limitGb - objectQuota.usedGb).toLocaleString() : "—"}<span className="resource-unit">GB</span>
+            {objectQuota
+              ? (objectQuota.limitGb - objectQuota.usedGb).toLocaleString()
+              : "—"}
+            <span className="resource-unit">GB</span>
           </div>
-          {objectQuota && <div className="resource-summary-progress">
-            <Progress value={(objectQuota.usedGb / objectQuota.limitGb) * 100} />
-            <small>{objectQuota.usedGb.toLocaleString()} / {objectQuota.limitGb.toLocaleString()} GB</small>
-          </div>}
+          {objectQuota && (
+            <div className="resource-summary-progress">
+              <Progress
+                value={(objectQuota.usedGb / objectQuota.limitGb) * 100}
+              />
+              <small>
+                {objectQuota.usedGb.toLocaleString()} /{" "}
+                {objectQuota.limitGb.toLocaleString()} GB
+              </small>
+            </div>
+          )}
         </Panel>
       </div>
       <div className="toolbar">
@@ -498,9 +520,15 @@ export default function StoragePage() {
                       type="number"
                       min={1}
                       max={3650}
+                      step={1}
                       value={days}
                       onChange={(e) => setDays(Number(e.target.value))}
                     />
+                    {(!Number.isInteger(days) || days < 1 || days > 3650) && (
+                      <small className="field-error">
+                        {t("wizard.lifecycleDaysInvalid")}
+                      </small>
+                    )}
                   </Field>
                   <Field label={t("common.action")}>
                     <select
@@ -513,7 +541,11 @@ export default function StoragePage() {
                   </Field>
                   <Button
                     disabled={
-                      !canWrite(role) || days < 1 || days > 3650 || busy
+                      !canWrite(role) ||
+                      !Number.isInteger(days) ||
+                      days < 1 ||
+                      days > 3650 ||
+                      busy
                     }
                     onClick={() =>
                       void run(() =>
@@ -523,7 +555,7 @@ export default function StoragePage() {
                             rules: [
                               ...bucket.lifecycle,
                               {
-                                prefix: rulePrefix,
+                                prefix: rulePrefix.trim(),
                                 action: ruleAction,
                                 after_days: days,
                               },
@@ -652,15 +684,39 @@ export default function StoragePage() {
                 type="number"
                 min={60}
                 max={604800}
+                step={1}
                 value={expires}
                 onChange={(e) => setExpires(Number(e.target.value))}
               />
+              {(!Number.isInteger(expires) ||
+                expires < 60 ||
+                expires > 604800) && (
+                <small className="field-error">
+                  {t("wizard.shareExpiryInvalid")}
+                </small>
+              )}
             </Field>
             <div className="row">
-              <Button onClick={() => void objectAction(selected, "share")}>
+              <Button
+                disabled={
+                  !Number.isInteger(expires) ||
+                  expires < 60 ||
+                  expires > 604800 ||
+                  busy
+                }
+                onClick={() => void objectAction(selected, "share")}
+              >
                 {t("storage.share")}
               </Button>
-              <Button onClick={() => void objectAction(selected, "download")}>
+              <Button
+                disabled={
+                  !Number.isInteger(expires) ||
+                  expires < 60 ||
+                  expires > 604800 ||
+                  busy
+                }
+                onClick={() => void objectAction(selected, "download")}
+              >
                 {t("common.download")}
               </Button>
               <Button

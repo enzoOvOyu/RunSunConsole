@@ -97,11 +97,11 @@ export function PoolCards({
             {kind === "gpu_baremetal" && (
               <small>
                 {pool.cpu} · {pool.memorySystemGb} GB ·{" "}
-                {pool.localNvmeGb / 1024} TB NVMe · {pool.network}
+                {pool.localNvmeGb / 1000} TB NVMe · {pool.network}
               </small>
             )}
             <div className="price">
-              {rate ? money(rate.unitPrice) : "—"}{" "}
+              {rate ? unitMoney(rate.unitPrice) : "—"}{" "}
               <small>
                 /{" "}
                 {t(
@@ -264,10 +264,13 @@ function WizardForm({
     )
       base.spec.modelRef = source.model;
     if (source.image && "imageRef" in base.spec) {
-      const selectedImage = context.images.find((image) => image.id === source.image);
+      const selectedImage = context.images.find(
+        (image) => image.id === source.image,
+      );
       if (selectedImage?.type === "container" && "runtimeImageRef" in base.spec)
         base.spec.runtimeImageRef = selectedImage.id;
-      else if (selectedImage?.type === "os") base.spec.imageRef = selectedImage.id;
+      else if (selectedImage?.type === "os")
+        base.spec.imageRef = selectedImage.id;
     }
     if (source.runtime && "runtimeImageRef" in base.spec)
       base.spec.runtimeImageRef = source.runtime;
@@ -355,9 +358,14 @@ function WizardForm({
     return !pool?.available || count > pool.availableGpu;
   });
   const poolStep = kind === "gpu_vm" || kind === "gpu_baremetal" ? 1 : 2;
+  const scalingRangeInvalid =
+    !!values.spec.scaling &&
+    (values.spec.scaling.min_size > currentSize ||
+      values.spec.scaling.max_size < currentSize);
   const valid =
     (step === 0 ? firstValid : validateStep(values, step)) &&
     !(step >= poolStep && overCapacity) &&
+    !scalingRangeInvalid &&
     !form.formState.errors.spec;
   const submit = async () => {
     const result = orderSchema.safeParse({ ...values, kind });
@@ -551,6 +559,11 @@ function WizardForm({
                       <div className="cost-line" key={i}>
                         <div className="cost-line-detail">
                           <span>{t("price." + line.key.split(":")[0])}</span>
+                          {line.key === "control" &&
+                            "controlPlaneTier" in values.spec &&
+                            values.spec.controlPlaneTier === "ha" && (
+                              <small>{t("price.haControlPlaneNote")}</small>
+                            )}
                           <small>
                             {line.quantity} × {unitMoney(line.unitPrice)} /{" "}
                             {t("unit." + line.unit)}

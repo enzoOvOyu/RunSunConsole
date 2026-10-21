@@ -13,7 +13,7 @@ export const number = (v: number, digits = 0) =>
     maximumFractionDigits: digits,
   }).format(v);
 export const size = (gb: number) =>
-  gb >= 1024 ? `${number(gb / 1024, 2)} TB` : `${number(gb, 1)} GB`;
+  gb >= 1000 ? `${number(gb / 1000, 2)} TB` : `${number(gb, 1)} GB`;
 
 export const unitMoney = (v: number) =>
   new Intl.NumberFormat(useLocale.getState().locale, {

@@ -72,8 +72,8 @@ export function estimate(
     add(
       "control",
       "per_cluster_hour",
-      find("per_cluster_hour", null),
-      spec.controlPlaneTier === "ha" ? 3 : 1,
+      find("per_cluster_hour", null) * (spec.controlPlaneTier === "ha" ? 3 : 1),
+      1,
       false,
     );
   } else
@@ -89,13 +89,7 @@ export function estimate(
     spec.storageGb - storageExtraGb(spec.storageSelections),
   );
   if (baseStorage > 0)
-    add(
-      "storage",
-      "per_gb_hour",
-      find("per_gb_hour", null),
-      baseStorage,
-      false,
-    );
+    add("storage", "per_gb_hour", find("per_gb_hour", null), baseStorage, true);
   for (const row of spec.storageSelections || []) {
     if (row.kind === "object") continue;
     const product = storageProduct(row.kind, row.tier);
