@@ -41,7 +41,7 @@ export function defaultSpec(kind: Kind, pool: Pool): Resource["spec"] {
       authMethod: "ssh_key",
       gpuModel: pool.gpuModel,
       vcpu: 16,
-      memoryGb: 128,
+      memoryGb: 32,
       imageRef: "pytorch",
       quantity: 1,
       gpuPerInstance: 1,

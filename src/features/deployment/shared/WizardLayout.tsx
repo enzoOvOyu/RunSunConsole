@@ -36,6 +36,12 @@ import {
 } from "../../../components/ui";
 import { useAction, useData } from "../../shared/hooks";
 import { ProjectSelect, type WizardValues, type FormContext } from "./fields";
+function normalizeServerCompute(spec: Resource["spec"]): Resource["spec"] {
+  if (!("gpuPerInstance" in spec)) return spec;
+  const rawVcpu = Number(spec.vcpu) || 16;
+  const vcpu = Math.max(8, Math.min(96, Math.round(rawVcpu / 8) * 8));
+  return { ...spec, vcpu, memoryGb: vcpu * 2 };
+}
 interface Props {
   kind: Kind;
   steps: string[];
@@ -229,8 +235,11 @@ function WizardForm({
     };
     try {
       const stored = sessionStorage.getItem(`wizard:${kind}`);
-      if (stored && !clone && !source.model)
-        return JSON.parse(stored) as WizardValues;
+      if (stored && !clone && !source.model) {
+        const draft = JSON.parse(stored) as WizardValues;
+        if (kind === "gpu_vm") draft.spec = normalizeServerCompute(draft.spec);
+        return draft;
+      }
     } catch {
       /* Start a fresh form when a stored draft is invalid. */
     }
@@ -242,7 +251,10 @@ function WizardForm({
         name: clone.name + "-copy",
         nodePool: clone.nodePool,
         mode: clone.mode,
-        spec: structuredClone(clone.spec),
+        spec:
+          kind === "gpu_vm"
+            ? normalizeServerCompute(structuredClone(clone.spec))
+            : structuredClone(clone.spec),
       };
     if (
       source.model &&
@@ -452,18 +464,6 @@ function WizardForm({
                         {...form.register("name")}
                         minLength={3}
                         maxLength={63}
-                      />
-                    </Field>
-                    <Field label={t("wizard.labels")}>
-                      <input
-                        className="input"
-                        value={values.labels.join(",")}
-                        onChange={(e) =>
-                          form.setValue(
-                            "labels",
-                            e.target.value.split(",").filter(Boolean),
-                          )
-                        }
                       />
                     </Field>
                   </div>

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { EP, query } from "../../../lib/api-client";
 import { useData } from "../../shared/hooks";
@@ -26,6 +26,7 @@ import {
 } from "../../../components/ui";
 import { t, dt } from "../../../i18n";
 import { defaultScaling, normalizeSpec } from "../../../lib/config";
+import { readSshKeys } from "../../../lib/ssh-keys";
 export interface WizardValues {
   projectId: string;
   region: Region;
@@ -558,6 +559,7 @@ export function NetworkFields() {
               </option>
             ))}
           </select>
+          {!vpcId && <small className="field-error">{t("wizard.vpcRequired")}</small>}
         </Field>
         <Field label={t("field.subnet")}>
           <select
@@ -573,6 +575,7 @@ export function NetworkFields() {
               </option>
             ))}
           </select>
+          {!spec.subnet && <small className="field-error">{t("wizard.subnetRequired")}</small>}
         </Field>
         <Field label={t("field.securityGroups")}>
           <select
@@ -594,6 +597,9 @@ export function NetworkFields() {
               </option>
             ))}
           </select>
+          {!spec.securityGroups?.length && (
+            <small className="field-error">{t("wizard.securityGroupRequired")}</small>
+          )}
         </Field>
         {vm && (
           <div className="stack">
@@ -720,11 +726,51 @@ export function ProjectSelect({
         <option value="">{t("common.project")}</option>
         {projects.map((p) => (
           <option key={p.id} value={p.id}>
-            {dt(p.name)}
+            {dt(p.name)} · {p.id}
           </option>
         ))}
       </select>
       <Button onClick={onCreate}>{t("wizard.projectNew")}</Button>
+    </div>
+  );
+}
+
+
+export function SshKeySelect({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (publicKey: string) => void;
+}) {
+  const [keys, setKeys] = useState(readSshKeys);
+  useEffect(() => {
+    const refresh = () => setKeys(readSshKeys());
+    window.addEventListener("storage", refresh);
+    return () => window.removeEventListener("storage", refresh);
+  }, []);
+  return (
+    <div className="stack">
+      <Field label={t("wizard.sshKey")}>
+        <select
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          aria-label={t("wizard.sshKey")}
+        >
+          <option value="">{t("wizard.selectSshKey")}</option>
+          {keys.map((key) => (
+            <option key={key.id} value={key.publicKey}>
+              {key.name}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <small>
+        {t("wizard.noSshKey")} {" "}
+        <Link to="/workbench/ssh-keys" target="_blank" rel="noreferrer">
+          {t("wizard.manageSshKeys")}
+        </Link>
+      </small>
     </div>
   );
 }

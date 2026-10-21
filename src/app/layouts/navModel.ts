@@ -23,6 +23,7 @@ import {
   Globe2,
   ShieldCheck,
   Cable,
+  KeyRound,
 } from "lucide-react";
 import { KINDS, type Role } from "../../types/domain";
 import { KIND_META } from "../../lib/ids";
@@ -55,6 +56,7 @@ const itemIcons: Record<string, typeof LayoutDashboard> = {
   images: Container,
   apps: AppWindow,
   scaling: Scaling,
+  "ssh-keys": KeyRound,
   block: HardDrive,
   file: Files,
   object: CloudUpload,
@@ -115,7 +117,7 @@ export function buildGroups(role: Role): NavGroup[] {
       {
         id: "workbench",
         icon: Terminal,
-        items: ["notebooks", "images", "apps", "scaling"],
+        items: ["notebooks", "images", "apps", "scaling", "ssh-keys"],
       },
       {
         id: "storage",

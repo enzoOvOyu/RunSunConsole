@@ -9,8 +9,8 @@ import {
   useSpec,
   SpecNumber,
   SpecText,
-  SpecCheck,
   SpecSelect,
+  SshKeySelect,
   ImageCards,
   NetworkFields,
   Review,
@@ -29,9 +29,10 @@ function validate(v: WizardValues, step: number) {
           z.literal(4),
           z.literal(8),
         ]),
-        vcpu: z.number().positive(),
-        memoryGb: z.number().positive(),
+        vcpu: z.number().int().min(8).max(96).multipleOf(8),
+        memoryGb: z.number().int(),
       })
+      .refine((value) => value.memoryGb === value.vcpu * 2)
       .safeParse(s).success;
   if (step === 2)
     return (
@@ -52,6 +53,10 @@ function validate(v: WizardValues, step: number) {
             .string()
             .regex(/^ssh-(ed25519|rsa)\s+[A-Za-z0-9+/=]+/)
             .safeParse(s.sshPubkey).success) &&
+      !!s.vpc &&
+      !!s.subnet &&
+      s.securityGroups.length > 0 &&
+      Number.isInteger(s.bandwidthMbps) &&
       s.bandwidthMbps >= 1 &&
       s.bandwidthMbps <= 1000
     );
@@ -60,6 +65,7 @@ function validate(v: WizardValues, step: number) {
 function ServerForm({ step, pools, images }: FormContext) {
   const { spec, update, form } = useSpec<ServerSpec>();
   const selected = form.watch("nodePool");
+  const password = form.watch("password") || "";
   return step === 1 ? (
     <div className="stack">
       <PoolCards
@@ -83,8 +89,6 @@ function ServerForm({ step, pools, images }: FormContext) {
               update({
                 gpuPerInstance: n,
                 gpuCount: n * spec.quantity,
-                vcpu: n * 16,
-                memoryGb: n * 128,
               });
             }}
           >
@@ -95,13 +99,32 @@ function ServerForm({ step, pools, images }: FormContext) {
             ))}
           </select>
         </Field>
-        <SpecNumber name="vcpu" label="vCPU" min={16} max={1024} />
-        <SpecNumber
-          name="memoryGb"
-          label={t("resource.cpu") + " · GB"}
-          min={128}
-          max={8192}
-        />
+        <Field label="vCPU" hint={t("wizard.vcpuHint")}>
+          <select
+            value={spec.vcpu}
+            onChange={(event) => {
+              const vcpu = Number(event.target.value);
+              update({ vcpu, memoryGb: vcpu * 2 });
+            }}
+          >
+            {Array.from({ length: 12 }, (_, index) => (index + 1) * 8).map(
+              (vcpu) => (
+                <option key={vcpu} value={vcpu}>
+                  {vcpu} vCPU
+                </option>
+              ),
+            )}
+          </select>
+        </Field>
+        <Field label={t("wizard.memoryForCpu")} hint={t("wizard.memoryRatio")}>
+          <input
+            className="input"
+            type="number"
+            value={spec.vcpu * 2}
+            readOnly
+            aria-readonly="true"
+          />
+        </Field>
         <small className="mono">
           gpu.{spec.gpuPerInstance}x{selected.toLowerCase()}.{spec.vcpu}c.
           {spec.memoryGb}g
@@ -148,23 +171,50 @@ function ServerForm({ step, pools, images }: FormContext) {
         ]}
       />
       {spec.authMethod === "password" ? (
-        <Field label={t("wizard.password")} hint="8–128">
+        <Field
+          label={t("wizard.password")}
+          hint={t("wizard.passwordRule")}
+        >
           <input
             className="input"
             type="password"
             autoComplete="new-password"
+            aria-invalid={
+              password.length < 8 ||
+              password.length > 128
+            }
             {...form.register("password")}
           />
+          {(password.length < 8 ||
+            password.length > 128) && (
+            <small className="field-error">{t("wizard.passwordRequired")}</small>
+          )}
         </Field>
       ) : (
-        <SpecText name="sshPubkey" label={t("wizard.sshKey")} area />
+        <>
+          <SshKeySelect
+            value={spec.sshPubkey}
+            onChange={(sshPubkey) => update({ sshPubkey })}
+          />
+          {!/^ssh-(ed25519|rsa)\s+[A-Za-z0-9+/=]+/.test(spec.sshPubkey) && (
+            <small className="field-error">{t("wizard.sshKeyRequired")}</small>
+          )}
+        </>
       )}
-      <SpecNumber
-        name="bandwidthMbps"
-        label={t("wizard.bandwidth")}
-        min={1}
-        max={1000}
-      />
+      <div className="stack">
+        <SpecNumber
+          name="bandwidthMbps"
+          label={t("wizard.bandwidth")}
+          min={1}
+          max={1000}
+          help={t("wizard.bandwidthHint")}
+        />
+        {(!Number.isInteger(spec.bandwidthMbps) ||
+          spec.bandwidthMbps < 1 ||
+          spec.bandwidthMbps > 1000) && (
+          <small className="field-error">{t("wizard.bandwidthInvalid")}</small>
+        )}
+      </div>
     </div>
   ) : (
     <div className="stack">
@@ -208,21 +258,6 @@ function ServerForm({ step, pools, images }: FormContext) {
             }
           />
         </Field>
-        <Field label={t("wizard.ports")}>
-          <input
-            className="input"
-            value={spec.ports?.join(",") || ""}
-            onChange={(e) =>
-              update({
-                ports: e.target.value
-                  .split(",")
-                  .map(Number)
-                  .filter(Number.isFinite),
-              })
-            }
-          />
-        </Field>
-        <SpecCheck name="publicIp" label={t("wizard.publicIp")} />
       </div>
       <ScalingToggle kind="gpu_vm" />
       <Review />

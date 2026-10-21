@@ -188,6 +188,14 @@ export const router = createBrowserRouter([
         }),
       },
       {
+        path: "workbench/ssh-keys",
+        lazy: async () => ({
+          Component: withLocale(
+            (await import("../features/workbench/SshKeysPage")).default,
+          ),
+        }),
+      },
+      {
         path: "data/datasets",
         lazy: async () => ({
           Component: withLocale(
