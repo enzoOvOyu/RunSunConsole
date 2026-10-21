@@ -1,7 +1,12 @@
 import type { NetworkState } from "../../types/network";
 import type { StorageVolume } from "../../types/storage";
 import { seedStandaloneVolumes, seedStorageVolumes } from "../fixtures/storage";
-import { makeNetwork } from "./network";
+import {
+  ensureScope,
+  makeNetwork,
+  releaseResourceNetwork,
+  syncResourceNetwork,
+} from "./network";
 import type {
   Resource,
   Project,
@@ -418,6 +423,21 @@ export function restoreDatabase() {
         data.resourceStatusMigrationVersion = 1;
       }
       data.network ??= makeNetwork(data.resources, data.projects);
+      for (const project of data.projects.filter((item) => !item.deletedAt))
+        for (const region of ["jp", "sg", "us"] as const)
+          ensureScope(data.network, { projectId: project.id, region });
+      for (const resource of data.resources) {
+        if (resource.deletedAt || resource.kind !== "gpu_baremetal") continue;
+        const currentVpc = data.network.vpcs.find(
+          (vpc) => vpc.id === resource.spec.vpc,
+        );
+        if (currentVpc && currentVpc.networkType === "baremetal") continue;
+        releaseResourceNetwork(data.network, resource.resourceUuid);
+        resource.spec.vpc = "";
+        resource.spec.subnet = "";
+        resource.spec.securityGroups = undefined;
+        syncResourceNetwork(data.network, resource);
+      }
       for (const list of [
         data.network.vpcs,
         data.network.subnets,

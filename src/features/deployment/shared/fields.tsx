@@ -454,13 +454,22 @@ export function ImageCards({
     </div>
   );
 }
-export function NetworkFields() {
+export function NetworkFields({
+  dedicatedBaremetal = false,
+}: {
+  dedicatedBaremetal?: boolean;
+}) {
   const { form, spec, update } = useSpec();
   const region = form.watch("region"),
     projectId = form.watch("projectId");
   const options = useData<DeploymentOptions>(
-    ["deployment-network", region, projectId],
-    EP.options + query({ region, project_id: projectId }),
+    ["deployment-network", region, projectId, dedicatedBaremetal],
+    EP.options +
+      query({
+        region,
+        project_id: projectId,
+        kind: dedicatedBaremetal ? "gpu_baremetal" : undefined,
+      }),
     { enabled: !!projectId },
   );
   const vpcId = spec.vpc || "";
@@ -535,6 +544,9 @@ export function NetworkFields() {
         </Link>
       </div>
       <div className="form-grid">
+        {dedicatedBaremetal && (
+          <div className="notice">{t("network.baremetalVpcNotice")}</div>
+        )}
         <Field label="VPC">
           <select
             aria-label="VPC"
@@ -559,7 +571,9 @@ export function NetworkFields() {
               </option>
             ))}
           </select>
-          {!vpcId && <small className="field-error">{t("wizard.vpcRequired")}</small>}
+          {!vpcId && (
+            <small className="field-error">{t("wizard.vpcRequired")}</small>
+          )}
         </Field>
         <Field label={t("field.subnet")}>
           <select
@@ -575,7 +589,9 @@ export function NetworkFields() {
               </option>
             ))}
           </select>
-          {!spec.subnet && <small className="field-error">{t("wizard.subnetRequired")}</small>}
+          {!spec.subnet && (
+            <small className="field-error">{t("wizard.subnetRequired")}</small>
+          )}
         </Field>
         <Field label={t("field.securityGroups")}>
           <select
@@ -598,7 +614,9 @@ export function NetworkFields() {
             ))}
           </select>
           {!spec.securityGroups?.length && (
-            <small className="field-error">{t("wizard.securityGroupRequired")}</small>
+            <small className="field-error">
+              {t("wizard.securityGroupRequired")}
+            </small>
           )}
         </Field>
         {vm && (
@@ -735,7 +753,6 @@ export function ProjectSelect({
   );
 }
 
-
 export function SshKeySelect({
   value,
   onChange,
@@ -766,7 +783,7 @@ export function SshKeySelect({
         </select>
       </Field>
       <small>
-        {t("wizard.noSshKey")} {" "}
+        {t("wizard.noSshKey")}{" "}
         <Link to="/workbench/ssh-keys" target="_blank" rel="noreferrer">
           {t("wizard.manageSshKeys")}
         </Link>

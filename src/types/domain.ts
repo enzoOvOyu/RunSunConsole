@@ -206,6 +206,10 @@ export interface Pool {
   memorySystemGb: number;
   localNvmeGb: number;
   network: string;
+  networkTechnology?: string;
+  networkPorts?: number;
+  networkSpeedGbps?: number;
+  migPreconfigured?: boolean;
   migProfile: string;
   migProfiles?: string[];
   availableGpu: number;

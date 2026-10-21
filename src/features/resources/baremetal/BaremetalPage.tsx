@@ -27,11 +27,6 @@ export default function BaremetalPage() {
       cell: ({ row }) => t(`common.${row.original.region}`),
     },
     {
-      id: "machine",
-      header: t("resource.machineType"),
-      cell: ({ row }) => row.original.spec.machineType,
-    },
-    {
       id: "raid",
       header: t("resource.raid"),
       cell: ({ row }) => row.original.spec.raidLevel.toUpperCase(),
@@ -47,8 +42,13 @@ export default function BaremetalPage() {
       cell: ({ row }) => row.original.spec.machineCount,
     },
     {
+      id: "gpuModel",
+      header: t("resource.gpuModel"),
+      cell: ({ row }) => row.original.spec.gpuModel,
+    },
+    {
       id: "gpu",
-      header: t("resource.totalGpu"),
+      header: t("resource.gpuQuantity"),
       cell: ({ row }) => row.original.spec.gpuCount,
     },
     {
@@ -81,8 +81,8 @@ export default function BaremetalPage() {
       facets={[
         {
           id: "machine",
-          label: t("resource.machineType"),
-          value: (r) => r.spec.machineType,
+          label: t("resource.gpuModel"),
+          value: (r) => r.spec.gpuModel,
         },
         {
           id: "raid",

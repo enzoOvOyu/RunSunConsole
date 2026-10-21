@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { StorageRows } from "./shared/StorageRows";
 import { z } from "zod";
 import type { BaremetalSpec } from "../../types/domain";
@@ -28,13 +29,18 @@ function validate(v: WizardValues, step: number) {
         raidLevel: z.enum(["none", "raid0", "raid1", "raid10"]),
       })
       .safeParse(s).success;
-  if (step === 3) return !!s.vpc && s.subnet.startsWith(v.region);
+  if (step === 3)
+    return !!s.vpc && !!s.subnet && (s.securityGroups?.length || 0) > 0;
   return baremetalSchema.safeParse(s).success;
 }
 function BaremetalForm({ step, pools, images }: FormContext) {
   const { spec, update, form } = useSpec<BaremetalSpec>();
   const selected = form.watch("nodePool");
   const pool = pools.find((p) => p.code === selected)!;
+  useEffect(() => {
+    if (!pool.migPreconfigured && !spec.passthrough)
+      update({ passthrough: true });
+  }, [pool.migPreconfigured, spec.passthrough, update]);
   return step === 1 ? (
     <PoolCards
       kind="gpu_baremetal"
@@ -71,12 +77,22 @@ function BaremetalForm({ step, pools, images }: FormContext) {
           }}
         />
       </Field>
-      <SpecCheck name="passthrough" label={t("wizard.passthrough")} />
-      {!spec.passthrough && (
+      {pool.migPreconfigured ? (
+        <SpecCheck name="passthrough" label={t("wizard.passthrough")} />
+      ) : (
+        <Field label={t("wizard.passthrough")}>
+          <input
+            className="input"
+            value={t("baremetal.fullGpuDefault")}
+            readOnly
+          />
+        </Field>
+      )}
+      {pool.migPreconfigured && !spec.passthrough && (
         <SpecSelect
           name="migPartition"
           label="MIG"
-          options={[pool.migProfile]}
+          options={pool.migProfiles || [pool.migProfile]}
         />
       )}
       <SpecSelect
@@ -87,16 +103,40 @@ function BaremetalForm({ step, pools, images }: FormContext) {
     </div>
   ) : step === 3 ? (
     <div className="stack">
-      <NetworkFields />
-      <SpecCheck name="ibEnabled" label={"InfiniBand · " + pool.network} />
-      <SpecCheck name="ipmiEnabled" label="IPMI / BMC" />
-      {spec.ipmiEnabled && (
-        <SpecSelect
-          name="bmcNetwork"
-          label="BMC Network"
-          options={["shared", "dedicated"]}
-        />
-      )}
+      <NetworkFields dedicatedBaremetal />
+      <section className="panel">
+        <div className="panel-body stack">
+          <h3>{t("baremetal.networkSpecs")}</h3>
+          <div className="form-grid">
+            <Field label={t("baremetal.networkTechnology")}>
+              <input
+                className="input"
+                value={pool.networkTechnology || pool.network}
+                readOnly
+              />
+            </Field>
+            <Field label={t("baremetal.networkPorts")}>
+              <input
+                className="input"
+                value={pool.networkPorts ?? "—"}
+                readOnly
+              />
+            </Field>
+            <Field label={t("baremetal.networkSpeed")}>
+              <input
+                className="input"
+                value={
+                  pool.networkSpeedGbps
+                    ? `${pool.networkSpeedGbps} Gb/s`
+                    : pool.network
+                }
+                readOnly
+              />
+            </Field>
+          </div>
+          <small>{t("baremetal.networkPlatformManaged")}</small>
+        </div>
+      </section>
     </div>
   ) : (
     <div className="stack">

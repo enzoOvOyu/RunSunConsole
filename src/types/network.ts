@@ -9,6 +9,7 @@ export interface Vpc extends NetworkScope {
   name: string;
   cidr: string;
   isDefault: boolean;
+  networkType?: "standard" | "baremetal";
   createdAt: string;
 }
 export interface Subnet extends NetworkScope {

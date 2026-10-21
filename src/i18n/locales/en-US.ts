@@ -31,7 +31,8 @@ export default {
   "nav.pipelines": "Data pipelines",
   "nav.bills": "My bills",
   "nav.vouchers": "Vouchers",
-  "pageDescription.sshKeys": "Import and manage public keys for GPU cloud server SSH access. Keys are stored in this browser only.",
+  "pageDescription.sshKeys":
+    "Import and manage public keys for GPU cloud server SSH access. Keys are stored in this browser only.",
   "pageDescription.resources.gpu_vm":
     "Review GPU VM status, specifications and network settings, and manage instance lifecycle.",
   "pageDescription.resources.gpu_baremetal":
@@ -309,7 +310,21 @@ export default {
   "resource.uptime": "Uptime",
   "resource.machineType": "Machine type",
   "resource.machineCount": "Machine count",
-  "resource.totalGpu": "Total GPUs · informational",
+  "resource.totalGpu": "GPU quantity",
+  "resource.gpuQuantity": "GPU quantity",
+  "resource.gpuModel": "GPU model",
+  "baremetal.fullGpuDefault": "Full GPU passthrough (platform default)",
+  "baremetal.networkSpecs": "Machine high-speed network specifications",
+  "baremetal.networkTechnology": "High-speed network fabric",
+  "baremetal.networkPorts": "Port count",
+  "baremetal.networkSpeed": "Per-port speed",
+  "baremetal.networkPlatformManaged":
+    "The BMC management network is configured by the platform and is not customer-editable.",
+  "network.vpcType": "VPC type",
+  "network.vpcTypeStandard": "General-purpose VPC",
+  "network.vpcTypeBaremetal": "Bare metal VPC",
+  "network.baremetalVpcNotice":
+    "Bare metal instances can use only a dedicated bare metal VPC.",
   "resource.nvme": "Local NVMe",
   "resource.rack": "Rack location",
   "resource.k8s": "Kubernetes version",
@@ -445,8 +460,10 @@ export default {
   "wizard.labels": "Labels · comma separated",
   "wizard.vcpuHint": "Choose 8–96 vCPU in increments of 8 per instance.",
   "wizard.memoryForCpu": "Memory · GB",
-  "wizard.memoryRatio": "Automatically set to vCPU × 2 GB; cannot be edited separately.",
-  "wizard.passwordRule": "8–128 characters; combine upper/lowercase letters, numbers and symbols for a stronger password.",
+  "wizard.memoryRatio":
+    "Automatically set to vCPU × 2 GB; cannot be edited separately.",
+  "wizard.passwordRule":
+    "8–128 characters; combine upper/lowercase letters, numbers and symbols for a stronger password.",
   "wizard.passwordRequired": "Enter a password with 8–128 characters.",
   "wizard.sshKeyRequired": "Select or import a valid SSH public key.",
   "wizard.selectSshKey": "Select an imported SSH public key",
@@ -467,10 +484,12 @@ export default {
   "sshKeys.add": "Add key",
   "sshKeys.savedTitle": "Saved public keys",
   "sshKeys.emptyTitle": "No SSH keys yet",
-  "sshKeys.emptyDescription": "Add or import a key to select it when creating a GPU cloud server.",
+  "sshKeys.emptyDescription":
+    "Add or import a key to select it when creating a GPU cloud server.",
   "sshKeys.localStorageHint": "Stored in this browser",
   "sshKeys.copied": "Public key copied",
-  "sshKeys.copyFailed": "Could not copy. Select and copy the public key manually.",
+  "sshKeys.copyFailed":
+    "Could not copy. Select and copy the public key manually.",
   "wizard.env": "Environment variables · KEY=VALUE per line",
   "wizard.idle": "Idle shutdown · minutes",
   "wizard.warmup": "Warmup prompt",

@@ -37,6 +37,11 @@ export function NetworkEditor({
     item?.projectId || projectId || projects[0]?.id || "",
   );
   const [name, setName] = useState(action === "subnet" ? "" : item?.name || "");
+  const [networkType, setNetworkType] = useState<"standard" | "baremetal">(
+    item && "networkType" in item && item.networkType === "baremetal"
+      ? "baremetal"
+      : "standard",
+  );
   const [cidr, setCidr] = useState(
     "cidr" in (item || {}) ? (item as { cidr: string }).cidr : "10.100.0.0/16",
   );
@@ -154,7 +159,7 @@ export function NetworkEditor({
       path += "/associate";
       body = { resourceUuid: binding };
     } else if (action === "psk") body = { psk };
-    else if (kind === "vpcs") body = { ...body, cidr };
+    else if (kind === "vpcs") body = { ...body, cidr, networkType };
     else if (kind === "eips") body = { ...body, bandwidthMbps: bandwidth };
     else if (kind === "security-groups")
       body = { ...body, vpcId: vpc?.id, description, intraGroupPolicy: intra };
@@ -253,6 +258,17 @@ export function NetworkEditor({
                 )}
               </>
             )}
+            {action === "create" &&
+              kind === "vpcs" &&
+              select(
+                t("network.vpcType"),
+                networkType,
+                (value) => setNetworkType(value as "standard" | "baremetal"),
+                [
+                  ["standard", t("network.vpcTypeStandard")],
+                  ["baremetal", t("network.vpcTypeBaremetal")],
+                ],
+              )}
             {action === "create" &&
               kind === "vpcs" &&
               input(

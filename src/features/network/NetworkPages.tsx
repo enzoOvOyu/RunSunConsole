@@ -224,6 +224,19 @@ function NetworkPage({ kind }: { kind: NetworkKind }) {
                 ...(kind === "vpcs"
                   ? [
                       {
+                        id: "networkType",
+                        header: t("network.vpcType"),
+                        cell: ({
+                          row,
+                        }: {
+                          row: { original: NetworkRecord };
+                        }) =>
+                          "networkType" in row.original &&
+                          row.original.networkType === "baremetal"
+                            ? t("network.vpcTypeBaremetal")
+                            : t("network.vpcTypeStandard"),
+                      },
+                      {
                         id: "cidr",
                         header: t("network.cidr"),
                         cell: ({

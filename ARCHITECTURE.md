@@ -927,7 +927,7 @@ CREATE INDEX idx_notifications_org_user ON notifications(org_id, user_id, read_a
 | ---------------- | ---------- |
 | `H100_SXM`       | H100 SXM   |
 | `H200_NVL`       | H200 NVL   |
-| `B200_NVL72`     | B200 NVL72 |
+| `B200_NVL72`     | B200 SXM（内部兼容池代码） |
 | `B300`           | B300       |
 | `GB300_NVL72`    | GB300 NVL72 |
 

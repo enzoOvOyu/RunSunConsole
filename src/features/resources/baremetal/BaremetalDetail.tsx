@@ -91,13 +91,13 @@ export function BaremetalDetail({
           <Panel title={t("tab.overview")}>
             <KeyValues
               items={[
-                [t("resource.machineType"), r.spec.machineType],
+                [t("resource.gpuModel"), r.spec.gpuModel],
 
                 [
                   t("resource.machineCount"),
                   `${r.spec.machineCount} ${t("common.machines")}`,
                 ],
-                [t("resource.totalGpu"), r.spec.gpuCount],
+                [t("resource.gpuQuantity"), r.spec.gpuCount],
                 [t("baremetal.cpuPerMachine"), r.spec.cpuModel],
                 [
                   t("baremetal.clusterMemory"),

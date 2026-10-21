@@ -159,6 +159,31 @@ it("allocates unique per-member addresses, reserves peak capacity and retains pr
       .status,
   ).toBe(410);
 });
+it("assigns bare metal to its dedicated VPC and exposes distinct VPC types", async () => {
+  const baremetal = db.resources.find(
+    (resource) => resource.kind === "gpu_baremetal",
+  )!;
+  const selected = db.network.vpcs.find((vpc) => vpc.id === baremetal.spec.vpc);
+  expect(selected?.networkType).toBe("baremetal");
+  expect(selected?.id).toContain("vpc-bm-");
+  const options = await fetch(
+    `http://localhost/api/deployment-options?region=${baremetal.region}&project_id=${baremetal.projectId}&kind=gpu_baremetal`,
+  );
+  const payload = (await options.json()) as {
+    vpcs: { networkType?: string }[];
+  };
+  expect(payload.vpcs.length).toBeGreaterThan(0);
+  expect(payload.vpcs.every((vpc) => vpc.networkType === "baremetal")).toBe(
+    true,
+  );
+  const created = await request("/vpcs", "POST", {
+    ...scope(),
+    name: "baremetal-net",
+    cidr: "172.28.0.0/16",
+    networkType: "baremetal",
+  });
+  expect(created.data.networkType).toBe("baremetal");
+});
 it("rejects cross-region VPC and security groups and counts each cluster member", () => {
   for (const r of db.resources)
     expect(

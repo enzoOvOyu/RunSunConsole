@@ -52,69 +52,90 @@ export function networkAudit(
   n.audit = n.audit.slice(0, 1000);
 }
 export function ensureScope(n: NetworkState, scope: NetworkScope) {
-  const vpcId = `vpc-${scope.projectId}-${scope.region}`;
-  if (n.vpcs.some((v) => v.id === vpcId)) return;
-  const octet = 16 + REGIONS.indexOf(scope.region) * 16;
+  const regionIndex = REGIONS.indexOf(scope.region);
   const now = new Date().toISOString();
-  n.vpcs.push({
-    ...scope,
-    id: vpcId,
-    name: "default-vpc",
-    cidr: `10.${octet}.0.0/16`,
-    isDefault: true,
-    createdAt: now,
-  });
-  for (const [suffix, block] of [
-    ["a", 0],
-    ["b", 16],
-  ] as const)
-    n.subnets.push({
+  for (const networkType of ["standard", "baremetal"] as const) {
+    const vpcId =
+      networkType === "standard"
+        ? `vpc-${scope.projectId}-${scope.region}`
+        : `vpc-bm-${scope.projectId}-${scope.region}`;
+    if (n.vpcs.some((v) => v.id === vpcId)) continue;
+    const octet = 16 + regionIndex * 16;
+    const bmOctet = 16 + regionIndex * 4;
+    const cidr =
+      networkType === "standard"
+        ? `10.${octet}.0.0/16`
+        : `172.${bmOctet}.0.0/16`;
+    n.vpcs.push({
       ...scope,
-      id: `vsw-${scope.projectId}-${scope.region}-${suffix}`,
-      vpcId,
-      name: `default-${suffix}`,
-      cidr: `10.${octet}.${block}.0/20`,
-      zone: `${scope.region}-${suffix}`,
+      id: vpcId,
+      name: networkType === "standard" ? "default-vpc" : "baremetal-vpc",
+      cidr,
+      isDefault: true,
+      networkType,
       createdAt: now,
     });
-  for (const name of ["default", "ssh-only", "web", "restricted"]) {
-    const rules: SecurityRule[] = [];
-    if (name === "ssh-only" || name === "default")
-      rules.push({
-        id: crypto.randomUUID(),
-        direction: "inbound",
-        action: "allow",
-        protocol: "tcp",
-        cidr: `10.${octet}.0.0/16`,
-        portFrom: 22,
-        portTo: 22,
-        priority: 1,
-        description: "SSH",
+    for (const [suffix, block] of [
+      ["a", 0],
+      ["b", 16],
+    ] as const)
+      n.subnets.push({
+        ...scope,
+        id:
+          networkType === "standard"
+            ? `vsw-${scope.projectId}-${scope.region}-${suffix}`
+            : `vsw-bm-${scope.projectId}-${scope.region}-${suffix}`,
+        vpcId,
+        name: `default-${suffix}`,
+        cidr:
+          networkType === "standard"
+            ? `10.${octet}.${block}.0/20`
+            : `172.${bmOctet}.${block}.0/20`,
+        zone: `${scope.region}-${suffix}`,
+        createdAt: now,
       });
-    if (name === "web")
-      for (const port of [80, 443])
+    for (const name of ["default", "ssh-only", "web", "restricted"]) {
+      const rules: SecurityRule[] = [];
+      if (name === "ssh-only" || name === "default")
         rules.push({
           id: crypto.randomUUID(),
           direction: "inbound",
           action: "allow",
           protocol: "tcp",
-          cidr: "0.0.0.0/0",
-          portFrom: port,
-          portTo: port,
+          cidr,
+          portFrom: 22,
+          portTo: 22,
           priority: 1,
-          description: "HTTPS / HTTP",
+          description: "SSH",
         });
-    n.groups.push({
-      ...scope,
-      id: `sg-${scope.projectId}-${scope.region}-${name}`,
-      vpcId,
-      name,
-      description: "",
-      intraGroupPolicy: name === "restricted" ? "deny" : "allow",
-      isDefault: name === "default",
-      rules,
-      createdAt: now,
-    });
+      if (name === "web")
+        for (const port of [80, 443])
+          rules.push({
+            id: crypto.randomUUID(),
+            direction: "inbound",
+            action: "allow",
+            protocol: "tcp",
+            cidr: "0.0.0.0/0",
+            portFrom: port,
+            portTo: port,
+            priority: 1,
+            description: "HTTPS / HTTP",
+          });
+      n.groups.push({
+        ...scope,
+        id:
+          networkType === "standard"
+            ? `sg-${scope.projectId}-${scope.region}-${name}`
+            : `sg-bm-${scope.projectId}-${scope.region}-${name}`,
+        vpcId,
+        name,
+        description: "",
+        intraGroupPolicy: name === "restricted" ? "deny" : "allow",
+        isDefault: name === "default",
+        rules,
+        createdAt: now,
+      });
+    }
   }
 }
 export function interfaceCount(r: Resource) {
@@ -152,19 +173,30 @@ export function availableIps(
     : 0;
 }
 export function resolveNetwork(n: NetworkState, r: Resource) {
+  const requiredType = r.kind === "gpu_baremetal" ? "baremetal" : "standard";
+  const defaultId =
+    requiredType === "baremetal"
+      ? `vpc-bm-${r.projectId}-${r.region}`
+      : `vpc-${r.projectId}-${r.region}`;
   const vpcId =
-    !r.spec.vpc || r.spec.vpc === "default-vpc"
-      ? `vpc-${r.projectId}-${r.region}`
-      : r.spec.vpc;
+    !r.spec.vpc || r.spec.vpc === "default-vpc" ? defaultId : r.spec.vpc;
   const vpc = n.vpcs.find((v) => v.id === vpcId && !v.deletedAt);
-  if (!vpc || vpc.projectId !== r.projectId || vpc.region !== r.region)
+  if (
+    !vpc ||
+    vpc.projectId !== r.projectId ||
+    vpc.region !== r.region ||
+    (vpc.networkType || "standard") !== requiredType
+  )
     networkFail(409, "NETWORK_SCOPE_MISMATCH");
   const alias = r.spec.subnet?.match(/^(jp|sg|us)-(default|private)$/);
   if (alias && alias[1] !== r.region)
     networkFail(409, "NETWORK_SCOPE_MISMATCH");
+  const suffix = alias?.[2] === "private" ? "b" : "a";
   const subnetId =
     !r.spec.subnet || alias
-      ? `vsw-${r.projectId}-${r.region}-${alias?.[2] === "private" ? "b" : "a"}`
+      ? requiredType === "baremetal"
+        ? `vsw-bm-${r.projectId}-${r.region}-${suffix}`
+        : `vsw-${r.projectId}-${r.region}-${suffix}`
       : r.spec.subnet;
   const subnet = n.subnets.find((s) => s.id === subnetId && !s.deletedAt);
   if (
@@ -183,7 +215,9 @@ export function resolveNetwork(n: NetworkState, r: Resource) {
       (["default", "ssh-only", "web", "restricted"].includes(id)
         ? n.groups.find(
             (g) =>
-              g.id === `sg-${r.projectId}-${r.region}-${id}` && !g.deletedAt,
+              g.id ===
+                `${requiredType === "baremetal" ? "sg-bm-" : "sg-"}${r.projectId}-${r.region}-${id}` &&
+              !g.deletedAt,
           )
         : undefined),
   );
@@ -363,6 +397,11 @@ export function makeNetwork(
       ensureScope(n, { projectId: project.id, region });
   for (const r of resources) {
     if (r.deletedAt) continue;
+    if (r.kind === "gpu_baremetal") {
+      r.spec.vpc = "";
+      r.spec.subnet = "";
+      r.spec.securityGroups = undefined;
+    }
     syncResourceNetwork(n, r);
   }
   n.audit = [];

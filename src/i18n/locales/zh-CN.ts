@@ -29,7 +29,8 @@ export default {
   "nav.pipelines": "数据预处理",
   "nav.bills": "我的账单",
   "nav.vouchers": "代金券",
-  "pageDescription.sshKeys": "导入和管理用于云服务器 SSH 登录的公钥。公钥仅保存在当前浏览器中。",
+  "pageDescription.sshKeys":
+    "导入和管理用于云服务器 SSH 登录的公钥。公钥仅保存在当前浏览器中。",
   "pageDescription.resources.gpu_vm":
     "查看云服务器实例的状态、规格和网络配置，并进行启停与资源管理。",
   "pageDescription.resources.gpu_baremetal":
@@ -303,7 +304,20 @@ export default {
   "resource.uptime": "运行时长",
   "resource.machineType": "机型",
   "resource.machineCount": "台数",
-  "resource.totalGpu": "整机总卡数 · 仅展示",
+  "resource.totalGpu": "GPU 数量",
+  "resource.gpuQuantity": "GPU 数量",
+  "resource.gpuModel": "GPU 型号",
+  "baremetal.fullGpuDefault": "整卡直通（平台默认）",
+  "baremetal.networkSpecs": "机型高速网络规格",
+  "baremetal.networkTechnology": "高速网络制式",
+  "baremetal.networkPorts": "端口数",
+  "baremetal.networkSpeed": "单端口速率",
+  "baremetal.networkPlatformManaged":
+    "BMC 管理网络由平台统一配置，不在创建时开放修改。",
+  "network.vpcType": "VPC 类型",
+  "network.vpcTypeStandard": "通用 VPC",
+  "network.vpcTypeBaremetal": "裸金属专用 VPC",
+  "network.baremetalVpcNotice": "裸金属实例仅可使用裸金属专用 VPC。",
   "resource.nvme": "本地 NVMe",
   "resource.rack": "机架位",
   "resource.k8s": "Kubernetes 版本",
@@ -546,7 +560,8 @@ export default {
   "data.action.retry": "检查配置后重试供给",
   "notebook.new": "新建开发环境",
   "notebook.host": "挂靠资源",
-  "notebook.noHost": "当前区域无可挂靠资源，请先创建云服务器、裸金属或 Kubernetes 集群",
+  "notebook.noHost":
+    "当前区域无可挂靠资源，请先创建云服务器、裸金属或 Kubernetes 集群",
   "notebook.idle": "闲置自动停止 · 分钟",
   "notebook.open": "打开开发环境",
   "notebook.hostHint": "GPU 继承宿主资源，删除开发环境不删除宿主",

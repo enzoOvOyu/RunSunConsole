@@ -927,10 +927,15 @@ async function dispatchNetwork(
           isDefault: false,
           createdAt: new Date().toISOString(),
         };
-        n.vpcs.push(v);
+        const networkType = z
+          .enum(["standard", "baremetal"])
+          .default("standard")
+          .parse(body.networkType);
+        const createdVpc = { ...v, networkType };
+        n.vpcs.push(createdVpc);
         networkAudit(n, s, v.id, "vpcCreate");
         persist();
-        return json(v, 201);
+        return json(createdVpc, 201);
       }
     }
     const v = n.vpcs.find((v) => v.id === id) || fail(404, "NOT_FOUND");
@@ -1418,10 +1423,18 @@ async function dispatch(request: Request) {
     if (!db.projects.some((p) => p.id === projectId && !p.deletedAt))
       fail(422, "VALIDATION_ERROR");
     ensureScope(db.network, { projectId, region: code });
+    const requestedKind = qs.get("kind");
+    const requestedVpcType =
+      requestedKind === "gpu_baremetal" ? "baremetal" : "standard";
     return json({
       vpcs: db.network.vpcs
         .filter(
-          (v) => !v.deletedAt && v.projectId === projectId && v.region === code,
+          (v) =>
+            !v.deletedAt &&
+            v.projectId === projectId &&
+            v.region === code &&
+            (!requestedKind ||
+              (v.networkType || "standard") === requestedVpcType),
         )
         .map((v) => ({
           ...v,
@@ -2346,13 +2359,15 @@ async function dispatch(request: Request) {
           (g) =>
             g.projectId === p.id &&
             !g.deletedAt &&
-            !g.id.startsWith(`sg-${p.id}-`),
+            !g.id.startsWith(`sg-${p.id}-`) &&
+            !g.id.startsWith(`sg-bm-${p.id}-`),
         ) ||
         db.network.subnets.some(
           (s) =>
             s.projectId === p.id &&
             !s.deletedAt &&
-            !s.id.startsWith(`vsw-${p.id}-`),
+            !s.id.startsWith(`vsw-${p.id}-`) &&
+            !s.id.startsWith(`vsw-bm-${p.id}-`),
         )
       )
         fail(409, "NETWORK_HAS_DEPENDENCIES");

@@ -141,7 +141,7 @@
 | 节点可靠性 | CoreWeave Mission Control 的 goodput / straggler 定义 | §6.6 |
 | K8s GPU 虚拟化 | NVIDIA GPU Operator / MIG / Device Plugin 语义 | §6.4 |
 
-> **口径标注义务（SHOULD）**：fixture 文件中对每张 DERIVED 常量表加注释标注来源与采集日期；若某值与 NVIDIA 多个口径冲突（例如 B200 显存 180/186/192 GB），必须在 §3 注明所采口径，全文统一，不得混用。
+> **口径标注义务（SHOULD）**：fixture 文件中对每张 DERIVED 常量表加注释标注来源与采集日期；若某值与 NVIDIA 多个口径冲突（例如 B200 显存 180 GB），必须在 §3 注明所采口径，全文统一，不得混用。
 
 ---
 
@@ -153,10 +153,10 @@
 
 | 字段 | `H100_SXM` | `H200_NVL` | `B200_NVL72` | `B300` | `GB300_NVL72` |
 | --- | --- | --- | --- | --- | --- |
-| 产品名 | H100 SXM5 | H200 SXM | B200（GB200 NVL72 节点） | B300 SXM | GB300 NVL72 机柜 |
+| 产品名 | H100 SXM | H200 SXM | B200 SXM | B300 SXM | GB300 NVL72 机柜 |
 | 架构 | Hopper (TSMC 4N) | Hopper (TSMC 4N) | Blackwell (TSMC 4NP) | Blackwell Ultra | Blackwell Ultra |
-| GPU/节点 | 8 | 8 | 8（柜 72） | 8 | 72 |
-| 显存/GPU | 80 GB HBM3 | 141 GB HBM3e | 192 GB HBM3e | 288 GB HBM3e | 288 GB HBM3e |
+| GPU/节点 | 8 | 8 | 8（单节点；不表示 NVL72 机柜） | 8 | 72（机柜级） |
+| 显存/GPU | 80 GB HBM3 | 141 GB HBM3e | 180 GB HBM3e | 288 GB HBM3e | 288 GB HBM3e |
 | 显存带宽/GPU | 3.35 TB/s | 4.8 TB/s | 8 TB/s | 8 TB/s | 8 TB/s |
 | BF16/FP16 dense | 989 TFLOPS | 989 TFLOPS | 2,250 TFLOPS | 2,250 TFLOPS | 2,250 TFLOPS |
 | FP8 dense | 1,979 TFLOPS | 1,979 TFLOPS | 4,500 TFLOPS | 4,500 TFLOPS | 4,500 TFLOPS |
@@ -169,19 +169,19 @@
 | 散热 | 风冷 | 风冷 | 液冷（机柜级） | 液冷 | 液冷（仅限） |
 
 > **口径声明**：B200/B300 的 FP8 dense 取 NVIDIA DGX 口径（DGX B200/B300 FP8 均为 72 PFLOPS sparse / 8 GPU = 9 PFLOPS sparse = **4.5 PFLOPS dense** 每卡）；FP4 dense 取 DGX B200 72 PFLOPS / DGX B300 108 PFLOPS 每 8 卡，即 9 / 13.5 PFLOPS 每卡。全文统一采用此口径，禁止混用其他第三方估算值。
-> **`B200_NVL72` 命名说明**：NVIDIA 官方对应产品为 **GB200 NVL72**（Grace CPU + B200 GPU 的 72-GPU 单一 NVLink 域机柜）。本控制台节点池键名沿用 `B200_NVL72`（PRD §9.1），展示名应写 **「B200 NVL72（GB200 机柜）」** 以免误解。
+> **`B200_NVL72` 命名说明**：该值仅作为历史内部节点池代码保留；控制台展示为 **B200 SXM**，对应 8 卡 HGX B200 节点。显存规格按 NVIDIA 官方 B200 SXM 产品资料记录为 180 GB。
 
 ### 3.2 节点 / 服务器配套规格（用于裸金属与云服务器的实例规格派生）
 
 | 池 | CPU | 系统内存 | 本地 NVMe | 节点网络 |
 | --- | --- | --- | --- | --- |
-| `H100_SXM` | 2 × Xeon Platinum 8480（56C/112T） | 2,048 GB DDR5 | 8 × 3.84 TB | 8 × 400 Gb/s NDR IB（总 400 GB/s） |
-| `H200_NVL` | 2 × Xeon Platinum 8568Y+（48C/96T） | 2,048 GB DDR5 | 8 × 3.84 TB | 8 × 400 Gb/s NDR IB |
-| `B200_NVL72` | 2 × Xeon Platinum 8570（56C）+ Grace 管理通道 | 2,252 GB DDR5 | 8 × 3.84 TB | 8 × 400 Gb/s NDR IB + Spectrum-X |
-| `B300` | 2 × Xeon Platinum 8580（60C） | 2,252 GB DDR5 | 8 × 3.84 TB | 8 × ConnectX-8 800 Gb/s（总 800 GB/s） |
+| `H100_SXM` | 双路 x86 服务器 CPU（OEM 型号依具体设备） | 2,048 GB DDR5 | 8 × 3.84 TB | 8 × 400 Gb/s NDR IB（总 400 GB/s） |
+| `H200_NVL` | 双路 x86 服务器 CPU（OEM 型号依具体设备） | 2,048 GB DDR5 | 8 × 3.84 TB | 8 × 400 Gb/s NDR IB |
+| `B200_NVL72` | 双路 x86 主机 CPU（具体 OEM 型号由平台提供） | 2,048 GB 系统内存 | 8 × 3.84 TB | 8 × 400 Gb/s NDR IB（平台网络规格） |
+| `B300` | 双路 x86 服务器 CPU（OEM 型号依具体设备） | 2,048 GB 系统内存 | 8 × 3.84 TB | 8 × ConnectX-8 800 Gb/s（总 800 GB/s） |
 | `GB300_NVL72` | 36 × Grace CPU（72C） | 17 TB LPDDR5X | 柜级 NVMe 层 | NVLink 域 + 800 Gb/s 上联 |
 
-**主机内存配额**：内存不是显存或云盘容量。VM 依据实例 `memoryGb × quantity`；裸金属按每台系统内存 × machineCount；vGPU 按各节点池系统内存 × 节点数；推理按所分配 GPU 对应的主机内存份额计算。H100/H200 每台 8 卡配 2048 GB RAM，B200/B300 每台 8 卡配 2252 GB RAM，几百张卡的节点集群应对应数十至数百 TB 系统内存。停止与释放后主机内存配额归零；云盘/PVC 的 cloud storage 配额独立保留，整机本地 NVMe 不重复计入云盘费用。配额页将存储额度拆为块、文件、对象三类，区域已分配容量分别为 JP 800 TB、SG 400 TB、US 800 TB，合计约 2,000 TB；对应额度分别为 1,000 / 500 / 1,000 TB。旧浏览器状态恢复时规范化 VM 磁盘与 vGPU PVC 容量，保留资源和历史账单。
+**主机内存配额**：内存不是显存或云盘容量。VM 依据实例 `memoryGb × quantity`；裸金属按每台系统内存 × machineCount；vGPU 按各节点池系统内存 × 节点数；推理按所分配 GPU 对应的主机内存份额计算。H100/H200/B200/B300 每台 8 卡配 2048 GB 系统内存，几百张卡的节点集群应对应数十至数百 TB 系统内存。停止与释放后主机内存配额归零；云盘/PVC 的 cloud storage 配额独立保留，整机本地 NVMe 不重复计入云盘费用。配额页将存储额度拆为块、文件、对象三类，区域已分配容量分别为 JP 800 TB、SG 400 TB、US 800 TB，合计约 2,000 TB；对应额度分别为 1,000 / 500 / 1,000 TB。旧浏览器状态恢复时规范化 VM 磁盘与 vGPU PVC 容量，保留资源和历史账单。
 
 **裸金属设备派生**：集群每台设备使用稳定 UUID/设备名、独立主机名、私网 IP 和 BMC IP；单台内存和 NVMe 按规格提供，集群合计按台数乘算。`/machines` 与 placement.nodes、按 node 索引查询的硬件/BMC 使用同一身份来源；监控的随机种子包含设备索引，切换设备不能复用上一设备的缓存或曲线。
 
@@ -190,7 +190,7 @@
 - **节点总显存** = GPU/节点 × 显存/GPU
   - H100：8 × 80 = **640 GB**（与 DGX H100 官方 640 GB 一致 ✅）
   - H200：8 × 141 = **1,128 GB**（与 AWS p5e 1128 GB 一致 ✅）
-  - B200：8 × 192 = **1,536 GB**（与 Lambda 8×B200 1536 GB 一致 ✅）
+  - B200：8 × 180 = **1,440 GB**
   - B300：8 × 288 = **2,304 GB**
   - GB300 机柜：72 × 288 = **20,736 GB ≈ 20.7 TB**（官方标称 ~20 TB ✅）
 - **节点 peak BF16** = GPU 数 × BF16 dense；**节点 idle 功耗** = GPU 数 × (60–100 W) + CPU/系统基线（约 300–500 W）。
@@ -281,7 +281,7 @@
 | --- | --- | --- | --- |
 | `H100_SXM` | US, JP, SG | US 512 / JP 336 / SG 192 | 泰国存量已迁入日本 |
 | `H200_NVL` | US, JP, SG | US 256 / JP 128 / SG 96 | 主流容量 |
-| `B200_NVL72` | US, JP | US 24 柜 / JP 8 柜 | 按机柜售卖，最小单位 1 柜 |
+| `B200_NVL72` | US, JP | US 144 GPU / JP 72 GPU | 8 GPU/节点，按裸金属台数创建；内部池代码保留兼容 |
 | `B300` | US, SG | US 64 / SG 32 | 新池，容量有限 |
 | `GB300_NVL72` | US | US 12 柜 | 旗舰，**仅美国**，需申请配额 |
 
