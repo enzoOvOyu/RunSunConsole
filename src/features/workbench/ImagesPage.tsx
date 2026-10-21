@@ -2,6 +2,7 @@ import { useUrlState } from "../shared/useUrlState";
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Star, Box, Brain } from "lucide-react";
+import { poolDisplayName } from "../../lib/gpu-labels";
 import type { Image, Model } from "../../types/domain";
 import { useAuth } from "../../stores/auth";
 import { canWrite } from "../../lib/rbac";
@@ -56,6 +57,8 @@ export default function ImagesPage() {
   const [favorite, setFavorite] = useState(false);
   const [modelId, setModelId] = useState<string | null>(null);
   const [image, setImage] = useState<Image | null>(null);
+  const [imageKind, setImageKind] = useState<"os" | "container">("os");
+  const [imageArchitecture, setImageArchitecture] = useState("");
   const models = useData<Model[]>(["models"], EP.models);
   const images = useData<Image[]>(["images"], EP.images);
   const { run, busy } = useAction();
@@ -322,40 +325,37 @@ export default function ImagesPage() {
         ) : (
           <Empty text={t("images.noMatches")} />
         )
-      ) : images.data?.filter((item) =>
-          item.name.toLowerCase().includes(search.toLowerCase()),
-        ).length ? (
-        <div className="grid grid-3">
-          {images.data
-            .filter((item) =>
-              item.name.toLowerCase().includes(search.toLowerCase()),
-            )
-            .map((item) => (
-              <article className="catalog-card" key={item.id}>
-                <Box size={26} color="var(--rs-brand)" />
-                <strong>{item.name}</strong>
-                <small>
-                  {item.framework} · CUDA {item.cudaVersion} · {item.sizeGb} GB
-                </small>
-                <span className="chip">{item.source}</span>
-                <div className="between">
-                  <Button onClick={() => setImage(item)}>
-                    {t("common.details")}
-                  </Button>
-                  <Button
-                    disabled={!canWrite(role)}
-                    onClick={() =>
-                      navigate("/deployment/server?image=" + item.id)
-                    }
-                  >
-                    {t("images.deploy")}
-                  </Button>
-                </div>
-              </article>
-            ))}
-        </div>
       ) : (
-        <Empty text={t("images.noMatches")} />
+        <>
+          <div className="row">
+            <Button variant={imageKind === "os" ? "primary" : "ghost"} onClick={() => setImageKind("os")}>{t("images.operatingSystems")}</Button>
+            <Button variant={imageKind === "container" ? "primary" : "ghost"} onClick={() => setImageKind("container")}>{t("images.runtimeTemplates")}</Button>
+            <select aria-label={t("images.cpuArchitecture")} value={imageArchitecture} onChange={(event) => setImageArchitecture(event.target.value)}>
+              <option value="">{t("images.allArchitectures")}</option>
+              <option value="x86_64">x86_64</option>
+              <option value="aarch64">aarch64</option>
+            </select>
+          </div>
+          {images.data?.filter((item) => item.type === imageKind && (!imageArchitecture || item.architectures.includes(imageArchitecture as "x86_64" | "aarch64")) && item.name.toLowerCase().includes(search.toLowerCase())).length ? (
+            <div className="grid grid-3">
+              {images.data.filter((item) => item.type === imageKind && (!imageArchitecture || item.architectures.includes(imageArchitecture as "x86_64" | "aarch64")) && item.name.toLowerCase().includes(search.toLowerCase())).map((item) => (
+                <article className="catalog-card" key={item.id}>
+                  <Box size={26} color="var(--rs-brand)" />
+                  <strong>{item.name}</strong>
+                  <small>{item.architectures.join(" / ")} · {t("images.gpuDriver")} {item.driverVersion || t("images.hostDriver")}</small>
+                  <small>CUDA {item.cudaVersion} · {item.sizeGb} GB</small>
+                  <small>{t("images.frameworksIncluded")}: {item.frameworks.length ? item.frameworks.join(", ") : t("images.noneIncluded")}</small>
+                  <div className="model-catalog-tags">{item.supportedGpuModels.map((gpu) => <span className="chip" key={gpu}>{poolDisplayName(gpu)}</span>)}</div>
+                  <span className="chip">{item.source}</span>
+                  <div className="between">
+                    <Button onClick={() => setImage(item)}>{t("common.details")}</Button>
+                    <Button disabled={!canWrite(role)} onClick={() => navigate(`/deployment/server?${item.type === "os" ? "image" : "runtime"}=${item.id}`)}>{t("images.deploy")}</Button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : <Empty text={t("images.noMatches")} />}
+        </>
       )}
       <Modal
         drawer
@@ -465,16 +465,22 @@ export default function ImagesPage() {
             <Panel title={t("common.details")}>
               <KeyValues
                 items={[
-                  [t("common.version"), image.framework],
+                  [t("images.imageType"), t(image.type === "os" ? "images.operatingSystems" : "images.runtimeTemplates")],
+                  [t("images.operatingSystem"), image.osFamily + " " + image.osVersion],
+                  [t("images.cpuArchitecture"), image.architectures.join(", ")],
+                  [t("images.gpuDriver"), image.driverVersion || t("images.hostDriver")],
                   ["CUDA", image.cudaVersion],
+                  [t("images.frameworksIncluded"), image.frameworks.length ? image.frameworks.join(", ") : t("images.noneIncluded")],
+                  [t("images.compatibleGpuModels"), image.supportedGpuModels.join(", ")],
                   [t("common.size"), image.sizeGb + " GB"],
                   [t("common.source"), image.source],
+                  [t("common.description"), image.description],
                 ]}
               />
             </Panel>
             <Button
               disabled={!canWrite(role)}
-              onClick={() => navigate("/deployment/server?image=" + image.id)}
+              onClick={() => navigate(`/deployment/server?${image.type === "os" ? "image" : "runtime"}=${image.id}`)}
             >
               {t("common.gpu_vm")}
             </Button>

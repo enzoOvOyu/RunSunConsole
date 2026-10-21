@@ -564,3 +564,24 @@ it("applies the overdue grace period and preserves metering uniqueness", async (
     vi.useRealTimers();
   }
 });
+it("targets Kubernetes node scheduling operations and records recoverable events", async () => {
+  const cluster = db.resources.find((item) => item.kind === "vgpu" && !item.deletedAt)!;
+  cluster.status = "running";
+  if (cluster.kind !== "vgpu") throw new Error("Expected Kubernetes cluster");
+  const initial = (await request(`/metrics/vgpu/${cluster.resourceUuid}/cluster`)).data;
+  const nodeUuid = initial.nodes[0].nodeUuid;
+
+  expect((await request(`/resources/${cluster.resourceUuid}/cordon`, "POST", { nodeUuid })).status).toBe(200);
+  const cordoned = (await request(`/metrics/vgpu/${cluster.resourceUuid}/cluster`)).data;
+  expect(cordoned.nodes.find((node: { nodeUuid: string }) => node.nodeUuid === nodeUuid).state).toBe("unschedulable");
+  expect(cordoned.workloads.flatMap((workload: { pods: { nodeUuid: string | null; phase: string }[] }) => workload.pods).some((pod: { nodeUuid: string | null; phase: string }) => pod.phase === "Pending" || pod.nodeUuid !== nodeUuid)).toBe(true);
+  expect(db.events[0]).toMatchObject({ type: "NODE_CORDONED", reason: nodeUuid, action: "NODE_CORDONED" });
+
+  expect((await request(`/resources/${cluster.resourceUuid}/uncordon`, "POST", { nodeUuid })).status).toBe(200);
+  const resumed = (await request(`/metrics/vgpu/${cluster.resourceUuid}/cluster`)).data;
+  expect(resumed.nodes.find((node: { nodeUuid: string }) => node.nodeUuid === nodeUuid).state).toBe("ready");
+  expect(db.events[0]).toMatchObject({ type: "NODE_UNCORDONED", reason: nodeUuid, action: "NODE_UNCORDONED" });
+
+  expect((await request(`/resources/${cluster.resourceUuid}/cordon`, "POST", {})).status).toBe(422);
+  expect((await request(`/resources/${cluster.resourceUuid}/upgrade`, "POST", { version: "1.31" })).status).toBe(404);
+});

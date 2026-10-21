@@ -60,6 +60,7 @@ export interface ClusterView {
     nodeUuid: string;
     name: string;
     state: string;
+    cordoned: boolean;
     gpuCount: number;
     allocatedGpu: number;
     straggler: boolean;
@@ -75,13 +76,14 @@ export interface ClusterView {
       oomKilled: number;
       waitingReason: string;
       gpuCount: number;
+      nodeUuid: string | null;
     }[];
   }[];
   scheduling: { reason: string; count: number }[];
   network: {
     cniErrors: number;
     serviceP99Ms: number;
-    ingressQps: number;
+    ingressQps: number | null;
     vpcPeering: string;
   };
   storage: {
@@ -89,6 +91,7 @@ export interface ClusterView {
     pending: number;
     pendingReason: string;
     pvCapacityGb: number;
+    provisioned: boolean;
     csiErrors: number;
   };
   plugins: {

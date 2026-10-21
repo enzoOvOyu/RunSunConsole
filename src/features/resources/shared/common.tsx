@@ -16,6 +16,7 @@ import { useLocale } from "../../../stores/locale";
 import { EP, query } from "../../../lib/api-client";
 import { useData } from "../../shared/hooks";
 import { money, number, unitMoney } from "../../../lib/money";
+import { poolDisplayName } from "../../../lib/gpu-labels";
 import { date, duration } from "../../../lib/date";
 import {
   Button,
@@ -254,8 +255,22 @@ export function EventsPanel({ resource: r }: { resource: Resource }) {
     <EventTimeline
       events={(events.data || []).map((e) => ({
         ...e,
-        reason: dt(e.reason),
-        action: dt(e.action),
+        reason:
+          e.type === "NODE_CORDONED"
+            ? t("cluster.nodeCordonedEvent", { node: e.reason })
+            : e.type === "NODE_UNCORDONED"
+              ? t("cluster.nodeUncordonedEvent", { node: e.reason })
+              : e.type === "NODE_POOL_RESIZED"
+                ? t("cluster.nodePoolResizedEvent", { pool: poolDisplayName(e.reason), before: e.before, after: e.after })
+                : dt(e.reason),
+        action:
+          e.action === "NODE_CORDONED"
+            ? t("cluster.nodeCordonedAction")
+            : e.action === "NODE_UNCORDONED"
+              ? t("cluster.nodeUncordonedAction")
+              : e.action === "NODE_POOL_RESIZED"
+                ? t("cluster.nodePoolResizedAction")
+                : dt(e.action),
       }))}
     />
   );

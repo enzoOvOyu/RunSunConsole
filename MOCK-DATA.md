@@ -1,7 +1,7 @@
 # Mock 数据约束规范（MOCK-DATA）
 
 > 配套文档：`PRD.md`（产品需求） · `ARCHITECTURE.md`（架构说明） · `DESIGN-SYSTEM.md`（UI 规范）
-> 版本：**v1.5 · 2026-10-20** · 适用：RunSun GPU Cloud 控制台当前设计基线
+> 版本：**v1.5 · 2026-10-21** · 适用：RunSun GPU Cloud 控制台当前设计基线
 > 本规范是 Mock 数据量级、单位、硬件参数、派生公式、状态与事件一致性的权威来源；用户可见行为以 `PRD.md` 为准。
 
 ---
@@ -359,7 +359,7 @@
 | **PSU / 冗余** | `psu_status` ×N、`psu_redundancy`（应为 2N）、`psu_input_power` W | 单电源失效必须告警但不宕机 |
 | **风扇 / 散热** | `fan_rpm` ×N、`fan_status`、`inlet_temp` °C | 液冷节点置 `null` |
 | **BMC / 带外** | `bmc_firmware`、`bmc_reachability`、`sel_log_count`（System Event Log）、`last_sel_entry` | IPMI 控制台入口的数据支撑 |
-| **固件版本** | `vbios`、`driver_version`、`cuda_version`、`firmware_compliance` | Vast.ai 卡片展示 `cuda 12.8 / driver 570` |
+| **固件版本** | `vbios`、`driver_version`、`cuda_version`、`firmware_compliance` | 驱动版本来自所选 OS；CUDA 来自可选容器运行时；无运行时显示未预装，不使用固定 550/570 值 |
 
 > **数据来源声明**：以上指标全部由 Mock TSDB 提供，均**不落 PostgreSQL**（ARCH §12.8 边界声明）。
 
@@ -374,11 +374,11 @@
 | **GPU 切片** | `mig_profile`（例如 `1g.24gb`）、`mig_free/total`、`time_slice_share`、`gpu_sharing_mode`（MIG / Time-Slicing / MPS） | MUST 与 §3.1 MIG 行一致 |
 | **设备插件** | `device_plugin_healthy`、`gpu_operator_version`、`nfd_version`、`driver_daemonset_ready` | 插件异常 → GPU 不可调度 |
 | **工作负载** | Pod 各 phase 计数（`Running/Pending/Failed/Succeeded`）、`pod_restarts`、`oom_killed_count`、`container_waiting_reason`（`ImagePullBackOff` / `CrashLoopBackOff` / `ContainerCreating`） | 详情页 Namespace → Deployment → Pod 三级下钻 |
-| **调度失败原因** | `FailedScheduling` 原因 TopN：`Insufficient nvidia.com/gpu`、`node(s) had taint`、`didn't match PodTopologySpread`、`Insufficient cpu/memory` | **必须出现 `Insufficient nvidia.com/gpu` 才有说服力** |
+| **调度失败原因** | 依据停止调度节点与可用 GPU 容量派生 `FailedScheduling` 原因 | 正常路径为空；仅在实际模拟状态产生 Pending Pod 时展示，不固定注入 GPU 不足或 taint |
 | **网络** | `cni_errors`、`service_latency_p99`、`ingress_qps`、`vpc_peering_status` | — |
 | **存储** | `pvc_bound/pending`、`pv_capacity` GB、`csi_errors` | Pending PVC 需有原因 |
 
-**典型形态（SHOULD）**：至少一个 Namespace 存在 `Pending` Pod 且原因为 `Insufficient nvidia.com/gpu`；至少一个 Pod 有 ≥ 1 次重启；至少一个节点池处于扩容中（`scaling_up`）。
+**一致性规则**：正常路径所有 Pod 可调度、无固定重启和调度故障；节点被 cordon 后读取节点状态并重新计算 Pod 分配和 Pending 数，uncordon 恢复调度并记录事件。没有策略显示 `idle`，暂停策略显示 `paused`；不生成无动作依据的 `scaling_up`。Ingress 关闭时 QPS 为 null，PVC 容量为 0 时 Bound/Pending 均为 0 且显示未预置。
 
 ### 6.5 推理服务（Inference Service，`kind='inference'`）
 
@@ -957,6 +957,7 @@ interface MonitorEvent {
 | --- | --- | --- |
 | v1.0 | 2026-10-17 | 初版。建立 Mock 数据真实值约束、硬件基线、价格与区域系数、四类资源与集群的指标字典、派生公式引擎、有意义事件规范、生成器与验收清单；同步 PRD / ARCHITECTURE / DESIGN-SYSTEM 交叉引用。 |
 | **v1.1** | **2026-10-18** | **第二轮评审修订**：①新增 **§6.8 详情页字段→数据源→派生方式映射表**（四类 + 计费段），落实"引入数据库让 Mock 更真实"；②新增 **§7.7 计费派生**（逐小时用量行/汇总/扣费流水，支撑 PRD §7.8 四段）；③§7.1 按类型区分计费数量，新增 `base_machine_rate`（整机价，禁止 `rate×8`）；④§8.1 fixtures 新增 `pool-regions.ts`/`projects.ts`/`usage.ts`；⑤§8.3 断言扩充至 ARCH §12.10.3 的 C1–C12 与"切区域数据指纹必变"；⑥§10 竞品表补齐**阿里云 / 火山引擎 / Lambda / Nebius**；⑦§6.6 标题按新导航改为「运营&运维·节点基础设施层」；⑧§12 验收清单新增 8 项。 |
+| **v1.5** | **2026-10-21** | 镜像目录拆分基础 OS 与可选容器运行时并补齐驱动/架构/GPU 兼容矩阵；Kubernetes 节点池调整、节点调度与 Pod 视图按模拟状态派生，移除正常路径固定故障。 |
 | **v1.4** | **2026-10-19** | 对齐当前 PRD：G11 定义为用户授权范围内未软删资源的实际 GPU 卡数求和，与配额占用、平台容量分离；区域筛选限定为区域维度数据；总览同屏覆盖三区域。 |
 | **v1.3** | **2026-10-19** | 增加 G11 三区域已分配 GPU 卡数锚点及相应种子一致性校验。 |
 | **v1.2** | **2026-10-19** | 增加国际化约束、弹性伸缩指标与事件规范，以及对应种子一致性校验。 |
@@ -978,3 +979,11 @@ PSK 只用于输入校验，无明文/密文快照字段，仅保留 pskConfigur
 ## 10. 部署附加存储派生口径
 
 `storageGb = 默认系统/数据盘或 PVC/基础卷 + Σ(块/文件行容量 × 数量)`；对象桶的容量上限不预占配额。块/文件附加卷分别按规格的 USD/GB·月换算为小时价格；停机后继续计费。对象桶实际对象字节数换算 GB 计入区域存储用量，上传不可超过桶容量上限或区域配额。卷与计算资源同生命周期，桶在计算资源删除后保留并解除关联。
+
+
+## 10.1 镜像目录与运行时兼容矩阵
+
+- `type=os` 只代表基础操作系统；当前目录包含 Ubuntu 22.04/24.04/26.04、Rocky Linux 9/10、Debian 12/13、Windows Server 2022/2025。基础 OS 不预装 PyTorch、vLLM 或 Jupyter 等交互入口。
+- `type=container` 是可选 Linux AI/开发运行时，与基础 OS 分层选择；GPU VM 规格变化时按 `Pool.cpuArchitecture`、`supportedGpuModels` 与 `compatibleOsFamilies` 过滤。GB300 使用 aarch64，Rocky Linux 当前只列 x86_64 支持配置。
+- OS 镜像展示所选 NVIDIA 驱动：Linux 615.71.10、Windows 616.92；CUDA 13.0 随运行时镜像展示，裸 OS 显示未预装。PyTorch 2.14、vLLM 0.32.0、JupyterLab 4 + PyTorch 2.14 按实际容器内容列出；Windows 不提供 Linux 容器模板。
+- 官方版本与系统/架构依据：[NVIDIA Data Center Driver R615 release notes](https://docs.nvidia.com/datacenter/tesla/tesla-release-notes-615-71-10/index.html)、[NVIDIA Driver Installation Guide](https://docs.nvidia.com/datacenter/tesla/driver-installation-guide/introduction.html)、[PyTorch 2.14 release notes](https://pytorch.org/blog/pytorch-2-14-release-blog/)、[vLLM releases](https://github.com/vllm-project/vllm/releases)；Blackwell CUDA 13.x 兼容性须满足对应 R580+ 驱动要求。

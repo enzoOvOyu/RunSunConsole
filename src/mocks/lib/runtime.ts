@@ -6,6 +6,7 @@ import type {
   ReplicaView,
 } from "../../types/monitoring";
 import { GPU_SPECS } from "../fixtures/gpu-specs";
+import { IMAGES } from "../fixtures/content";
 import { db } from "./database";
 import { decodeUpperBound, modelMemory } from "./derive";
 export function servingRates(r: Extract<Resource, { kind: "inference" }>) {
@@ -75,6 +76,10 @@ export function hardwareSnapshot(
 ): HardwareSnapshot {
   const gpu = GPU_SPECS[r.nodePool];
   const liquid = ["B200_NVL72", "B300", "GB300_NVL72"].includes(r.nodePool);
+  const imageRef = r.kind === "gpu_vm" || r.kind === "gpu_baremetal" ? r.spec.imageRef : undefined;
+  const runtimeImageRef = r.kind === "gpu_vm" ? r.spec.runtimeImageRef : undefined;
+  const osImage = imageRef ? IMAGES.find((image) => image.id === imageRef) : undefined;
+  const runtimeImage = runtimeImageRef ? IMAGES.find((image) => image.id === runtimeImageRef) : undefined;
   const available = r.status === "running" || r.status === "error";
   const damaged = fault === "xid48";
   const machine =
@@ -138,8 +143,8 @@ export function hardwareSnapshot(
     },
     firmware: {
       vbios: liquid ? "97.00.68.00.01" : "96.00.68.00.01",
-      driver: liquid ? "570.124.06" : "550.127.05",
-      cuda: liquid ? "12.8" : "12.4",
+      driver: osImage?.driverVersion || "—",
+      cuda: runtimeImage?.cudaVersion || "Not installed",
       compliance: true,
     },
   };
@@ -152,91 +157,77 @@ export function clusterView(
   const count = r.spec.nodePools.reduce((n, p) => n + p.nodeCount, 0);
   const desired = r.spec.controlPlaneTier === "ha" ? 3 : 1;
   const nodes = r.spec.nodePools.flatMap((pool, poolIndex) =>
-    Array.from({ length: pool.nodeCount }, (_, i) => ({
-      poolIndex,
-      poolCode: pool.poolCode,
-      nodeUuid: `${r.resourceUuid}-${poolIndex}-${i}`,
-      name: `${r.displayId}-pool${poolIndex + 1}-node${i + 1}`,
-      state: active ? "ready" : "initializing",
-      gpuCount: GPU_SPECS[pool.poolCode].gpusPerNode,
-      allocatedGpu: active
-        ? Math.floor(GPU_SPECS[pool.poolCode].gpusPerNode * 0.75)
-        : 0,
-      straggler: fault === "straggler" && poolIndex === 0 && i === 0,
-      ratio:
-        fault === "straggler" && poolIndex === 0 && i === 0
-          ? 1.55
-          : 1.04 + (i % 3) * 0.02,
-    })),
+    Array.from({ length: pool.nodeCount }, (_, i) => {
+      const nodeUuid = `${r.resourceUuid}-${poolIndex}-${i}`;
+      const cordoned = r.labels.includes(`cluster-node:${nodeUuid}:cordoned`);
+      return {
+        poolIndex, poolCode: pool.poolCode, nodeUuid,
+        name: `${r.displayId}-pool${poolIndex + 1}-node${i + 1}`,
+        state: !active ? "initializing" : cordoned ? "unschedulable" : "ready",
+        cordoned,
+        gpuCount: GPU_SPECS[pool.poolCode].gpusPerNode,
+        allocatedGpu: active ? Math.floor(GPU_SPECS[pool.poolCode].gpusPerNode * 0.75) : 0,
+        straggler: fault === "straggler" && poolIndex === 0 && i === 0,
+        ratio: fault === "straggler" && poolIndex === 0 && i === 0 ? 1.55 : 1.04 + (i % 3) * 0.02,
+      };
+    }),
   );
-  const workloads = [
-    {
-      namespace: "training",
-      deployment: `${r.displayId}-trainer`,
-      pods: Array.from({ length: Math.min(count * 2, 32) }, (_, i) => ({
-        name: `trainer-${i + 1}`,
-        phase: active
-          ? i === count * 2 - 1 || i === 31
-            ? "Pending"
-            : "Running"
-          : "Pending",
-        restarts: i === 1 ? 1 : 0,
-        oomKilled: 0,
-        waitingReason:
-          active && i < count * 2 - 1 && i !== 31
-            ? ""
-            : "Insufficient nvidia.com/gpu",
-        gpuCount: 1,
-      })),
-    },
-    {
-      namespace: "inference",
-      deployment: `${r.displayId}-gateway`,
-      pods: [
-        {
-          name: "gateway-1",
-          phase: active ? "Running" : "Pending",
-          restarts: 0,
-          oomKilled: 0,
-          waitingReason: active ? "" : "ContainerCreating",
-          gpuCount: 0,
-        },
-      ],
-    },
-  ];
+  const schedulable = nodes.filter((node) => node.state === "ready");
+  const podCount = Math.min(count * 2, 32);
+  const capacity = schedulable.map((node) => ({
+    node,
+    remaining: Math.max(1, node.gpuCount - node.allocatedGpu),
+  }));
+  const pods = Array.from({ length: podCount }, (_, i) => {
+    const node = active ? capacity.find((entry) => entry.remaining > 0)?.node : null;
+    const phase = !active || !node ? "Pending" : "Running";
+    if (node && active) {
+      const entry = capacity.find((candidate) => candidate.node.nodeUuid === node.nodeUuid);
+      if (entry) entry.remaining -= 1;
+    }
+    return {
+      name: `trainer-${i + 1}`, phase, restarts: 0, oomKilled: 0,
+      waitingReason: phase === "Pending" ? (!active ? "Cluster is not running" : "No schedulable GPU node") : "",
+      gpuCount: 1, nodeUuid: node?.nodeUuid || null,
+    };
+  });
+  const gatewayPhase = active ? "Running" : "Pending";
+  const policy = db.policies.find((item) => item.resourceUuid === r.resourceUuid);
+  const pvcConfigured = r.spec.defaultPvcGb > 0;
   return {
     components: ["API Server", "etcd", "Scheduler", "Controller-Manager"].map(
       (name) => ({ name, ready: active ? desired : 0, desired }),
     ),
     nodes,
-    workloads,
-    scheduling: [
-      { reason: "Insufficient nvidia.com/gpu", count: 2 },
-      { reason: "node(s) had taint", count: 1 },
+    workloads: [
+      { namespace: "training", deployment: `${r.displayId}-trainer`, pods },
+      { namespace: "inference", deployment: `${r.displayId}-gateway`, pods: [{
+        name: "gateway-1", phase: gatewayPhase, restarts: 0, oomKilled: 0,
+        waitingReason: active ? "" : "Cluster is not running", gpuCount: 0,
+        nodeUuid: active ? schedulable[0]?.nodeUuid || null : null,
+      }] },
     ],
+    scheduling: active && pods.some((pod) => pod.phase === "Pending")
+      ? [{ reason: "No schedulable GPU node", count: pods.filter((pod) => pod.phase === "Pending").length }]
+      : [],
     network: {
-      cniErrors: 0,
-      serviceP99Ms: 12.4,
-      ingressQps: active ? 180 : 0,
+      cniErrors: 0, serviceP99Ms: 12.4,
+      ingressQps: r.spec.ingressEnabled ? (active ? 180 : 0) : null,
       vpcPeering: active ? "ready" : "pending",
     },
     storage: {
-      bound: active ? 4 : 0,
-      pending: 1,
-      pendingReason: "WaitForFirstConsumer: volume awaits scheduled pod",
-      pvCapacityGb: r.spec.defaultPvcGb,
-      csiErrors: 0,
+      bound: pvcConfigured ? 1 : 0, pending: 0, pendingReason: "",
+      pvCapacityGb: pvcConfigured ? r.spec.defaultPvcGb : 0,
+      provisioned: pvcConfigured, csiErrors: 0,
     },
     plugins: {
-      gpuOperator: "24.9.1",
-      devicePluginHealthy: active,
-      nfdVersion: "0.16.6",
-      driverReady: active ? count : 0,
-      driverDesired: count,
+      gpuOperator: "24.9.1", devicePluginHealthy: active,
+      nfdVersion: "0.16.6", driverReady: active ? count : 0, driverDesired: count,
     },
-    poolStatus: "scaling_up",
+    poolStatus: !r.spec.scaling ? "idle" : policy?.status === "paused" ? "paused" : "idle",
   };
 }
+
 export function replicaView(
   r: Extract<Resource, { kind: "inference" }>,
   fault = "",

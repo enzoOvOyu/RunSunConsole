@@ -89,6 +89,7 @@ export const serverSchema = z
     vcpu: z.number().int().positive(),
     memoryGb: z.number().positive(),
     imageRef: z.string().min(1),
+    runtimeImageRef: z.string().optional(),
     quantity: z.number().int().min(1).max(50),
     gpuPerInstance: z.union([
       z.literal(1),

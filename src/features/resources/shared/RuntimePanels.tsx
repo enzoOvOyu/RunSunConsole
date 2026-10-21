@@ -11,7 +11,8 @@ import { useData, useAction } from "../../shared/hooks";
 import { useAuth } from "../../../stores/auth";
 import { canWrite } from "../../../lib/rbac";
 import { t } from "../../../i18n";
-import { number } from "../../../lib/money";
+import { number, money } from "../../../lib/money";
+import type { Rate } from "../../../types/domain";
 import { duration } from "../../../lib/date";
 import {
   Panel,
@@ -263,37 +264,36 @@ export function NodePoolsPanel({
     `${EP.metrics}/${r.kind}/${r.resourceUuid}/cluster`,
     { poll: true },
   );
-  const [selected, setSelected] = useState<ClusterView["nodes"][number] | null>(
-    null,
-  );
+  const [selected, setSelected] = useState<ClusterView["nodes"][number] | null>(null);
+  const [resizePool, setResizePool] = useState<number | null>(null);
+  const [targetNodes, setTargetNodes] = useState(1);
+  const rates = useData<Rate[]>(["rates", r.region], EP.rates + query({ region: r.region }));
+  const role = useAuth((state) => state.role);
+  const { run, busy } = useAction();
+  const rateFor = (code: string) => rates.data?.find((item) => item.kind === "vgpu" && item.pool === code && item.unit === "per_gpu_hour")?.unitPrice;
+  const changeNodeState = (nodeUuid: string, action: "cordon" | "uncordon") => run(() => post(`${EP.resources}/${r.resourceUuid}/${action}`, { nodeUuid }));
+  const changePoolSize = async () => {
+    if (resizePool == null) return;
+    const result = await run(() => post(`${EP.resources}/${r.resourceUuid}/resize`, { poolIndex: resizePool, count: targetNodes }));
+    if (result) setResizePool(null);
+  };
+  const currentPool = resizePool == null ? undefined : r.spec.nodePools[resizePool];
+  const currentCount = currentPool?.nodeCount || 0;
+  const gpuDelta = currentPool ? (targetNodes - currentCount) * currentPool.gpuPerNode : 0;
+  const hourlyDelta = currentPool && rates.data ? gpuDelta * (rateFor(currentPool.poolCode) || 0) : null;
   return (
     <div className="stack">
       {r.spec.nodePools.map((p, i) => (
-        <Panel key={i} title={poolDisplayName(p.poolCode)}>
+        <Panel key={i} title={poolDisplayName(p.poolCode)} action={<Button disabled={!canWrite(role) || busy} onClick={() => { setResizePool(i); setTargetNodes(p.nodeCount); }}>{t("cluster.adjustNodeCount")}</Button>}>
           <KeyValues
             items={[
               [t("resource.nodeCount"), p.nodeCount],
               [t("resource.gpu"), p.nodeCount * p.gpuPerNode],
               [t("resource.slicing"), p.slicingPolicy + " · " + p.migProfile],
-              [
-                t("cluster.autoscaler"),
-                t("common." + (q.data?.poolStatus || "pending")),
-              ],
+              [t("cluster.autoscaler"), t("common." + (q.data?.poolStatus || "pending"))],
             ]}
           />
-          <div style={{ marginTop: 12 }}>
-            <Progress
-              value={
-                q.data
-                  ? (100 *
-                      q.data.nodes
-                        .filter((n) => n.poolIndex === i)
-                        .reduce((a, n) => a + n.allocatedGpu, 0)) /
-                    (p.nodeCount * p.gpuPerNode)
-                  : 0
-              }
-            />
-          </div>
+          <div style={{ marginTop: 12 }}><Progress value={q.data ? (100 * q.data.nodes.filter((n) => n.poolIndex === i).reduce((a, n) => a + n.allocatedGpu, 0)) / (p.nodeCount * p.gpuPerNode) : 0} /></div>
         </Panel>
       ))}
       <Panel title={t("cluster.nodes")}>
@@ -302,25 +302,12 @@ export function NodePoolsPanel({
           onRow={setSelected}
           columns={[
             { accessorKey: "name", header: t("common.name") },
-            {
-              accessorKey: "state",
-              header: t("common.status"),
-              cell: ({ row }) => <Badge status={row.original.state} />,
-            },
+            { accessorKey: "poolCode", header: t("cluster.nodePool") , cell: ({ row }) => poolDisplayName(row.original.poolCode) },
+            { accessorKey: "state", header: t("common.status"), cell: ({ row }) => <Badge status={row.original.state} /> },
             { accessorKey: "gpuCount", header: "GPU" },
             { accessorKey: "allocatedGpu", header: t("cluster.gpuAllocated") },
-            {
-              id: "straggler",
-              header: "Straggler",
-              cell: ({ row }) =>
-                row.original.straggler ? (
-                  <span className="danger-text">
-                    ⚠ {number(row.original.ratio, 2)}×
-                  </span>
-                ) : (
-                  number(row.original.ratio, 2) + "×"
-                ),
-            },
+            { id: "straggler", header: "Straggler", cell: ({ row }) => row.original.straggler ? <span className="danger-text">⚠ {number(row.original.ratio, 2)}×</span> : number(row.original.ratio, 2) + "×" },
+            { id: "scheduler", header: t("cluster.scheduling"), cell: ({ row }) => <Button variant="ghost" disabled={!canWrite(role) || busy || r.status !== "running"} onClick={(event) => { event.stopPropagation(); void changeNodeState(row.original.nodeUuid, row.original.cordoned ? "uncordon" : "cordon"); }}>{t(row.original.cordoned ? "cluster.resumeScheduling" : "cluster.stopScheduling")}</Button> },
           ]}
         />
       </Panel>
@@ -344,6 +331,21 @@ export function NodePoolsPanel({
           />
         </Panel>
       )}
+      <Modal open={resizePool !== null} onClose={() => setResizePool(null)} title={t("cluster.adjustNodeCount")}>
+        {currentPool && <div className="stack">
+          <KeyValues items={[
+            [t("cluster.nodePool"), poolDisplayName(currentPool.poolCode)],
+            [t("common.current"), currentCount],
+            [t("common.target"), targetNodes],
+            [t("cluster.gpuDelta"), `${gpuDelta > 0 ? "+" : ""}${gpuDelta}`],
+            [t("cluster.hourlyCostChange"), hourlyDelta == null ? "—" : `${hourlyDelta > 0 ? "+" : hourlyDelta < 0 ? "−" : ""}${money(Math.abs(hourlyDelta))} / h`],
+          ]} />
+          <Field label={t("cluster.targetNodeCount")} hint="1–64">
+            <input className="input" type="number" min={1} max={64} value={targetNodes} onChange={(event) => setTargetNodes(Number(event.target.value))} />
+          </Field>
+          <Button variant="primary" disabled={!canWrite(role) || busy || !Number.isInteger(targetNodes) || targetNodes < 1 || targetNodes > 64} onClick={() => void changePoolSize()}>{t("common.confirm")}</Button>
+        </div>}
+      </Modal>
       <Modal
         open={!!selected}
         onClose={() => setSelected(null)}
@@ -400,6 +402,7 @@ export function WorkloadsPanel({
                     ),
                   },
                   { accessorKey: "gpuCount", header: "GPU" },
+                  { id: "node", header: t("cluster.nodes"), cell: ({ row }) => row.original.nodeUuid || "—" },
                   { accessorKey: "restarts", header: t("cluster.restarts") },
                   { accessorKey: "oomKilled", header: "OOM" },
                   {
@@ -442,14 +445,14 @@ export function ClusterNetworkPanel({
             [t("field.networkPlugin"), r.spec.networkPlugin],
             ["CNI errors", q.data.network.cniErrors],
             ["Service P99", q.data.network.serviceP99Ms + " ms"],
-            ["Ingress QPS", q.data.network.ingressQps],
+            ["Ingress QPS", r.spec.ingressEnabled ? q.data.network.ingressQps : t("common.notEnabled")],
             ["VPC peering", t("common." + q.data.network.vpcPeering)],
             [
               "PVC Bound / Pending",
-              `${q.data.storage.bound} / ${q.data.storage.pending}`,
+              q.data.storage.provisioned ? `${q.data.storage.bound} / ${q.data.storage.pending}` : t("cluster.pvcNotProvisioned"),
             ],
-            [t("cluster.pendingReason"), q.data.storage.pendingReason],
-            ["PV", q.data.storage.pvCapacityGb + " GB"],
+            [t("cluster.pendingReason"), q.data.storage.provisioned ? (q.data.storage.pendingReason || "—") : "—"],
+            ["PV", q.data.storage.provisioned ? q.data.storage.pvCapacityGb + " GB" : "—"],
             ["CSI errors", q.data.storage.csiErrors],
           ]}
         />

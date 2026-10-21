@@ -1,7 +1,9 @@
 import { gpuModelDisplayName, poolDisplayName } from "../../../lib/gpu-labels";
 import { ResourceNetwork } from "../../network/ResourceNetwork";
 import { useState } from "react";
-import type { ResourceOf } from "../../../types/domain";
+import type { Image, ResourceOf } from "../../../types/domain";
+import { EP } from "../../../lib/api-client";
+import { useData } from "../../shared/hooks";
 import { t } from "../../../i18n";
 import { Panel, Tabs, KeyValues } from "../../../components/ui";
 import { date } from "../../../lib/date";
@@ -21,6 +23,9 @@ export function ServerDetail({
   resource: ResourceOf<"gpu_vm">;
 }) {
   const [tab, setTab] = useState("overview");
+  const images = useData<Image[]>(["images"], EP.images);
+  const baseImage = images.data?.find((image) => image.id === r.spec.imageRef);
+  const runtimeImage = images.data?.find((image) => image.id === r.spec.runtimeImageRef);
   const tabs = [
     "overview",
     "monitoring",
@@ -55,7 +60,10 @@ export function ServerDetail({
                   t("resource.cpu"),
                   `${r.spec.vcpu} vCPU / ${r.spec.memoryGb} GB`,
                 ],
-                [t("wizard.imageStorage"), r.spec.imageRef],
+                [t("images.baseOperatingSystem"), baseImage?.name || r.spec.imageRef],
+                [t("images.gpuDriver"), baseImage?.driverVersion || "—"],
+                [t("images.frameworksIncluded"), runtimeImage?.frameworks.join(", ") || t("images.noneIncluded")],
+                ["CUDA", runtimeImage?.cudaVersion || t("images.noneIncluded")],
                 [t("common.region"), t("common." + r.region)],
                 [t("resource.pool"), poolDisplayName(r.nodePool)],
                 [t("common.createdAt"), date(r.createdAt)],

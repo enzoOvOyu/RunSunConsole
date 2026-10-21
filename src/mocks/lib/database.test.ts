@@ -132,3 +132,32 @@ it("migrates legacy storage allocations once and preserves later volume deletion
     vi.unstubAllGlobals();
   }
 });
+
+
+it("migrates legacy GPU VM and bare metal image references to split OS and runtime selections", () => {
+  const key = "rs.mock.database.v2";
+  const storage = new Map<string, string>();
+  vi.stubGlobal("localStorage", {
+    getItem: (name: string) => storage.get(name) ?? null,
+    setItem: (name: string, value: string) => storage.set(name, value),
+  });
+  try {
+    const old = makeDatabase();
+    const vm = old.resources.find((item) => item.kind === "gpu_vm")!;
+    if (vm.kind !== "gpu_vm") throw new Error("Expected GPU VM");
+    vm.spec.imageRef = "jupyter";
+    const machine = old.resources.find((item) => item.kind === "gpu_baremetal")!;
+    if (machine.kind !== "gpu_baremetal") throw new Error("Expected bare metal");
+    machine.spec.imageRef = "rocky";
+    storage.set(key, JSON.stringify({ ...old, usage: [] }));
+
+    const restored = restoreDatabase();
+    const restoredVm = restored.resources.find((item) => item.resourceUuid === vm.resourceUuid)!;
+    const restoredMachine = restored.resources.find((item) => item.resourceUuid === machine.resourceUuid)!;
+    expect(restoredVm.kind === "gpu_vm" && restoredVm.spec.imageRef).toBe("ubuntu-24.04");
+    expect(restoredVm.kind === "gpu_vm" && restoredVm.spec.runtimeImageRef).toBe("jupyter-cu130");
+    expect(restoredMachine.kind === "gpu_baremetal" && restoredMachine.spec.imageRef).toBe("rocky-9");
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

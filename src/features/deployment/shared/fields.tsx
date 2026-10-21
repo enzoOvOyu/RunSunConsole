@@ -426,35 +426,63 @@ export function ScalingToggle({ kind }: { kind: Kind }) {
 export function ImageCards({
   images,
   os = false,
+  runtime = false,
+  architecture,
+  gpuModel,
+  osFamily,
 }: {
   images: Image[];
   os?: boolean;
+  runtime?: boolean;
+  architecture?: "x86_64" | "aarch64";
+  gpuModel?: Pool["code"];
+  osFamily?: string;
 }) {
   const { spec, update } = useSpec();
-  const selected = "imageRef" in spec ? spec.imageRef : "";
+  const field = runtime ? "runtimeImageRef" : "imageRef";
+  const selected = field in spec ? String((spec as unknown as Record<string, unknown>)[field] || "") : "";
+  const compatible = images.filter((image) =>
+    image.type === (runtime ? "container" : os ? "os" : image.type) &&
+    (!architecture || image.architectures.includes(architecture)) &&
+    (!gpuModel || image.supportedGpuModels.includes(gpuModel)) &&
+    (!runtime || !osFamily || image.compatibleOsFamilies.includes(osFamily)),
+  );
   return (
-    <div className="grid grid-2">
-      {images
-        .filter((i) => !os || i.type === "os")
-        .map((image) => (
+    <section className="stack">
+      <h3>{t(runtime ? "images.runtimeTemplates" : "images.baseOperatingSystem")}</h3>
+      <div className="grid grid-2">
+        {runtime && (
+          <button type="button" className={`catalog-card ${selected === "" ? "selected" : ""}`} onClick={() => update({ runtimeImageRef: "" })}>
+            <strong>{t("images.noRuntime")}</strong>
+            <small>{t("images.noRuntimeDescription")}</small>
+          </button>
+        )}
+        {compatible.map((image) => (
           <button
             type="button"
             className={`catalog-card ${selected === image.id ? "selected" : ""}`}
             key={image.id}
-            onClick={() => update({ imageRef: image.id })}
+            onClick={() => {
+              if (runtime) update({ runtimeImageRef: image.id });
+              else {
+                const activeRuntime = images.find((candidate) => candidate.id === (spec as unknown as Record<string, unknown>).runtimeImageRef);
+                const runtimeFits = activeRuntime && activeRuntime.compatibleOsFamilies.includes(image.osFamily) && (!architecture || activeRuntime.architectures.includes(architecture)) && (!gpuModel || activeRuntime.supportedGpuModels.includes(gpuModel));
+                update({ imageRef: image.id, ...(runtimeFits ? {} : { runtimeImageRef: "" }) });
+              }
+            }}
           >
             <strong>{image.name}</strong>
-            <small>
-              {image.framework} · CUDA {image.cudaVersion}
-            </small>
-            <small>
-              {image.sizeGb} GB · {image.source}
-            </small>
+            <small>{t("images.cpuArchitecture")}: {image.architectures.join(" / ")} · {image.sizeGb} GB</small>
+            <small>{t("images.gpuDriver")}: {image.driverVersion || t("images.hostDriver")} · CUDA {image.cudaVersion}</small>
+            <small>{t("images.frameworksIncluded")}: {image.frameworks.length ? image.frameworks.join(", ") : t("images.noneIncluded")}</small>
+            {runtime && <small>{t("images.compatibleOperatingSystems")}: {image.compatibleOsFamilies.join(", ")}</small>}
           </button>
         ))}
-    </div>
+      </div>
+    </section>
   );
 }
+
 export function NetworkFields({
   dedicatedBaremetal = false,
 }: {
@@ -722,10 +750,18 @@ export function Review() {
           ],
           [t("common.region"), t("common." + values.region)],
           [t("common.name"), values.name],
-          ...Object.entries(spec).map(([key, value]): [string, string] => [
-            t("field." + key),
-            renderValue(key, value),
-          ]),
+          ...Object.entries(spec)
+            .filter(([key]) => !("gpuPerInstance" in spec) || (key !== "env" && key !== "entrypoint"))
+            .map(([key, value]): [string, string] => [
+              "gpuPerInstance" in spec && key === "vcpu"
+                ? t("images.vcpuPerInstance")
+                : "gpuPerInstance" in spec && key === "memoryGb"
+                  ? t("images.memoryPerInstance")
+                  : "gpuPerInstance" in spec && key === "gpuCount"
+                    ? t("images.totalGpuCount")
+                    : t("field." + key),
+              renderValue(key, value),
+            ]),
         ]}
       />
       <Check

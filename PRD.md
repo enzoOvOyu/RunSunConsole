@@ -2,7 +2,7 @@
 
 > 文档类型：产品需求文档（仅前端功能设计，不含后端实现）
 > 版本：**v0.11 · 当前产品需求基线**
-> 日期：2026-10-20
+> 日期：2026-10-21
 > 关联文档：`ARCHITECTURE.md`（架构/数据模型）、`DESIGN-SYSTEM.md`（UI 规范）、`MOCK-DATA.md`（数据约束）
 
 ---
@@ -336,9 +336,9 @@ RunSun 控制台
 | -- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 1  | 项目与区域      | `project_id`(Select+内联新建 · **必填** · §3.5 · `projects`)；`region`(Select · 必填 · `region_code`)；`name`(Input · 必填 · 3–63 字符 · 默认 `${kind}-${pool}-${seq}`)；`labels`(TagInput · 选填)                                                                                                                                                                                                     |
 | 2  | **规格选型（卡片化）** | `node_pool`(**卡片网格单选** · 必填 · 卡面含 GPU 型号/显存/互联/**本区域单价**/可用量 · `node_pools`×`billing_rates`)；`gpu_count`(Segmented · 必填 · ∈{1,2,4,8} 且 ≤ `gpus_per_node` · `node_pools`)；**规格族**(Select · 必填 · 由卡数与池推导的选项，如 `gpu.8xh100.128c.1024g` / `gpu.1xh100.16c.128g` · 见下"规格族"说明)；`vcpu`(Select · 必填 · 随规格族联动)、`memory_gb`(Select · 必填 · 随规格族联动) |
-| 3  | 镜像与存储      | `image_ref`(**卡片网格单选** · 必填 · 卡面含 框架/CUDA/体积 · `images`)；`system_disk_gb`(Number · 必填 · 40–2048 · 默认 100)；`system_disk_type`(Radio · 必填 · `nvme_ssd`/`ssd`)；`data_disk_gb`(Number · 选填 · 0–32768)；`data_disk_type`(Radio · 有数据盘时必填)                                                                                                                                                      |
+| 3  | 镜像与存储      | `image_ref`(基础 OS 卡片单选 · 必填 · 按 GPU 型号/CPU 架构过滤 · 展示系统、预装驱动与框架；基础 OS 不预装 AI 框架) + `runtime_image_ref`(可选 Linux 容器模板 · 按 OS/CPU 架构/GPU 过滤 · 展示 CUDA 与镜像内框架)；`system_disk_gb`(Number · 必填 · 40–2048 · 默认 100)；`system_disk_type`(Radio · 必填 · `nvme_ssd`/`ssd`)；`data_disk_gb`(Number · 选填 · 0–32768)；`data_disk_type`(Radio · 有数据盘时必填)                                                                                                                                                      |
 | 4  | 网络与安全      | `vpc`(Select · 必填 · 默认 `default-vpc`)；`subnet`(Select · 必填 · **必须与所选区域一致**)；`security_group`(MultiSelect · 必填 · 默认 `default`)；`public_ip`(Switch · 选填 · 开启后显示带宽计费口径)；`bandwidth_mbps`(Number · 开启公网 IP 时必填 · 1–1000)；`ssh_pubkey`(Textarea/密钥选择器 · 必填 · 或选 `password` 二选一，火山引擎风格)                                                                                          |
-| 5  | 高级与确认      | `env`(KeyValueEditor · 选填)；`entrypoint`(Input · 选填 · 容器场景)；`ports`(PortEditor · 选填 · 需包含 22/8888 提示)；`auto_shutdown_idle_min`(Select · 选填 · 0/30/60/120 · AutoDL 省钱心智)；**`elastic_scaling`(Switch · 选填 · 默认关 · 开启展开「节点池伸缩策略」精简表单：触发指标/`min_size`(默认1，禁止摘最后一台)/`max_size`/库存回退/缩容保护 · §4.2.6)**；`quantity`(Number · 必填 · **本次创建的实例数量** 1–50) → 右侧费用明细卡（开启弹性时显示保底/峰值双档 · §4.2.6.3）→ 「创建」                                                                                                                                                     |
+| 5  | 高级与确认      | `ports`(PortEditor · 选填 · 需包含 22/8888 提示)；`auto_shutdown_idle_min`(Select · 选填 · 0/30/60/120 · AutoDL 省钱心智)；**`elastic_scaling`(Switch · 选填 · 默认关 · 开启展开「节点池伸缩策略」精简表单：触发指标/`min_size`(默认1，禁止摘最后一台)/`max_size`/库存回退/缩容保护 · §4.2.6)**；`quantity`(Number · 必填 · **本次创建的实例数量** 1–50) → 右侧费用明细卡（开启弹性时显示保底/峰值双档 · §4.2.6.3）→ 「创建」                                                                                                                                                     |
 
 - **规格族说明（阿里云化）**：GPU 卡数决定规格族前缀（`gpu.1x`/`gpu.2x`/`gpu.4x`/`gpu.8x` + 型号 + vCPU + 内存），用户在**同一卡数内**仅调整 vCPU/内存档位；卡数变更即换族并刷新右侧估价的 GPU 项。
 - **校验**：`gpu_count ≤ node_pools.gpus_per_node`（ARCH §12.10.2）；`subnet.region === region`；镜像体积 ≤ 系统盘容量。
@@ -558,17 +558,17 @@ RunSun 控制台
 |           | 费用卡                | 控制面费 `$/集群·h`（HA ×3）+ 各池 GPU·小时 汇总 = `$/时` ← §4.2.3 三行明细                                                                                                                       |
 | **控制面**    | 控制面健康（SLA 指标）      | `apiserver_latency_p99` ms（阈值 1000）/ `etcd_fsync_p99` ms（阈值 25）/ `etcd_db_size` MB / `scheduler_pending_pods` / `controller_queue_depth` / `api_error_rate` % ← MOCK-DATA §6.4    |
 |           | 组件状态               | API Server / etcd / Scheduler / Controller-Manager 各副本就绪数                                                                                                                    |
-| **节点池**    | 每池一张卡（多池并列）        | 池名 · 节点数 · GPU 总量/已分配 · 切片策略（整卡/MIG/time-slicing/MPS）· MIG profile 与 空闲/总数 · autoscaler 状态（idle/scaling_up/scaling_down）· 每池单价                                                    |
-|           | 节点列表               | 每节点：状态（5 态）、GPU 切片占用、straggler 标记、机架位 ← `resource_placements → gpu_nodes`；点击行 → Drawer（§3.4 B 档）                                                                              |
-| **工作负载**   | Namespace → Deploy → Pod 三级下钻 | 每级显示 phase 分布（Running/Pending/Failed/Succeeded）、重启次数、`oom_killed_count`、`container_waiting_reason`                                                                            |
-|           | 调度失败原因 TopN        | `FailedScheduling` 原因排行，**必须包含 `Insufficient nvidia.com/gpu`** 才具说服力（MOCK-DATA §6.4）                                                                                            |
-| **网络与存储**  | 网络                 | `cni_errors` / `service_latency_p99` / `ingress_qps` / VPC 对等状态 / IB 启用状态                                                                                                       |
-|           | 存储                 | `pvc_bound/pending`（Pending 须附原因）/ `pv_capacity` GB / `csi_errors`                                                                                                            |
+| **节点池**    | 每池一张卡（多池并列）        | 池名 · 节点数 · GPU 总量/已分配 · 切片策略 · MIG profile · autoscaler 状态（无策略 `idle`、暂停 `paused`）· 每池单价；“调整节点数”作用于该池，展示型号、当前/目标节点数、GPU 差额与每小时费用变化；创建和调整均为 1–64 节点 |
+|           | 节点列表               | 每节点状态与 GPU 占用；停止调度/恢复调度绑定明确 node UUID，分别反映到节点、Pod 调度和事件；暂不展示无恢复语义的 drain 与升级操作                                                                                  |
+| **工作负载**   | Namespace → Deploy → Pod 三级下钻 | 显示 Pod phase、所在节点、重启次数、`oom_killed_count`、`container_waiting_reason`；正常配置无固定 Pending/故障，Pending 由集群停止或不可调度节点等状态派生                                                                            |
+|           | 调度失败原因 TopN        | 仅在实际模拟状态产生待调度 Pod 时显示原因；正常路径为空，不固定填充 GPU 不足或 taint                                                                                           |
+| **网络与存储**  | 网络                 | `cni_errors` / `service_latency_p99` / Ingress QPS（Ingress 关闭时显示未启用/—）/ VPC 对等状态                                                                                                       |
+|           | 存储                 | `pvc_bound/pending` / `pv_capacity` GB / `csi_errors`；PVC 容量为 0 时显示“未预置”，不生成 Pending PVC                                                                                                            |
 | **拓扑**     | 机架/交换机/NVL72       | visx 图：rack → switch → node，NVL72 机柜级互联；节点按 5 态着色，straggler 加警示环。**仅在 Kubernetes 集群 详情内出现，不设独立页面**；受 `VITE_FEATURE_TOPOLOGY` 降级开关控制                                                       |
 | **事件**     | 时间线                | `resource_events` + 关联 `node_events`（节点级运维事件一并展示）                                                                                                                               |
 | **计费**     | 见 §7.8             | 明细**分三行**：控制面 + 各节点池 GPU + 附加存储                                                                                                                                                   |
 
-**操作**：节点池扩容/缩容（节点数）· 节点 cordon/drain（联动 §4.4）· 升级 K8s 版本 · 下载 kubeconfig · 删除。
+**操作**：节点池调整（目标节点池内 1–64 节点，显式显示 GPU 与每小时费用变化）· 指定节点停止调度 / 恢复调度 · 下载 kubeconfig · 删除。集群升级与 drain 暂不显示，待完整结果和恢复语义落地后再开放。
 
 #### 4.3.4 推理服务 Inference Service（资源类型 ④，`kind='inference'`）
 

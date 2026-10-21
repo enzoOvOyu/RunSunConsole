@@ -263,8 +263,14 @@ function WizardForm({
       context.models.some((model) => model.id === source.model)
     )
       base.spec.modelRef = source.model;
-    if (source.image && "imageRef" in base.spec)
-      base.spec.imageRef = source.image;
+    if (source.image && "imageRef" in base.spec) {
+      const selectedImage = context.images.find((image) => image.id === source.image);
+      if (selectedImage?.type === "container" && "runtimeImageRef" in base.spec)
+        base.spec.runtimeImageRef = selectedImage.id;
+      else if (selectedImage?.type === "os") base.spec.imageRef = selectedImage.id;
+    }
+    if (source.runtime && "runtimeImageRef" in base.spec)
+      base.spec.runtimeImageRef = source.runtime;
     return base;
   };
   const form = useForm<WizardValues>({ defaultValues: initial() });
@@ -371,7 +377,7 @@ function WizardForm({
               ? "app"
               : source.model
                 ? "model"
-                : source.image
+                : source.image || source.runtime
                   ? "image"
                   : clone
                     ? "clone"
@@ -380,6 +386,7 @@ function WizardForm({
               source.template ||
               source.model ||
               source.image ||
+              source.runtime ||
               clone?.resourceUuid ||
               "",
           },

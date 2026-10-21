@@ -220,7 +220,7 @@ export default function NotebooksPage() {
                     post<Notebook>(EP.notebooks, {
                       resourceUuid: selected,
                       ide,
-                      imageRef: ide,
+                      imageRef: ide === "jupyter" ? "jupyter-cu130" : "vscode-cu130",
                       storageGb: storage,
                       autoShutdownIdleMin: idle,
                     }),

@@ -63,6 +63,7 @@ export interface ServerSpec extends CommonSpec {
   vcpu: number;
   memoryGb: number;
   imageRef: string;
+  runtimeImageRef?: string;
   quantity: number;
   gpuPerInstance: number;
   systemDiskGb: number;
@@ -203,6 +204,7 @@ export interface Pool {
   tdp: number;
   gpusPerNode: number;
   cpu: string;
+  cpuArchitecture: "x86_64" | "aarch64";
   memorySystemGb: number;
   localNvmeGb: number;
   network: string;
@@ -343,9 +345,17 @@ export interface Image {
   name: string;
   framework: string;
   cudaVersion: string;
+  driverVersion: string | null;
   sizeGb: number;
   type: "container" | "os";
   source: string;
+  osFamily: string;
+  osVersion: string;
+  architectures: ("x86_64" | "aarch64")[];
+  supportedGpuModels: PoolCode[];
+  compatibleOsFamilies: string[];
+  frameworks: string[];
+  description: string;
 }
 export interface Notebook {
   id: string;

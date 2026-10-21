@@ -72,62 +72,29 @@ export const MODELS: Model[] = [
   },
   ...CATALOG_MODELS,
 ];
+const x86Pools: Image["supportedGpuModels"] = ["H100_SXM", "H200_NVL", "B200_NVL72", "B300"];
+const allPools: Image["supportedGpuModels"] = [...x86Pools, "GB300_NVL72"];
+const linuxImage = (id: string, name: string, osFamily: string, osVersion: string, architecture: ("x86_64" | "aarch64")[], pools: Image["supportedGpuModels"], sizeGb: number): Image => ({
+  id, name, osFamily, osVersion, architectures: architecture, supportedGpuModels: pools, compatibleOsFamilies: [],
+  framework: "Base OS", frameworks: [], cudaVersion: "Not included", driverVersion: "615.71.10",
+  sizeGb, type: "os", source: "RunSun verified", description: "Base operating system; AI frameworks and CUDA toolkit are not preinstalled.",
+});
 export const IMAGES: Image[] = [
-  {
-    id: "pytorch",
-    name: "PyTorch 2.5",
-    framework: "PyTorch",
-    cudaVersion: "12.4",
-    sizeGb: 18,
-    type: "container",
-    source: "official",
-  },
-  {
-    id: "vllm",
-    name: "vLLM 0.7",
-    framework: "vLLM",
-    cudaVersion: "12.4",
-    sizeGb: 14,
-    type: "container",
-    source: "official",
-  },
-  {
-    id: "jupyter",
-    name: "JupyterLab 4",
-    framework: "Jupyter",
-    cudaVersion: "12.4",
-    sizeGb: 12,
-    type: "container",
-    source: "official",
-  },
-  {
-    id: "vscode",
-    name: "VS Code Server",
-    framework: "VS Code",
-    cudaVersion: "12.4",
-    sizeGb: 9,
-    type: "container",
-    source: "community",
-  },
-  {
-    id: "ubuntu",
-    name: "Ubuntu 22.04 LTS",
-    framework: "NVIDIA 550",
-    cudaVersion: "12.4",
-    sizeGb: 8,
-    type: "os",
-    source: "official",
-  },
-  {
-    id: "rocky",
-    name: "Rocky Linux 9",
-    framework: "NVIDIA 550",
-    cudaVersion: "12.4",
-    sizeGb: 6,
-    type: "os",
-    source: "official",
-  },
+  linuxImage("ubuntu-22.04", "Ubuntu 22.04 LTS", "Ubuntu", "22.04 LTS", ["x86_64", "aarch64"], allPools, 8),
+  linuxImage("ubuntu-24.04", "Ubuntu 24.04 LTS", "Ubuntu", "24.04 LTS", ["x86_64", "aarch64"], allPools, 9),
+  linuxImage("ubuntu-26.04", "Ubuntu 26.04 LTS", "Ubuntu", "26.04 LTS", ["x86_64", "aarch64"], allPools, 10),
+  linuxImage("rocky-9", "Rocky Linux 9", "Rocky Linux", "9", ["x86_64"], x86Pools, 7),
+  linuxImage("rocky-10", "Rocky Linux 10", "Rocky Linux", "10", ["x86_64"], x86Pools, 7),
+  linuxImage("debian-12", "Debian 12", "Debian", "12", ["x86_64", "aarch64"], allPools, 6),
+  linuxImage("debian-13", "Debian 13", "Debian", "13", ["x86_64", "aarch64"], allPools, 6),
+  { id: "windows-server-2022", name: "Windows Server 2022", osFamily: "Windows Server", osVersion: "2022", architectures: ["x86_64"], supportedGpuModels: x86Pools, compatibleOsFamilies: [], framework: "Base OS", frameworks: [], cudaVersion: "Not included", driverVersion: "616.92", sizeGb: 20, type: "os", source: "RunSun verified", description: "Windows Server base image; CUDA toolkit and AI frameworks are not preinstalled." },
+  { id: "windows-server-2025", name: "Windows Server 2025", osFamily: "Windows Server", osVersion: "2025", architectures: ["x86_64"], supportedGpuModels: x86Pools, compatibleOsFamilies: [], framework: "Base OS", frameworks: [], cudaVersion: "Not included", driverVersion: "616.92", sizeGb: 22, type: "os", source: "RunSun verified", description: "Windows Server base image; CUDA toolkit and AI frameworks are not preinstalled." },
+  { id: "pytorch-cu130", name: "PyTorch 2.14 · CUDA 13.0", osFamily: "Linux container", osVersion: "CUDA 13.0", architectures: ["x86_64", "aarch64"], supportedGpuModels: allPools, compatibleOsFamilies: ["Ubuntu", "Rocky Linux", "Debian"], framework: "PyTorch 2.14", frameworks: ["PyTorch 2.14"], cudaVersion: "13.0", driverVersion: null, sizeGb: 18, type: "container", source: "PyTorch official", description: "Linux GPU runtime; use with a compatible Linux base OS." },
+  { id: "vllm-cu130", name: "vLLM 0.32.0 · CUDA 13.0", osFamily: "Linux container", osVersion: "CUDA 13.0", architectures: ["x86_64", "aarch64"], supportedGpuModels: allPools, compatibleOsFamilies: ["Ubuntu", "Rocky Linux", "Debian"], framework: "vLLM 0.32.0", frameworks: ["vLLM 0.32.0", "PyTorch dependency"], cudaVersion: "13.0", driverVersion: null, sizeGb: 16, type: "container", source: "vLLM official", description: "Linux inference runtime for supported NVIDIA GPUs; requires a Linux host and compatible NVIDIA driver." },
+  { id: "vscode-cu130", name: "VS Code Server · CUDA 13.0", osFamily: "Linux container", osVersion: "CUDA 13.0", architectures: ["x86_64", "aarch64"], supportedGpuModels: allPools, compatibleOsFamilies: ["Ubuntu", "Rocky Linux", "Debian"], framework: "VS Code Server", frameworks: ["VS Code Server"], cudaVersion: "13.0", driverVersion: null, sizeGb: 12, type: "container", source: "RunSun verified", description: "Remote development environment; requires a compatible Linux base OS." },
+  { id: "jupyter-cu130", name: "JupyterLab 4 · PyTorch 2.14", osFamily: "Linux container", osVersion: "CUDA 13.0", architectures: ["x86_64", "aarch64"], supportedGpuModels: allPools, compatibleOsFamilies: ["Ubuntu", "Rocky Linux", "Debian"], framework: "JupyterLab 4", frameworks: ["JupyterLab 4", "PyTorch 2.14"], cudaVersion: "13.0", driverVersion: null, sizeGb: 20, type: "container", source: "RunSun verified", description: "Notebook runtime with JupyterLab and PyTorch preinstalled; requires a Linux base OS." },
 ];
+
 export const PROJECTS: Project[] = ["default", "training", "production"].map(
   (id, i) => ({
     id,

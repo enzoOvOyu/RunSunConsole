@@ -348,12 +348,23 @@ function precheck(r: Resource, exclude?: string) {
   }
   if (r.kind === "gpu_vm" || r.kind === "gpu_baremetal") {
     const image = IMAGES.find((i) => i.id === r.spec.imageRef);
+    const runtimeImage = r.kind === "gpu_vm" && r.spec.runtimeImageRef
+      ? IMAGES.find((i) => i.id === r.spec.runtimeImageRef)
+      : undefined;
+    const poolSpec = GPU_SPECS[r.nodePool];
     if (
-      !image ||
-      (r.kind === "gpu_baremetal" && image.type !== "os") ||
-      (r.kind === "gpu_vm" && image.sizeGb > r.spec.systemDiskGb)
-    )
-      fail(422, "VALIDATION_ERROR");
+      !image || image.type !== "os" ||
+      !image.supportedGpuModels.includes(r.nodePool) ||
+      !image.architectures.includes(poolSpec.cpuArchitecture) ||
+      (r.kind === "gpu_baremetal" && image.sizeGb > r.spec.storageGb) ||
+      (r.kind === "gpu_vm" && (
+        image.sizeGb + (runtimeImage?.sizeGb || 0) > r.spec.systemDiskGb ||
+        (r.spec.runtimeImageRef && (!runtimeImage || runtimeImage.type !== "container" ||
+          !runtimeImage.supportedGpuModels.includes(r.nodePool) ||
+          !runtimeImage.architectures.includes(poolSpec.cpuArchitecture) ||
+          !runtimeImage.compatibleOsFamilies.includes(image.osFamily)))
+      ))
+    ) fail(422, "VALIDATION_ERROR");
   }
   if (
     r.kind === "vgpu" &&
@@ -1916,6 +1927,7 @@ async function dispatch(request: Request) {
       const before = r.status;
       const governanceBefore =
         r.kind === "inference" ? JSON.stringify(governanceSettings(r)) : "";
+      let resizePreviousCount: number | null = null;
       if (action === "start") {
         if (r.status !== "stopped") fail(409, "INVALID_STATE");
         precheck(r, r.resourceUuid);
@@ -1953,17 +1965,21 @@ async function dispatch(request: Request) {
         r.spec.gpuCount = r.spec.gpuDisabled
           ? 0
           : r.spec.gpuPerInstance * r.spec.quantity;
-      } else if (action === "upgrade") {
-        if (r.kind !== "vgpu") fail(422, "VALIDATION_ERROR");
-        r.spec.k8sVersion = z
-          .enum(["1.28", "1.29", "1.30", "1.31"])
-          .parse(body.version);
-      } else if (action === "cordon" || action === "drain") {
-        if (r.kind !== "vgpu") fail(422, "VALIDATION_ERROR");
-        r.labels = [
-          ...r.labels.filter((l) => !l.startsWith("node:")),
-          `node:${action}`,
-        ];
+      } else if (action === "cordon" || action === "uncordon") {
+        if (r.kind !== "vgpu" || r.status !== "running") fail(422, "VALIDATION_ERROR");
+        const nodeUuid = z.string().min(1).parse(body.nodeUuid);
+        const match = nodeUuid.match(new RegExp(`^${r.resourceUuid}-(\\d+)-(\\d+)$`));
+        if (!match) fail(422, "INVALID_NODE_TARGET");
+        const poolIndex = Number(match[1]);
+        const nodeIndex = Number(match[2]);
+        const pool = r.spec.nodePools[poolIndex];
+        if (!pool || nodeIndex < 0 || nodeIndex >= pool.nodeCount) fail(404, "NODE_NOT_FOUND");
+        const nodeLabel = `cluster-node:${nodeUuid}:cordoned`;
+        const isCordon = r.labels.includes(nodeLabel);
+        if ((action === "cordon" && isCordon) || (action === "uncordon" && !isCordon)) fail(409, "INVALID_NODE_STATE");
+        r.labels = action === "cordon"
+          ? [...r.labels, nodeLabel]
+          : r.labels.filter((label) => label !== nodeLabel);
       } else if (action === "governance") {
         if (r.kind !== "inference") fail(404, "NOT_FOUND");
         if (r.status !== "running") fail(409, "INVALID_STATE");
@@ -1991,7 +2007,7 @@ async function dispatch(request: Request) {
         db.replicaRestarts[r.resourceUuid][String(index)] =
           (db.replicaRestarts[r.resourceUuid][String(index)] || 0) + 1;
       } else if (action === "resize") {
-        const count = z.number().int().min(1).max(32).parse(body.count);
+        const count = z.number().int().min(1).max(r.kind === "vgpu" ? 64 : 32).parse(body.count);
         if (r.kind === "inference") {
           const next = {
             ...r,
@@ -2005,17 +2021,37 @@ async function dispatch(request: Request) {
           r.spec = next.spec;
         } else if (r.kind === "vgpu") {
           const next = structuredClone(r);
-          next.spec.nodePools[0].nodeCount = count;
-          next.spec.gpuCount = next.spec.nodePools.reduce(
-            (a, p) => a + p.nodeCount * p.gpuPerNode,
-            0,
-          );
+          const poolIndex = z.number().int().min(0).max(next.spec.nodePools.length - 1).parse(body.poolIndex);
+          resizePreviousCount = next.spec.nodePools[poolIndex].nodeCount;
+          next.spec.nodePools[poolIndex].nodeCount = z.number().int().min(1).max(64).parse(body.count);
+          next.spec.nodePools[poolIndex].gpuPerNode = GPU_SPECS[next.spec.nodePools[poolIndex].poolCode].gpusPerNode;
+          next.spec.gpuCount = next.spec.nodePools.reduce((a, p) => a + p.nodeCount * p.gpuPerNode, 0);
           precheck(next, r.resourceUuid);
           r.spec = next.spec;
         } else fail(422, "VALIDATION_ERROR");
       } else fail(404, "NOT_FOUND");
       if (action === "resize") syncResourceNetwork(db.network, r);
       addEvent(r, action === "stop" ? "stopped" : action, before, r.status);
+      if (r.kind === "vgpu" && (action === "cordon" || action === "uncordon")) {
+        Object.assign(db.events[0], {
+          type: action === "cordon" ? "NODE_CORDONED" : "NODE_UNCORDONED",
+          component: "scheduler",
+          reason: String(body.nodeUuid),
+          action: action === "cordon" ? "NODE_CORDONED" : "NODE_UNCORDONED",
+          before: action === "cordon" ? "ready" : "unschedulable",
+          after: action === "cordon" ? "unschedulable" : "ready",
+          metric: "scheduler_pending_pods",
+          value: clusterView(r).scheduling.reduce((sum, item) => sum + item.count, 0),
+        });
+      }
+      if (r.kind === "vgpu" && action === "resize") {
+        Object.assign(db.events[0], {
+          type: "NODE_POOL_RESIZED", component: "node-pool",
+          reason: r.spec.nodePools[Number(body.poolIndex)].poolCode,
+          action: "NODE_POOL_RESIZED",
+          before: String(resizePreviousCount ?? "—"), after: String(body.count), metric: "gpu_count", value: r.spec.gpuCount,
+        });
+      }
       if (
         r.kind === "inference" &&
         (action === "governance" || action === "traffic")
@@ -2436,7 +2472,7 @@ async function dispatch(request: Request) {
         id: "training",
         name: "LoRA Studio",
         description: "PyTorch · JupyterLab · PEFT",
-        imageRef: "pytorch",
+        imageRef: "pytorch-cu130",
         kind: "gpu_vm",
       },
       {

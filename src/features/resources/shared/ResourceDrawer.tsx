@@ -197,42 +197,16 @@ export function ResourceDrawer() {
                     </Button>
                   </>
                 )}
-                {(r.kind === "vgpu" || r.kind === "inference") && (
+                {r.kind === "inference" && (
                   <Button
                     disabled={!allowed}
                     onClick={() => {
-                      setCount(
-                        r.kind === "inference"
-                          ? r.spec.replicas
-                          : r.spec.nodePools[0].nodeCount,
-                      );
+                      setCount(r.spec.replicas);
                       setOperation("resize");
                     }}
                   >
                     {t("resource.expand")}
                   </Button>
-                )}
-                {r.kind === "vgpu" && (
-                  <>
-                    <Button
-                      disabled={!allowed}
-                      onClick={() => void act("upgrade", { version: "1.31" })}
-                    >
-                      {t("resource.upgrade")}
-                    </Button>
-                    <Button
-                      disabled={!allowed}
-                      onClick={() => void act("cordon")}
-                    >
-                      {t("resource.cordon")}
-                    </Button>
-                    <Button
-                      disabled={!allowed}
-                      onClick={() => setOperation("drain")}
-                    >
-                      {t("resource.drain")}
-                    </Button>
-                  </>
                 )}
                 <Button
                   variant="danger"

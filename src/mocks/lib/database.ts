@@ -362,6 +362,26 @@ const statusNames = [
   "error",
   "terminating",
 ] as const;
+
+function migrateLegacyImageSpec(spec: Resource["spec"]): Resource["spec"] {
+  if (!("imageRef" in spec)) return spec;
+  const next = { ...spec };
+  const legacyRuntime: Record<string, string> = {
+    pytorch: "pytorch-cu130",
+    vllm: "vllm-cu130",
+    jupyter: "jupyter-cu130",
+    vscode: "vscode-cu130",
+  };
+  if ("gpuPerInstance" in next && legacyRuntime[next.imageRef]) {
+    next.runtimeImageRef = legacyRuntime[next.imageRef];
+    next.imageRef = "ubuntu-24.04";
+  } else if (next.imageRef === "ubuntu") {
+    next.imageRef = "ubuntu-22.04";
+  } else if (next.imageRef === "rocky") {
+    next.imageRef = "rocky-9";
+  }
+  return next;
+}
 export function restoreDatabase() {
   try {
     const stored =
@@ -388,8 +408,14 @@ export function restoreDatabase() {
         r.region = "jp";
       }
       data.resources = data.resources.map(
-        (r) => ({ ...r, spec: normalizeSpec(r.spec) }) as Resource,
+        (r) => ({ ...r, spec: migrateLegacyImageSpec(normalizeSpec(r.spec)) }) as Resource,
       );
+      for (const order of data.orders)
+        order.requested_spec = migrateLegacyImageSpec(normalizeSpec(order.requested_spec));
+      for (const notebook of data.notebooks) {
+        if (notebook.imageRef === "jupyter") notebook.imageRef = "jupyter-cu130";
+        if (notebook.imageRef === "vscode") notebook.imageRef = "vscode-cu130";
+      }
       if (!data.resourceStatusMigrationVersion) {
         const resumedAt = new Date().toISOString();
         data.billingCursors ??= {};

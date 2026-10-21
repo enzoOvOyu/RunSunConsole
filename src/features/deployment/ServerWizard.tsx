@@ -9,7 +9,6 @@ import { WizardLayout, PoolCards } from "./shared/WizardLayout";
 import {
   useSpec,
   SpecNumber,
-  SpecText,
   SpecSelect,
   SshKeySelect,
   ImageCards,
@@ -66,6 +65,7 @@ function validate(v: WizardValues, step: number) {
 function ServerForm({ step, pools, images }: FormContext) {
   const { spec, update, form } = useSpec<ServerSpec>();
   const selected = form.watch("nodePool");
+  const selectedPool = pools.find((pool) => pool.code === selected);
   const password = form.watch("password") || "";
   return step === 1 ? (
     <div className="stack">
@@ -75,9 +75,17 @@ function ServerForm({ step, pools, images }: FormContext) {
         selected={selected}
         onSelect={(p) => {
           form.setValue("nodePool", p.code);
+          const fits = (image: (typeof images)[number]) =>
+            image.supportedGpuModels.includes(p.code) && image.architectures.includes(p.cpuArchitecture);
+          const baseImage = images.find((image) => image.id === spec.imageRef);
+          const nextImage = baseImage && fits(baseImage) ? baseImage : images.find((image) => image.type === "os" && fits(image));
+          const runtimeImage = images.find((image) => image.id === spec.runtimeImageRef);
+          const runtimeFits = runtimeImage && nextImage && fits(runtimeImage) && runtimeImage.compatibleOsFamilies.includes(nextImage.osFamily);
           update({
             gpuModel: gpuModelDisplayName(p.gpuModel),
             gpuCount: spec.gpuPerInstance * spec.quantity,
+            imageRef: nextImage?.id || "",
+            runtimeImageRef: runtimeFits ? runtimeImage.id : "",
           });
         }}
       />
@@ -134,7 +142,8 @@ function ServerForm({ step, pools, images }: FormContext) {
     </div>
   ) : step === 2 ? (
     <div className="stack">
-      <ImageCards images={images} />
+      <ImageCards images={images} os architecture={selectedPool?.cpuArchitecture} gpuModel={selectedPool?.code} />
+      <ImageCards images={images} runtime architecture={selectedPool?.cpuArchitecture} gpuModel={selectedPool?.code} osFamily={images.find((image) => image.id === spec.imageRef)?.osFamily} />
       <div className="form-grid">
         <SpecNumber
           name="systemDiskGb"
@@ -238,27 +247,6 @@ function ServerForm({ step, pools, images }: FormContext) {
           label={t("wizard.idle")}
           max={120}
         />
-        <SpecText name="entrypoint" label="Entrypoint" />
-        <Field label={t("wizard.env")}>
-          <textarea
-            value={Object.entries(spec.env || {})
-              .map(([k, v]) => `${k}=${v}`)
-              .join("\n")}
-            onChange={(e) =>
-              update({
-                env: Object.fromEntries(
-                  e.target.value
-                    .split("\n")
-                    .filter((x) => x.includes("="))
-                    .map((x) => [
-                      x.slice(0, x.indexOf("=")),
-                      x.slice(x.indexOf("=") + 1),
-                    ]),
-                ),
-              })
-            }
-          />
-        </Field>
       </div>
       <ScalingToggle kind="gpu_vm" />
       <Review />

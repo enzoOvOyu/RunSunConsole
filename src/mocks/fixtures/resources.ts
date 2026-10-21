@@ -68,7 +68,8 @@ export function seedResources(): Resource[] {
       spec.vcpu = count * 16;
       spec.memoryGb = count * 128;
       spec.sshPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAISEED";
-      spec.imageRef = ["pytorch", "jupyter", "vscode", "vllm"][i % 4];
+      spec.imageRef = ["ubuntu-22.04", "rocky-9", "debian-12", "ubuntu-24.04"][i % 4];
+      spec.runtimeImageRef = ["pytorch-cu130", "jupyter-cu130", "vllm-cu130", ""][i % 4];
       spec.dataDiskGb = [0, 200, 500][i % 3];
       spec.bandwidthMbps = [10, 25, 50, 100][i % 4];
       spec.subnet = `${region}-default`;
@@ -78,7 +79,7 @@ export function seedResources(): Resource[] {
       spec.gpuCount = count * pool.gpusPerNode;
       spec.sshPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAISEED";
       spec.raidLevel = ["none", "raid0", "raid10"][i % 3];
-      spec.imageRef = i % 2 ? "rocky" : "ubuntu";
+      spec.imageRef = i % 2 ? "rocky-9" : "ubuntu-24.04";
       spec.subnet = `${region}-default`;
     }
     if ("nodePools" in spec) {

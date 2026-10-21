@@ -49,8 +49,12 @@ function BaremetalForm({ step, pools, images }: FormContext) {
       selected={selected}
       onSelect={(p) => {
         form.setValue("nodePool", p.code);
+        const currentImage = images.find((image) => image.id === spec.imageRef);
+        const compatible = (image: (typeof images)[number]) => image.type === "os" && image.supportedGpuModels.includes(p.code) && image.architectures.includes(p.cpuArchitecture);
+        const nextImage = currentImage && compatible(currentImage) ? currentImage : images.find(compatible);
         update({
           machineType: p.code,
+          imageRef: nextImage?.id || "",
           gpuModel: gpuModelDisplayName(p.gpuModel),
           gpuCount: p.gpusPerNode * spec.machineCount,
           cpuModel: p.cpu,
@@ -141,7 +145,7 @@ function BaremetalForm({ step, pools, images }: FormContext) {
     </div>
   ) : (
     <div className="stack">
-      <ImageCards images={images} os />
+      <ImageCards images={images} os architecture={pool.cpuArchitecture} gpuModel={pool.code} />
       <SpecText name="hostnamePrefix" label={t("wizard.hostname")} />
       <SpecText name="sshPubkey" label={t("wizard.sshKey")} area />
       <SpecSelect
