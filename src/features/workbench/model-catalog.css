@@ -2,12 +2,12 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 22px;
-  margin: 18px 0;
-  padding: 16px 20px;
+  gap: var(--rs-s5);
+  margin: var(--rs-s4) 0;
+  padding: var(--rs-s4) var(--rs-s5);
   border: 1px solid var(--rs-border);
-  border-radius: var(--rs-r-md);
-  background: var(--rs-surface);
+  border-radius: var(--rs-r-lg);
+  background: var(--rs-bg);
 }
 
 .model-catalog-summary > div {

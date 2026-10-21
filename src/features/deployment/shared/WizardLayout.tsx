@@ -515,18 +515,20 @@ function WizardForm({
             </div>
           </div>
           <div className="cost-summary">
-            <Panel title={t("price.breakdown")}>
-              <Field label={t("common.type")}>
-                <select {...form.register("mode")}>
-                  {["on_demand", "spot", "reserved"].map((mode) => (
-                    <option key={mode} value={mode}>
-                      {t("price." + mode)}
-                    </option>
-                  ))}
-                </select>
-              </Field>
+            <Panel title={t("price.breakdown")} className="cost-panel">
+              <div className="cost-mode">
+                <Field label={t("common.type")}>
+                  <select {...form.register("mode")}>
+                    {["on_demand", "spot", "reserved"].map((mode) => (
+                      <option key={mode} value={mode}>
+                        {t("price." + mode)}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
               {values.mode === "spot" && (
-                <p className="notice warning" style={{ marginTop: 12 }}>
+                <p className="notice warning cost-warning">
                   {t("price.spotWarning")}
                 </p>
               )}
@@ -536,31 +538,38 @@ function WizardForm({
                 <ErrorState error={price.error} />
               ) : (
                 <>
-                  {price.data.lines.map((line, i) => (
-                    <div className="cost-line" key={i}>
-                      <span>
-                        {t("price." + line.key.split(":")[0])}
-                        <small style={{ display: "block" }}>
-                          {line.quantity} × {unitMoney(line.unitPrice)} /{" "}
-                          {t("unit." + line.unit)}
-                        </small>
-                      </span>
-                      <strong>
-                        {money(line.hourly)}
-                        {t("common.perHour")}
-                      </strong>
-                    </div>
-                  ))}
-                  <div className="cost-total">
-                    {money(price.data.hourly)}
-                    <small>{t("common.perHour")}</small>
+                  <div className="cost-items">
+                    {price.data.lines.map((line, i) => (
+                      <div className="cost-line" key={i}>
+                        <div className="cost-line-detail">
+                          <span>{t("price." + line.key.split(":")[0])}</span>
+                          <small>
+                            {line.quantity} × {unitMoney(line.unitPrice)} /{" "}
+                            {t("unit." + line.unit)}
+                          </small>
+                        </div>
+                        <strong className="cost-line-amount">
+                          {money(line.hourly)}
+                          <small>{t("common.perHour")}</small>
+                        </strong>
+                      </div>
+                    ))}
                   </div>
-                  <small>{t("price.monthly")}</small>
-                  <p style={{ fontSize: 18, fontWeight: 600 }}>
-                    {money(price.data.monthly)}
-                  </p>
+                  <div className="cost-estimate">
+                    <span className="cost-estimate-label">
+                      {t("common.hourly")}
+                    </span>
+                    <div className="cost-total">
+                      <span>{money(price.data.hourly)}</span>
+                      <small>{t("common.perHour")}</small>
+                    </div>
+                    <div className="cost-monthly">
+                      <span>{t("price.monthly")}</span>
+                      <strong>{money(price.data.monthly)}</strong>
+                    </div>
+                  </div>
                   {values.spec.scaling && (
-                    <div className="stack" style={{ marginTop: 16 }}>
+                    <div className="cost-range">
                       <KeyValues
                         items={[
                           [t("price.floor"), money(price.data.floorMonthly)],
