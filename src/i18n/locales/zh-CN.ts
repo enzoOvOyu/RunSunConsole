@@ -251,7 +251,6 @@ export default {
   "overview.noProjects": "暂无项目",
   "overview.metrics": "关键指标",
   "overview.allocated": "已分配 GPU 总卡数",
-  "overview.allocatedScope": "运行中及创建中的 GPU 卡数 · 三区域合计",
   "overview.running": "运行中资源",
   "overview.matrix": "资源分布",
   "overview.matrixScope":

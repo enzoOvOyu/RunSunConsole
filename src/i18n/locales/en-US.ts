@@ -256,8 +256,6 @@ export default {
   "overview.noProjects": "No projects yet",
   "overview.metrics": "Key metrics",
   "overview.allocated": "Allocated GPUs",
-  "overview.allocatedScope":
-    "GPUs in running and provisioning resources · all three regions",
   "overview.running": "Running resources",
   "overview.matrix": "Resource distribution",
   "overview.matrixScope":

@@ -282,7 +282,6 @@ export default function OverviewPage() {
           </CardHeader>
           <CardContent>
             <div className="overview-stat-value">{number(data.allocated)}</div>
-            <p className="overview-stat-note">{t("overview.allocatedScope")}</p>
           </CardContent>
           <CardFooter className="overview-region-summary">
             {REGIONS.map((region) => (
