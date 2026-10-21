@@ -1,19 +1,15 @@
 import { useUrlState } from "../shared/useUrlState";
 import { useState, lazy, Suspense, Fragment } from "react";
-import type { Usage, Account, Project } from "../../types/domain";
-import { EP, query, patch } from "../../lib/api-client";
+import type { Usage, Project } from "../../types/domain";
+import { EP, query } from "../../lib/api-client";
 import { useRegion } from "../../stores/region";
-import { useAuth } from "../../stores/auth";
-import { canManageOrg } from "../../lib/rbac";
-import { useAction, useData } from "../shared/hooks";
+import { useData } from "../shared/hooks";
 import { RegionFilter } from "../shared/RegionFilter";
 import { t, dt } from "../../i18n";
 import { money } from "../../lib/money";
 import {
   PageHeader,
   Panel,
-  Button,
-  Field,
   Loading,
   ErrorState,
 } from "../../components/ui";
@@ -21,15 +17,12 @@ import { BillingUsageTable } from "./BillingTables";
 const TrendChart = lazy(() => import("../../components/charts/TrendChart"));
 export default function CostPage() {
   const region = useRegion((s) => s.region);
-  const role = useAuth((s) => s.role);
   const [period, setPeriod] = useUrlState(
     "billing_period",
     new Date().toISOString().slice(0, 7),
   );
   const [dimension, setDimension] = useState("project");
   const [expanded, setExpanded] = useState("");
-  const [budget, setBudget] = useState("");
-  const { run, busy } = useAction();
   const summary = useData<{
     month: number;
     today: number;
@@ -43,7 +36,6 @@ export default function CostPage() {
     EP.usage + query({ region, billing_period: period }),
   );
   const projects = useData<Project[]>(["projects"], EP.projects);
-  const account = useData<Account>(["account"], EP.account);
   const groups = new Map<string, Usage[]>();
   for (const u of usage.data || []) {
     const key =
@@ -164,29 +156,7 @@ export default function CostPage() {
               </table>
             </div>
           </Panel>
-          <Panel title={t("common.budget")} hint={t("billing.setBudget")} className="budget-settings-card">
-            <div className="budget-settings-form">
-              <Field label={t("common.budget") + " · USD"}>
-                <input
-                  className="input"
-                  type="number"
-                  min={1}
-                  value={budget || account.data?.budget || ""}
-                  onChange={(e) => setBudget(e.target.value)}
-                />
-              </Field>
-              <Button
-                disabled={
-                  !canManageOrg(role) || !budget || Number(budget) <= 0 || busy
-                }
-                onClick={() =>
-                  void run(() => patch(EP.account, { budget: Number(budget) }))
-                }
-              >
-                {t("common.save")}
-              </Button>
-            </div>
-          </Panel>
+
         </div>
       )}
     </>

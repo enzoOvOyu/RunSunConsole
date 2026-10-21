@@ -1588,31 +1588,7 @@ button.catalog-card {
   gap: 8px;
 }
 
-.budget-settings-form {
-  display: grid;
-  grid-template-columns: minmax(240px, 420px) auto;
-  align-items: end;
-  gap: 14px;
-}
 
-.budget-settings-form .field {
-  width: 100%;
-  margin: 0;
-}
-
-.budget-settings-form .btn {
-  min-width: 88px;
-}
-
-@media (width <= 560px) {
-  .budget-settings-form {
-    grid-template-columns: 1fr;
-  }
-
-  .budget-settings-form .btn {
-    width: 100%;
-  }
-}
 
 .field-error {
   font-size: 12px;
