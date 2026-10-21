@@ -1,5 +1,6 @@
 import { NavLink, useLocation } from "react-router-dom";
 import { ChevronDown } from "lucide-react";
+import { Button } from "../../components/ui/button";
 import { useAuth } from "../../stores/auth";
 import { useNav } from "../../stores/nav";
 import { buildGroups } from "./navModel";
@@ -41,19 +42,22 @@ export function Sidebar({
             return (
               <div className={styles.navGroup} key={group.id}>
                 {group.direct ? (
-                  <NavLink
-                    to={group.items[0].path}
-                    className={({ isActive }) =>
-                      `${styles.navLink} ${isActive ? styles.active : ""}`
-                    }
-                    onClick={onClose}
-                  >
-                    <Icon size={17} />
-                    {group.label()}
-                  </NavLink>
+                  <Button asChild variant="ghost" className={styles.navLink}>
+                    <NavLink
+                      to={group.items[0].path}
+                      className={({ isActive }) =>
+                        isActive ? styles.active : ""
+                      }
+                      onClick={onClose}
+                    >
+                      <Icon size={17} />
+                      {group.label()}
+                    </NavLink>
+                  </Button>
                 ) : (
                   <>
-                    <button
+                    <Button
+                      variant="ghost"
                       className={styles.groupButton}
                       aria-expanded={expanded}
                       onClick={() => toggle(group.id)}
@@ -66,28 +70,34 @@ export function Sidebar({
                           transform: expanded ? "rotate(180deg)" : undefined,
                         }}
                       />
-                    </button>
+                    </Button>
                     {expanded && (
                       <div className={styles.subItems}>
                         {group.items.map((item) => {
                           const ItemIcon = item.icon;
                           return (
-                            <NavLink
+                            <Button
                               key={item.path}
-                              to={item.path}
-                              onClick={onClose}
-                              className={({ isActive }) =>
-                                `${styles.navLink} ${isActive ? styles.active : ""}`
-                              }
+                              asChild
+                              variant="ghost"
+                              className={styles.navLink}
                             >
-                              <ItemIcon
-                                size={16}
-                                strokeWidth={1.75}
-                                aria-hidden="true"
-                                style={{ color: item.color }}
-                              />
-                              {item.label()}
-                            </NavLink>
+                              <NavLink
+                                to={item.path}
+                                onClick={onClose}
+                                className={({ isActive }) =>
+                                  isActive ? styles.active : ""
+                                }
+                              >
+                                <ItemIcon
+                                  size={16}
+                                  strokeWidth={1.75}
+                                  aria-hidden="true"
+                                  style={{ color: item.color }}
+                                />
+                                {item.label()}
+                              </NavLink>
+                            </Button>
                           );
                         })}
                       </div>
