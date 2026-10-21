@@ -48,7 +48,7 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "../../components/ui/shadcn-card";
+} from "../../components/ui/card";
 const TrendChart = lazy(() => import("../../components/charts/TrendChart"));
 interface Overview {
   running: number;
@@ -120,14 +120,14 @@ function OverviewPanel({
 }) {
   return (
     <Card className={`panel overview-panel ${className}`}>
-      <CardHeader className="panel-head">
+      <CardHeader className="panel-head flex flex-row items-center justify-between px-5 py-4">
         <div className="overview-panel-heading">
           <CardTitle>{title}</CardTitle>
           {hint && <CardDescription>{hint}</CardDescription>}
         </div>
         {action && <CardAction>{action}</CardAction>}
       </CardHeader>
-      <CardContent className="panel-body">{children}</CardContent>
+      <CardContent className="panel-body px-5 py-5">{children}</CardContent>
     </Card>
   );
 }

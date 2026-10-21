@@ -1,3 +1,4 @@
+import { TooltipProvider } from "../components/ui/tooltip";
 import { ConfirmAction } from "../components/ui/ConfirmAction";
 import { Realtime } from "./Realtime";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -32,9 +33,11 @@ export async function initialize() {
 export function Providers({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
-      <Realtime />
-      <ConfirmAction />
-      {children}
+      <TooltipProvider>
+        <Realtime />
+        <ConfirmAction />
+        {children}
+      </TooltipProvider>
     </QueryClientProvider>
   );
 }

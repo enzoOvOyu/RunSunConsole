@@ -30,7 +30,7 @@
 | 状态管理 | Zustand（全局轻量）+ TanStack Query（服务端态） | 避免 Redux 样板；Query 层天然适配 Mock/真实 API |
 | 数据Mock | MSW（Mock Service Worker）          | 拦截 fetch，契约即文档；切换开关见 §12.7         |
 | UI基础 | Radix UI 原语 + 自研组件                  | 无障碍优先，可控主题                          |
-| 样式   | CSS Modules + Design Token（CSS 变量）   | 主题切换靠变量                             |
+| 样式   | Tailwind CSS v4 + CSS Modules + shadcn/ui（Radix）+ Design Token（CSS 变量） | shadcn 基础组件位于 `src/components/ui`；语义令牌映射至 `--rs-*`，CSS Modules 保留业务布局 |
 | 表格   | TanStack Table                      | 复杂筛选/排序/虚拟滚动（Vast.ai 风格）           |
 | 图表   | Recharts（常规）+ visx（拓扑/机架定制）         | 定制能力与效率平衡                           |
 | 表单   | React Hook Form + Zod               | 部署向导分步校验；Zod 同时约束 `spec_json`（§12.9） |

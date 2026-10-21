@@ -7,7 +7,17 @@ import {
   type RefObject,
   type ButtonHTMLAttributes,
 } from "react";
-import * as Dialog from "@radix-ui/react-dialog";
+import { Dialog as ShadDialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "./dialog";
+import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "./sheet";
+import { Button as ShadButton } from "./button";
+import { Card, CardContent, CardHeader, CardTitle } from "./card";
+import { Badge as ShadBadge } from "./badge";
+import { Tabs as ShadTabs, TabsList, TabsTrigger } from "./tabs";
+import { Skeleton } from "./skeleton";
+import { Checkbox } from "./checkbox";
+import { Progress as ShadProgress } from "./progress";
+import { Alert, AlertDescription } from "./alert";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./table";
 import {
   Inbox,
   Info,
@@ -38,13 +48,8 @@ export function Button({
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "default" | "primary" | "danger" | "ghost";
 }) {
-  return (
-    <button
-      type="button"
-      {...props}
-      className={`btn btn-${variant} ${className}`}
-    />
-  );
+  const mapped = variant === "primary" ? "default" : variant === "danger" ? "destructive" : variant === "ghost" ? "ghost" : "outline";
+  return <ShadButton type="button" {...props} variant={mapped} className={`btn btn-${variant} ${className}`} />;
 }
 export function Panel({
   title,
@@ -60,11 +65,11 @@ export function Panel({
   className?: string;
 }) {
   return (
-    <section className={`panel ${className}`}>
+    <Card className={`panel ${className}`}>
       {title && (
-        <header className="panel-head">
+        <CardHeader className="panel-head flex flex-row items-center justify-between px-5 py-4">
           <div className="row">
-            <h2>{title}</h2>
+            <CardTitle>{title}</CardTitle>
             {hint && (
               <span
                 tabIndex={0}
@@ -77,16 +82,15 @@ export function Panel({
             )}
           </div>
           {action}
-        </header>
+        </CardHeader>
       )}
-      <div className="panel-body">{children}</div>
-    </section>
+      <CardContent className="panel-body px-5 py-5">{children}</CardContent>
+    </Card>
   );
 }
 export function Badge({ status, label }: { status: string; label?: string }) {
-  return (
-    <span className={`badge ${status}`}>{label || t(`common.${status}`)}</span>
-  );
+  const variant = /error|failed|denied|expired|abnormal/i.test(status) ? "destructive" : "secondary";
+  return <ShadBadge variant={variant} className={`badge ${status}`} data-status={status}>{label || t(`common.${status}`)}</ShadBadge>;
 }
 export function FilterReset() {
   const [params, setParams] = useSearchParams();
@@ -127,7 +131,7 @@ export function FilterReset() {
 export function Empty({ text, action }: { text?: string; action?: ReactNode }) {
   const client = useQueryClient();
   return (
-    <div className="empty">
+    <div className="empty" data-slot="empty">
       <Inbox size={28} />
       <p>{text || t("common.empty")}</p>
       {action || (
@@ -154,10 +158,10 @@ export function Loading() {
       style={{ minHeight: 160 }}
     >
       {visible && (
-        <div className="skeleton" aria-hidden="true">
-          <div />
-          <div />
-          <div />
+        <div className="skeleton-stack" aria-hidden="true">
+          <Skeleton className="h-4 w-3/4" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-5/6" />
         </div>
       )}
     </div>
@@ -171,13 +175,13 @@ export function ErrorState({
   retry?: () => void;
 }) {
   return (
-    <div role="alert" className="error-box stack">
-      <div className="row">
-        <AlertCircle size={16} />
-        {errorText(error)}
-      </div>
-      {retry && <Button onClick={retry}>{t("common.retry")}</Button>}
-    </div>
+    <Alert variant="destructive" className="error-box stack" role="alert">
+      <AlertCircle size={16} />
+      <AlertDescription className="stack">
+        <span>{errorText(error)}</span>
+        {retry && <Button onClick={retry}>{t("common.retry")}</Button>}
+      </AlertDescription>
+    </Alert>
   );
 }
 export function PageHeader({
@@ -209,19 +213,11 @@ export function Tabs({
   onChange: (id: string) => void;
 }) {
   return (
-    <div className="tabs" role="tablist">
-      {items.map((item) => (
-        <button
-          role="tab"
-          aria-selected={value === item.id}
-          key={item.id}
-          className={`tab ${value === item.id ? "active" : ""}`}
-          onClick={() => onChange(item.id)}
-        >
-          {item.label}
-        </button>
-      ))}
-    </div>
+    <ShadTabs value={value} onValueChange={onChange} className="tabs">
+      <TabsList>
+        {items.map((item) => <TabsTrigger key={item.id} value={item.id} className={`tab ${value === item.id ? "active" : ""}`}>{item.label}</TabsTrigger>)}
+      </TabsList>
+    </ShadTabs>
   );
 }
 export function Field({
@@ -239,7 +235,7 @@ export function Field({
 }) {
   return (
     <label className={`field ${wide ? "field-wide" : ""}`}>
-      <span>{label}</span>
+      <span className="field-label">{label}</span>
       {children}
       {hint && <small>{hint}</small>}
       {error && (
@@ -261,15 +257,11 @@ export function Check({
   onChange: (v: boolean) => void;
   disabled?: boolean;
 }) {
+  const id = useId();
   return (
-    <label className="check">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        disabled={disabled}
-      />
-      {label}
+    <label className="check" htmlFor={id}>
+      <Checkbox id={id} checked={checked} onCheckedChange={(value) => onChange(value === true)} disabled={disabled} />
+      <span>{label}</span>
     </label>
   );
 }
@@ -293,78 +285,68 @@ export function Modal({
   initialFocusRef?: RefObject<HTMLButtonElement | null>;
 }) {
   const descriptionId = useId();
-  return (
-    <Dialog.Root
-      open={open}
-      onOpenChange={(value) => {
-        if (!value) onClose();
-      }}
-    >
-      <Dialog.Portal>
-        <Dialog.Overlay className="overlay" />
-        <Dialog.Content
-          onOpenAutoFocus={
-            initialFocusRef
-              ? (event) => {
-                  event.preventDefault();
-                  initialFocusRef.current?.focus();
-                }
-              : undefined
-          }
-          className={drawer ? `drawer ${small ? "small" : ""}` : "dialog"}
+  const onOpenAutoFocus = initialFocusRef
+    ? (event: Event) => {
+        event.preventDefault();
+        initialFocusRef.current?.focus();
+      }
+    : undefined;
+  const closeButton = (
+    <Button variant="ghost" className="icon-btn" aria-label={t("common.close")}>
+      <X size={18} />
+    </Button>
+  );
+
+  if (drawer) {
+    return (
+      <Sheet open={open} onOpenChange={(value) => { if (!value) onClose(); }}>
+        <SheetContent
+          side="right"
+          showCloseButton={false}
+          onOpenAutoFocus={onOpenAutoFocus}
+          className={`drawer ${small ? "small w-[min(760px,92vw)]" : "w-[min(1100px,92vw)]"} min-w-0 max-w-none sm:max-w-none max-[720px]:w-screen`}
           aria-describedby={description ? descriptionId : undefined}
         >
-          <div className={drawer ? "drawer-header" : ""}>
+          <div className="drawer-header">
             <div className="between">
-              <Dialog.Title className="dialog-title">{title}</Dialog.Title>
-              <Dialog.Close asChild>
-                <Button
-                  variant="ghost"
-                  className="icon-btn"
-                  aria-label={t("common.close")}
-                >
-                  <X size={18} />
-                </Button>
-              </Dialog.Close>
+              <SheetTitle className="dialog-title">{title}</SheetTitle>
+              <SheetClose asChild>{closeButton}</SheetClose>
             </div>
-            {description && (
-              <Dialog.Description
-                id={descriptionId}
-                className="dialog-description"
-              >
-                {description}
-              </Dialog.Description>
-            )}
+            {description && <SheetDescription id={descriptionId} className="dialog-description">{description}</SheetDescription>}
           </div>
-          <div className={drawer ? "drawer-content" : ""}>{children}</div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
-  );
-}
-export function Progress({ value }: { value: number }) {
+          <div className="drawer-content">{children}</div>
+        </SheetContent>
+      </Sheet>
+    );
+  }
+
   return (
-    <div
-      className="progress"
-      role="progressbar"
-      aria-valuenow={Math.round(value)}
-      aria-valuemin={0}
-      aria-valuemax={100}
-    >
-      <span
-        style={{
-          width: `${Math.min(100, Math.max(0, value))}%`,
-          background:
-            value >= 100
-              ? "var(--rs-danger)"
-              : value >= 80
-                ? "var(--rs-warning)"
-                : undefined,
-        }}
-      />
-    </div>
+    <ShadDialog open={open} onOpenChange={(value) => { if (!value) onClose(); }}>
+      <DialogContent
+        showCloseButton={false}
+        onOpenAutoFocus={onOpenAutoFocus}
+        className="dialog"
+        aria-describedby={description ? descriptionId : undefined}
+      >
+        <div>
+          <div className="between">
+            <DialogTitle className="dialog-title">{title}</DialogTitle>
+            <DialogClose asChild>{closeButton}</DialogClose>
+          </div>
+          {description && <DialogDescription id={descriptionId} className="dialog-description">{description}</DialogDescription>}
+        </div>
+        {children}
+      </DialogContent>
+    </ShadDialog>
   );
 }
+
+export function Progress({ value }: { value: number }) {
+  const safeValue = Math.min(100, Math.max(0, value));
+  const level = value >= 100 ? "critical" : value >= 80 ? "warning" : "normal";
+  return <ShadProgress value={safeValue} aria-label={`${Math.round(safeValue)}%`} data-level={level} className="progress" />;
+}
+
 export function KeyValues({ items }: { items: [string, ReactNode][] }) {
   return (
     <dl className="kv">
@@ -412,12 +394,12 @@ export function DataTable<T>({
   return (
     <>
       <div className="table-wrap">
-        <table>
-          <thead>
+        <Table>
+          <TableHeader>
             {table.getHeaderGroups().map((g) => (
-              <tr key={g.id}>
+              <TableRow key={g.id}>
                 {g.headers.map((h) => (
-                  <th key={h.id}>
+                  <TableHead key={h.id}>
                     <button
                       onClick={h.column.getToggleSortingHandler()}
                       disabled={!h.column.getCanSort()}
@@ -425,14 +407,14 @@ export function DataTable<T>({
                       {flexRender(h.column.columnDef.header, h.getContext())}
                       {h.column.getCanSort() && <ArrowUpDown size={11} />}
                     </button>
-                  </th>
+                  </TableHead>
                 ))}
-              </tr>
+              </TableRow>
             ))}
-          </thead>
-          <tbody>
+          </TableHeader>
+          <TableBody>
             {display.map((row) => (
-              <tr
+              <TableRow
                 key={row.id}
                 className={onRow ? "clickable" : ""}
                 onClick={() => onRow?.(row.original)}
@@ -469,14 +451,14 @@ export function DataTable<T>({
                 }}
               >
                 {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id}>
+                  <TableCell key={cell.id}>
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </td>
+                  </TableCell>
                 ))}
-              </tr>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
       {paginate && (
         <footer className="table-footer">

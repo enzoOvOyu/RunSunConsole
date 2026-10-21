@@ -2,8 +2,7 @@ import { createRoot } from "react-dom/client";
 import { RouterProvider } from "react-router-dom";
 import { Providers, initialize } from "./app/providers";
 import { router } from "./app/router";
-import "./styles/theme.css";
-import "./styles/global.css";
+import "./styles/globals.css";
 import { t } from "./i18n";
 initialize()
   .then(() =>

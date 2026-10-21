@@ -1762,3 +1762,55 @@ label.field small {
   font-weight: 400;
 }
 
+
+
+/* Shared shadcn form and interaction tokens for legacy feature markup. */
+:where(input:not([type="checkbox"], [type="radio"]), select, textarea, button) {
+  font: inherit;
+}
+
+:where(input:not([type="checkbox"], [type="radio"]), select, textarea, .input, .select) {
+  color: var(--rs-text);
+  background: var(--rs-bg);
+  border-color: var(--rs-border);
+  border-radius: var(--rs-r-sm);
+}
+
+:where(input:not([type="checkbox"], [type="radio"]), select, textarea, .input, .select):focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--rs-focus-ring) 38%, transparent);
+  outline-offset: 1px;
+  border-color: var(--rs-focus-ring);
+}
+
+:where(button, [role="button"], a) {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:where(button, [role="button"]):focus-visible,
+a:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--rs-focus-ring) 55%, transparent);
+  outline-offset: 2px;
+}
+
+[data-slot="card"] {
+  border-color: var(--rs-border);
+  border-radius: var(--rs-r-lg);
+  box-shadow: var(--rs-shadow-sm);
+}
+
+[data-slot="badge"] {
+  font-weight: 550;
+  letter-spacing: 0;
+}
+
+[data-slot="table-container"] {
+  border-radius: var(--rs-r-md);
+}
+
+[data-slot="progress"][data-level="warning"] [data-slot="progress-indicator"] {
+  background: var(--rs-warning);
+}
+
+[data-slot="progress"][data-level="critical"] [data-slot="progress-indicator"] {
+  background: var(--rs-danger);
+}

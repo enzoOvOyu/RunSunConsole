@@ -66,6 +66,7 @@
   padding: 8px 12px;
   border-radius: var(--rs-r-sm);
   text-align: left;
+  transition: background-color 140ms ease, color 140ms ease;
 }
 
 .groupButton {
@@ -94,8 +95,8 @@
 }
 
 .navLink.active {
-  background: var(--rs-brand-soft);
-  color: var(--rs-brand-strong);
+  background: var(--rs-surface-2);
+  color: var(--rs-text);
   font-weight: 600;
 }
 

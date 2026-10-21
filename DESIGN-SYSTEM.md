@@ -1,13 +1,22 @@
 # DESIGN-SYSTEM — RunSun GPU Cloud 控制台 UI 规范
 
 > 文档类型：UI 设计规范（Token + 组件 + 可视化）
-> 版本：**v0.11 · 当前 UI 设计基线**
+> 版本：**v1.0 · shadcn/ui 统一组件基线**
 > 品牌来源：runsuncloud.com（RunSun — "The GPU Cloud"，sun/gold 暖色太阳识别；线上 CSS 资源不可达，本规范以该太阳/金色识别为基准，**正式落地前请以官方品牌指南校准**）
 > 关联文档：`PRD.md`（产品需求）、`ARCHITECTURE.md`（架构）、`MOCK-DATA.md`（数据约束）
 
 > 本规范定义当前导航、组件、状态、表单与可视化样式。交互行为以 PRD 为准；总览不展示节点健康预览或全局服务健康度，资源完整详情统一使用右侧 Drawer。
 
 ---
+## 0. shadcn/ui 实施约定
+
+- 前端组件体系采用 shadcn/ui `new-york` 风格、Radix UI primitives 与 Tailwind CSS v4；共享基础组件放在 `src/components/ui`，组合类名通过 `src/lib/utils.ts` 的 `cn()` 合并。
+- CSS 语义令牌由 `src/styles/globals.css` 映射至既有 `--rs-*` 主题变量，浅色/深色主题继续使用 `data-theme` 切换；橙色仅用于品牌强调，面板、导航、表单和表格以中性色为基础。
+- 业务页面必须优先复用共享 Button、Card/Panel、Badge、Tabs、Table、Dialog/Sheet、Select、Input、Checkbox、Switch、Tooltip、Skeleton、Alert 等组件。保留既有页面组合和 CSS 模块，逐步用共享原语替代页面级重复控件。
+- 页面样式仍可用 CSS Modules 表达业务布局；不要另建一套颜色/圆角令牌，不要在页面内复制基础控件，不要更改组件外观时改写数据、权限、API 或状态流转。
+- 应用导航保留现有权限过滤、路由模型、分组持久化及移动端抽屉行为，样式使用本规范语义令牌。交互语义以现有 PRD 为准。
+
+
 
 ## 1. 品牌
 
@@ -39,7 +48,7 @@
 | `--rs-brand`           | `#FF7A1A`                                         | 主品牌色（太阳橙）        |
 | `--rs-brand-strong`    | `#F2640A`                                         | 按压/强调            |
 | `--rs-brand-soft`      | `#FFF3E8`                                         | 品牌浅底（标签/选中）      |
-| `--rs-brand-gradient`  | `linear-gradient(135deg,#FF9E2C 0%,#FF6A00 100%)` | 主按钮/品牌头（消费点 §5.1） |
+| `--rs-brand-gradient`  | `linear-gradient(135deg,#FF9E2C 0%,#FF6A00 100%)` | 旧业务渐变装饰（基础按钮不再使用） |
 | `--rs-gold`            | `#FFC24B`                                         | **辅助金**（消费点：§5.11 ResourceCard 推荐/官方徽标、§5.3 星标等级） |
 
 ### 2.3 语义色（状态/反馈）
@@ -91,9 +100,9 @@
 
 | Token                          | 定义处  | 消费位置                                    |
 | ------------------------------ | ---- | --------------------------------------- |
-| `--rs-brand-gradient`          | §2.2 | §5.1 Button Primary                     |
+| `--rs-brand-gradient`          | §2.2 | 仅保留给兼容的品牌装饰                    |
 | `--rs-gold`                    | §2.2 | §5.11 ResourceCard（推荐/官方徽标）、§5.3 星标等级   |
-| `--rs-text-inverse`            | §2.1 | §5.1 Button Primary（渐变底上的文本）            |
+| `--rs-text-inverse`            | §2.1 | 深色品牌底上的文字                          |
 | `--rs-type-*`                  | §2.6 | §5.11 ResourceCard/**MachineCard**、资源列表徽标、§5.10 Sidebar、**§5.20 详情页头部类型图标、§5.21 删除对话框标题图标** |
 | `--rs-status-terminating`      | §2.3 | §5.18 LifecycleBadge                    |
 | `--rs-surface-2`               | §2.1 | §5.17 StatusBar 底色、Table 斑马纹、**§5.19 C 档行内展开面板底** |
@@ -146,7 +155,7 @@
 
 | 变体        | 样式                                | 用途       |
 | --------- | --------------------------------- | -------- |
-| Primary   | `--rs-brand-gradient` 渐变底 + `--rs-text-inverse` 白字 | 主操作（新建/部署） |
+| Primary   | shadcn `default` 实心品牌强调色，使用语义令牌 | 主操作（新建/部署） |
 | Secondary | 描边/中性底                            | 次操作      |
 | Ghost     | 无底，hover 浅底                       | 文本型操作    |
 | Danger    | 红底/红字                             | 删除/下线    |
@@ -155,8 +164,8 @@
 
 ### 5.2 Card / Panel
 
-- 白/表面底，`--rs-r-lg`，细描边；标题区 16/600，操作区右对齐；内容区 16/24 padding。
-- 总览页面使用从 shadcn/ui Card registry 引入的组合结构（CardHeader、CardDescription、CardContent、CardFooter、CardAction），以现有 RunSun CSS Token 实现视觉样式；统计口径直接显示在卡片标题下。
+- Neutral 表面底，`--rs-r-lg`，细描边和轻阴影；标题区 16/600，操作区右对齐；内容区使用一致 padding。
+- 全站复用 `src/components/ui/card.tsx` 的 CardHeader、CardDescription、CardContent、CardFooter、CardAction 组合；统计口径显示在卡片标题下。
 
 ### 5.3 Stat Tile（指标卡）
 
@@ -169,7 +178,7 @@
 
 ### 5.5 Tabs / Segmented
 
-- 下划线或胶囊两种；激活态品牌色；用于详情页分区（如推理服务「实例管理 / 服务治理」）。
+- 使用共享 shadcn Tabs/TabsList/TabsTrigger；中性色容器、清晰选中态；用于详情页分区（如推理服务「实例管理 / 服务治理」）。
 
 ### 5.6 Badge / StatusDot
 
@@ -189,7 +198,7 @@
 
 ### 5.10 Sidebar 导航（分组）
 
-- 分组标题（大写、muted）；选中项左侧 3px 品牌条 + 浅品牌底；图标 20；二级项缩进。
+- 选中项使用中性选中底和清晰文字，左侧保留品牌状态条；图标 16–20px；二级项缩进。
 - **品牌区固定在侧边栏顶部**（RunSun Logo + 产品名），**冻结常驻**，滚动/路由切换均不隐藏（PRD §3.1）。
 - 分组（与 PRD §2 导航一致）：
   - **总览**（**直达项**：无子菜单、无展开箭头，整行即链接，PRD §2.1）
