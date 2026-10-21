@@ -820,6 +820,7 @@ export default {
   "billing.dimension.region": "Region",
   "billing.dimension.kind": "Type",
   "billing.setBudget": "Save budget",
+  "billing.todayBasis": "Totals use UTC",
   "tickets.new": "New ticket",
   "tickets.title": "Ticket title",
   "tickets.priority": "Priority",

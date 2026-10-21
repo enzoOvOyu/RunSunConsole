@@ -789,6 +789,7 @@ export default {
   "billing.dimension.region": "区域",
   "billing.dimension.kind": "类型",
   "billing.setBudget": "保存预算",
+  "billing.todayBasis": "按 UTC 时区汇总",
   "tickets.new": "新建工单",
   "tickets.title": "工单标题",
   "tickets.priority": "优先级",

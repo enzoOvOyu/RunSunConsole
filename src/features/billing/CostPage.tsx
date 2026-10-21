@@ -102,7 +102,7 @@ export default function CostPage() {
             </Panel>
             <Panel title={t("common.today")} className="cost-metric-card">
               <div className="stat-value">{money(summary.data.today)}</div>
-              <small className="cost-metric-note">UTC</small>
+              <small className="cost-metric-note">{t("billing.todayBasis")}</small>
             </Panel>
             <Panel title={t("billing.dimensions")} className="cost-metric-card">
               <div className="stat-value">{usage.data?.length ?? 0}</div>
@@ -183,7 +183,7 @@ export default function CostPage() {
                   void run(() => patch(EP.account, { budget: Number(budget) }))
                 }
               >
-                {t("billing.setBudget")}
+                {t("common.save")}
               </Button>
             </div>
           </Panel>

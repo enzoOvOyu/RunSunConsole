@@ -1601,7 +1601,7 @@ button.catalog-card {
 }
 
 .budget-settings-form .btn {
-  min-width: 132px;
+  min-width: 88px;
 }
 
 @media (width <= 560px) {
