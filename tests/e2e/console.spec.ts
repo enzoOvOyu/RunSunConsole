@@ -65,9 +65,9 @@ test("overview groups allocated GPU models across every region", async ({
   await expect(page.getByText("GPU 型号与已分配量")).toBeVisible();
   await expect(page.locator(".overview-gpu-chart")).toBeVisible();
   await expect(page.locator(".overview-gpu-total-label")).toHaveCount(5);
-  await expect(page.locator(".overview-gpu-legend")).toContainText("日本");
-  await expect(page.locator(".overview-gpu-legend")).toContainText("新加坡");
-  await expect(page.locator(".overview-gpu-legend")).toContainText("美国");
+  await expect(page.locator(".overview-region-breakdown")).toContainText("日本");
+  await expect(page.locator(".overview-region-breakdown")).toContainText("新加坡");
+  await expect(page.locator(".overview-region-breakdown")).toContainText("美国");
   const counts = await page
     .locator(".overview-gpu-total-label")
     .allTextContents();

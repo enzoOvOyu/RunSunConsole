@@ -9,6 +9,15 @@ import {
   Settings2,
   Plus,
   ArrowUpRight,
+  Activity,
+  BarChart3,
+  Bell,
+  Clock3,
+  FolderKanban,
+  Gauge,
+  History,
+  LayoutGrid,
+  type LucideIcon,
 } from "lucide-react";
 import {
   KINDS,
@@ -59,10 +68,16 @@ import {
   CardAction,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "../../components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../components/ui/select";
 const TrendChart = lazy(() => import("../../components/charts/TrendChart"));
 interface Overview {
   running: number;
@@ -123,12 +138,14 @@ function OverviewPanel({
   title,
   hint,
   action,
+  icon: Icon,
   children,
   className = "",
 }: {
   title: ReactNode;
   hint?: string;
   action?: ReactNode;
+  icon?: LucideIcon;
   children: ReactNode;
   className?: string;
 }) {
@@ -136,8 +153,15 @@ function OverviewPanel({
     <Card className={`panel overview-panel ${className}`}>
       <CardHeader className="panel-head flex flex-row items-center justify-between px-5 py-4">
         <div className="overview-panel-heading">
-          <CardTitle>{title}</CardTitle>
-          {hint && <CardDescription>{hint}</CardDescription>}
+          {Icon && (
+            <span className="overview-panel-icon" aria-hidden="true">
+              <Icon size={16} />
+            </span>
+          )}
+          <div className="overview-panel-heading-copy">
+            <CardTitle>{title}</CardTitle>
+            {hint && <CardDescription>{hint}</CardDescription>}
+          </div>
         </div>
         {action && <CardAction>{action}</CardAction>}
       </CardHeader>
@@ -303,15 +327,15 @@ export default function OverviewPage() {
           </Button>
         }
       />
-      <div className="grid overview-stats">
-        <Card className="overview-stat-card overview-stat-primary">
+      <div className="overview-stats overview-summary-layout">
+        <Card className="overview-stat-card overview-stat-primary overview-gpu-overview-card">
           <CardHeader>
             <CardDescription>{t("overview.allocated")}</CardDescription>
             <CardAction className="overview-stat-icon">
               <Cpu size={18} strokeWidth={2} aria-hidden="true" />
             </CardAction>
           </CardHeader>
-          <CardContent className="overview-total-chart-content">
+          <CardContent className="overview-gpu-overview-content">
             <div
               className="overview-total-chart"
               role="img"
@@ -372,55 +396,75 @@ export default function OverviewPage() {
                 <span>GPU</span>
               </div>
             </div>
+            <div className="overview-region-breakdown">
+              {REGIONS.map((region) => (
+                <div className="overview-region-row" key={region}>
+                  <span className="overview-region-name">
+                    <i className={`overview-gpu-key region-${region}`} />
+                    {t(`common.${region}`)}
+                  </span>
+                  <span className="overview-region-amount">
+                    <strong>{number(gpuRegionTotals[region])}</strong>
+                    <small>
+                      {number(
+                        gpuRegionTotal
+                          ? (gpuRegionTotals[region] / gpuRegionTotal) * 100
+                          : 0,
+                        1,
+                      )}
+                      %
+                    </small>
+                  </span>
+                </div>
+              ))}
+            </div>
           </CardContent>
-          <CardFooter className="overview-region-summary overview-gpu-legend">
-            {REGIONS.map((region) => (
-              <span key={region} title={t("common." + region)}>
-                <i className={`overview-gpu-key region-${region}`} />
-                <span>{t("common." + region)}</span>
-                <strong>{number(gpuRegionTotals[region])}</strong>
-              </span>
-            ))}
-          </CardFooter>
         </Card>
-        {[
-          {
-            label: t("common.mtd"),
-            value: money(data.month),
-            note: t("common.scope"),
-            icon: TrendingUp,
-          },
-          {
-            label: t("common.today"),
-            value: money(data.today),
-            note: `${new Date().toISOString().slice(0, 10)} · ${t("billing.todayBasis")}`,
-            icon: TrendingUp,
-          },
-          {
-            label: t("common.balance"),
-            value: money(data.balance),
-            note:
-              t("common.runtime") +
-              " " +
-              (data.remainingHours
-                ? number(data.remainingHours, 1) + "h"
-                : "—"),
-            icon: Wallet,
-          },
-        ].map((item) => (
-          <Card className="overview-stat-card" key={item.label}>
-            <CardHeader>
-              <CardDescription>{item.label}</CardDescription>
-              <CardAction className="overview-stat-icon">
-                <item.icon size={17} />
-              </CardAction>
-            </CardHeader>
-            <CardContent>
-              <div className="overview-stat-value">{item.value}</div>
-              <p className="overview-stat-note">{item.note}</p>
-            </CardContent>
-          </Card>
-        ))}
+        <div className="overview-finance-stack">
+          {[
+            {
+              label: t("common.mtd"),
+              value: money(data.month),
+              note: t("common.scope"),
+              icon: TrendingUp,
+            },
+            {
+              label: t("common.today"),
+              value: money(data.today),
+              note: `${new Date().toISOString().slice(0, 10)} · ${t("billing.todayBasis")}`,
+              icon: TrendingUp,
+            },
+            {
+              label: t("common.balance"),
+              value: money(data.balance),
+              note:
+                t("common.runtime") +
+                " " +
+                (data.remainingHours
+                  ? number(data.remainingHours, 1) + "h"
+                  : "—"),
+              icon: Wallet,
+            },
+          ].map((item) => (
+            <Card
+              className="overview-stat-card overview-finance-card"
+              key={item.label}
+            >
+              <CardHeader>
+                <span className="overview-stat-icon" aria-hidden="true">
+                  <item.icon size={17} />
+                </span>
+                <div className="overview-finance-labels">
+                  <CardDescription>{item.label}</CardDescription>
+                  <p className="overview-stat-note">{item.note}</p>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <strong className="overview-stat-value">{item.value}</strong>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
       <div className="overview-action-bar">
         <div className="overview-action-copy">
@@ -450,6 +494,7 @@ export default function OverviewPage() {
         {show("alerts") && (
           <OverviewPanel
             title={t("overview.alerts")}
+            icon={Bell}
             className="overview-alert-panel"
             action={
               attentionItems.length > 2 ? (
@@ -480,14 +525,9 @@ export default function OverviewPage() {
         {show("insights") && (
           <div className="grid grid-2 overview-insights">
             <OverviewPanel
-              title={
-                <span className="overview-panel-title">
-                  <span className="overview-title-icon" aria-hidden="true">
-                    <Layers3 size={16} strokeWidth={2} />
-                  </span>
-                  {t("overview.gpuModels")}
-                </span>
-              }
+              title={t("overview.gpuModels")}
+              icon={Layers3}
+              className="overview-gpu-panel"
               hint={t("overview.gpuModelsScope")}
               action={
                 <Link to="/deployment/server">
@@ -508,7 +548,7 @@ export default function OverviewPage() {
                 role="img"
                 aria-label={t("overview.gpuModels")}
                 style={{
-                  height: `${Math.max(220, gpuModels.length * 42 + 44)}px`,
+                  height: `${Math.max(186, gpuModels.length * 36 + 28)}px`,
                 }}
               >
                 <ResponsiveContainer width="100%" height="100%">
@@ -572,10 +612,13 @@ export default function OverviewPage() {
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-              <small className="muted">{t("overview.gpuZeroNote")}</small>
+              {gpuModels.some((model) => model.total === 0) && (
+                <small className="muted">{t("overview.gpuZeroNote")}</small>
+              )}
             </OverviewPanel>
             <OverviewPanel
               title={t("overview.projectLoad")}
+              icon={FolderKanban}
               hint={t("overview.projectLoadScope")}
               action={
                 <Link to="/ops/projects">{t("overview.viewProjects")}</Link>
@@ -627,6 +670,7 @@ export default function OverviewPage() {
             {show("health") && (
               <OverviewPanel
                 title={t("overview.health")}
+                icon={Activity}
                 hint={t("overview.healthScope")}
               >
                 <div className="overview-health-list">
@@ -689,6 +733,7 @@ export default function OverviewPage() {
             {show("spendMix") && (
               <OverviewPanel
                 title={t("overview.spendMix")}
+                icon={BarChart3}
                 hint={t("overview.spendMixScope")}
                 action={
                   <Link to="/billing/cost">{t("overview.viewCost")}</Link>
@@ -729,6 +774,7 @@ export default function OverviewPage() {
         {show("matrix") && (
           <OverviewPanel
             title={t("overview.matrix")}
+            icon={LayoutGrid}
             hint={t("overview.matrixScope")}
           >
             <div className="table-wrap overview-distribution">
@@ -828,55 +874,60 @@ export default function OverviewPage() {
         {show("quotas") && (
           <OverviewPanel
             title={t("overview.quotas")}
+            icon={Gauge}
             hint={t("overview.quotaScope")}
           >
-            <div className="grid grid-3">
+            <div className="grid grid-3 overview-quota-regions">
               {REGIONS.map((region) => (
-                <div key={region}>
+                <div className="overview-quota-region" key={region}>
                   <h3>
-                    {t(`common.${region}`)}{" "}
+                    {t(`common.${region}`)}
                     <span className="muted">{region.toUpperCase()}</span>
                   </h3>
-                  {data.quotas
-                    .filter((q) => q.region === region)
-                    .flatMap((quota) =>
-                      quota.metric === "storage"
-                        ? (quota.storageBreakdown || []).map((storage) => (
-                            <div
-                              className="quota-line"
-                              key={`${quota.metric}-${storage.kind}`}
-                            >
-                              <div className="between">
-                                <small>
-                                  {t(`quota.storage.${storage.kind}`)}
-                                </small>
-                                <small className="mono">
-                                  {number(storage.usedGb / 1000)} /{" "}
-                                  {number(storage.limitGb / 1000)} TB
-                                </small>
+                  <div className="overview-quota-metrics">
+                    {data.quotas
+                      .filter((q) => q.region === region)
+                      .flatMap((quota) =>
+                        quota.metric === "storage"
+                          ? (quota.storageBreakdown || []).map((storage) => (
+                              <div
+                                className="quota-line"
+                                key={`${quota.metric}-${storage.kind}`}
+                              >
+                                <div className="between">
+                                  <small>
+                                    {t(`quota.storage.${storage.kind}`)}
+                                  </small>
+                                  <small className="mono">
+                                    {number(storage.usedGb / 1000)} /{" "}
+                                    {number(storage.limitGb / 1000)} TB
+                                  </small>
+                                </div>
+                                <Progress
+                                  value={
+                                    (storage.usedGb / storage.limitGb) * 100
+                                  }
+                                />
                               </div>
-                              <Progress
-                                value={(storage.usedGb / storage.limitGb) * 100}
-                              />
-                            </div>
-                          ))
-                        : [
-                            <div className="quota-line" key={quota.metric}>
-                              <div className="between">
-                                <small>{t(`quota.${quota.metric}`)}</small>
-                                <small className="mono">
-                                  {number(quota.usedValue)} /{" "}
-                                  {number(quota.limitValue)}
-                                </small>
-                              </div>
-                              <Progress
-                                value={
-                                  (quota.usedValue / quota.limitValue) * 100
-                                }
-                              />
-                            </div>,
-                          ],
-                    )}
+                            ))
+                          : [
+                              <div className="quota-line" key={quota.metric}>
+                                <div className="between">
+                                  <small>{t(`quota.${quota.metric}`)}</small>
+                                  <small className="mono">
+                                    {number(quota.usedValue)} /{" "}
+                                    {number(quota.limitValue)}
+                                  </small>
+                                </div>
+                                <Progress
+                                  value={
+                                    (quota.usedValue / quota.limitValue) * 100
+                                  }
+                                />
+                              </div>,
+                            ],
+                      )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -885,17 +936,24 @@ export default function OverviewPage() {
         {show("trend") && (
           <OverviewPanel
             title={t("overview.trend")}
+            icon={TrendingUp}
             hint={t("overview.trendScope")}
             action={
-              <select
-                aria-label={t("billing.dimensions")}
-                value={grouping}
-                onChange={(e) => setGrouping(e.target.value)}
-              >
-                <option value="total">{t("common.total")}</option>
-                <option value="kind">{t("overview.byType")}</option>
-                <option value="project">{t("overview.byProject")}</option>
-              </select>
+              <Select value={grouping} onValueChange={setGrouping}>
+                <SelectTrigger
+                  aria-label={t("billing.dimensions")}
+                  className="overview-trend-select"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="total">{t("common.total")}</SelectItem>
+                  <SelectItem value="kind">{t("overview.byType")}</SelectItem>
+                  <SelectItem value="project">
+                    {t("overview.byProject")}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             }
           >
             <Suspense fallback={<Loading />}>
@@ -918,6 +976,7 @@ export default function OverviewPage() {
         {show("recentDeployments") && (
           <OverviewPanel
             title={t("overview.recentDeployments")}
+            icon={Clock3}
             hint={t("overview.recentDeploymentsScope")}
           >
             {recentResources.length ? (
@@ -974,6 +1033,7 @@ export default function OverviewPage() {
         {show("activity") && (
           <OverviewPanel
             title={t("overview.activity")}
+            icon={History}
             hint={t("overview.activityScope")}
           >
             <EventTimeline
