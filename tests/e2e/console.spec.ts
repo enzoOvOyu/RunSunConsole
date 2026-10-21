@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 async function expectOverviewAllocation(page: Page) {
-  await expect(page.locator(".overview-stats .stat")).toHaveCount(4);
+  await expect(page.locator(".overview-stats .overview-stat-card")).toHaveCount(4);
   const allocated = await page.evaluate(async () => {
     const quotas = (await (await fetch("/api/quotas")).json()) as {
       metric: string;
@@ -512,7 +512,7 @@ test("overview uses regional allocations and realistic separate memory quotas", 
 }) => {
   await page.goto("/overview");
   await expectOverviewAllocation(page);
-  await expect(page.locator(".overview-stats .stat")).toHaveCount(4);
+  await expect(page.locator(".overview-stats .overview-stat-card")).toHaveCount(4);
   await expect(
     page.getByRole("heading", { name: "区域分布", exact: true }),
   ).toHaveCount(0);

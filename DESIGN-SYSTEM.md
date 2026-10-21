@@ -156,11 +156,12 @@
 ### 5.2 Card / Panel
 
 - 白/表面底，`--rs-r-lg`，细描边；标题区 16/600，操作区右对齐；内容区 16/24 padding。
+- 总览页面使用从 shadcn/ui Card registry 引入的组合结构（CardHeader、CardDescription、CardContent、CardFooter、CardAction），以现有 RunSun CSS Token 实现视觉样式；统计口径直接显示在卡片标题下。
 
 ### 5.3 Stat Tile（指标卡）
 
 - 大数字（3xl/700，可品牌色或语义色）、标签（sm/secondary）、趋势微标（↑/↓ + 百分比，绿/红）；等级/推荐标识用 `--rs-gold`。
-- 总览四张核心指标卡采用统一的标签、数值与说明三行栅格，金额使用等宽数字；首张「已分配 GPU」以细品牌边框标示主指标，其余保持中性卡面，避免四卡同权重或大面积装饰色。
+- 总览四张核心指标卡采用 shadcn/ui Card 的标题、数值与说明分区，金额使用等宽数字；首张「已分配 GPU」以细品牌边框标示主指标，并在底部列出三区域分配量，其余保持中性卡面。
 
 ### 5.4 Table
 

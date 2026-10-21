@@ -1,4 +1,5 @@
-import { lazy, Suspense, useState } from "react";
+import "./overview.css";
+import { lazy, Suspense, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Cpu,
@@ -30,7 +31,6 @@ import { money, number } from "../../lib/money";
 import {
   Button,
   PageHeader,
-  Panel,
   Progress,
   Empty,
   Loading,
@@ -40,6 +40,15 @@ import {
   EventTimeline,
   Badge,
 } from "../../components/ui";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "../../components/ui/shadcn-card";
 const TrendChart = lazy(() => import("../../components/charts/TrendChart"));
 interface Overview {
   running: number;
@@ -96,11 +105,38 @@ function initialHidden(): string[] {
     return [];
   }
 }
+function OverviewPanel({
+  title,
+  hint,
+  action,
+  children,
+  className = "",
+}: {
+  title: ReactNode;
+  hint?: string;
+  action?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <Card className={`panel overview-panel ${className}`}>
+      <CardHeader className="panel-head">
+        <div className="overview-panel-heading">
+          <CardTitle>{title}</CardTitle>
+          {hint && <CardDescription>{hint}</CardDescription>}
+        </div>
+        {action && <CardAction>{action}</CardAction>}
+      </CardHeader>
+      <CardContent className="panel-body">{children}</CardContent>
+    </Card>
+  );
+}
 export default function OverviewPage() {
   const q = useData<Overview>(["overview"], EP.overview, { poll: true });
   const [hidden, setHidden] = useState<string[]>(initialHidden);
   const [custom, setCustom] = useState(false);
   const [grouping, setGrouping] = useState("total");
+  const [expandedAlerts, setExpandedAlerts] = useState(false);
   const role = useAuth((s) => s.role);
   const navigate = useNavigate();
   if (q.isPending) return <Loading />;
@@ -180,6 +216,50 @@ export default function OverviewPage() {
     .slice()
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, 5);
+  const quotaWarnings = data.quotas.filter(
+    (quota) => quota.usedValue / quota.limitValue >= 0.8,
+  );
+  const attentionItems: ReactNode[] = [];
+  if (data.balance < data.account.lowBalanceThresholdUsd) {
+    attentionItems.push(
+      <Link key="low-balance" className="notice warning" to="/billing/bills">
+        {t("billing.lowBalance")}
+      </Link>,
+    );
+  }
+  if (data.month > data.account.budget) {
+    attentionItems.push(
+      <Link key="over-budget" className="notice warning" to="/billing/cost">
+        {t("billing.overBudget")}
+      </Link>,
+    );
+  }
+  for (const alert of data.alerts) {
+    attentionItems.push(
+      <Link
+        key={alert.id}
+        className="notice warning"
+        to={resourceLink(alert.resource)}
+      >
+        <span>
+          {dt(alert.resource.name)} · {t("common.error")}
+        </span>
+        <ArrowUpRight size={16} aria-hidden="true" />
+      </Link>,
+    );
+  }
+  for (const quota of quotaWarnings) {
+    attentionItems.push(
+      <Link
+        key={`${quota.region}-${quota.metric}`}
+        className="notice warning"
+        to="/ops/quotas"
+      >
+        {t(`common.${quota.region}`)} · {t(`quota.${quota.metric}`)}{" "}
+        {number((quota.usedValue / quota.limitValue) * 100, 1)}%
+      </Link>,
+    );
+  }
   return (
     <>
       <PageHeader
@@ -192,32 +272,35 @@ export default function OverviewPage() {
           </Button>
         }
       />
-      <div className="row" style={{ marginBottom: 20 }}>
-        {KINDS.map((kind) => {
-          const Icon = KIND_META[kind].icon;
-          return (
-            <Button
-              key={kind}
-              disabled={!canWrite(role)}
-              onClick={() =>
-                navigate(`/deployment/${KIND_META[kind].deployKey}`)
-              }
-            >
-              <Icon size={15} style={{ color: KIND_META[kind].color }} />
-              <Plus size={12} />
-              {t(`common.${kind}`)}
-            </Button>
-          );
-        })}
-      </div>
       <div className="grid overview-stats">
+        <Card className="overview-stat-card overview-stat-primary">
+          <CardHeader>
+            <CardDescription>{t("overview.allocated")}</CardDescription>
+            <CardAction className="overview-stat-icon">
+              <Cpu size={17} />
+            </CardAction>
+          </CardHeader>
+          <CardContent>
+            <div className="overview-stat-value">{number(data.allocated)}</div>
+            <p className="overview-stat-note">{t("overview.allocatedScope")}</p>
+          </CardContent>
+          <CardFooter className="overview-region-summary">
+            {REGIONS.map((region) => (
+              <span key={region} title={t("common." + region)}>
+                <span className={`overview-gpu-key region-${region}`} />
+                {region.toUpperCase()}
+                <strong>
+                  {number(
+                    data.distribution
+                      .filter((item) => item.region === region)
+                      .reduce((total, item) => total + item.gpuCount, 0),
+                  )}
+                </strong>
+              </span>
+            ))}
+          </CardFooter>
+        </Card>
         {[
-          {
-            label: t("overview.allocated"),
-            value: number(data.allocated),
-            note: t("overview.allocatedScope"),
-            icon: Cpu,
-          },
           {
             label: t("common.mtd"),
             value: money(data.month),
@@ -227,7 +310,7 @@ export default function OverviewPage() {
           {
             label: t("common.today"),
             value: money(data.today),
-            note: new Date().toISOString().slice(0, 10) + " · UTC",
+            note: `${new Date().toISOString().slice(0, 10)} · ${t("billing.todayBasis")}`,
             icon: TrendingUp,
           },
           {
@@ -241,23 +324,79 @@ export default function OverviewPage() {
                 : "—"),
             icon: Wallet,
           },
-        ].map((s) => (
-          <div className="panel stat" key={s.label}>
-            <div className="stat-label">
-              {s.label}
-              <span className="stat-icon">
-                <s.icon size={15} />
-              </span>
-            </div>
-            <div className="stat-value">{s.value}</div>
-            <div className="stat-note">{s.note}</div>
-          </div>
+        ].map((item) => (
+          <Card className="overview-stat-card" key={item.label}>
+            <CardHeader>
+              <CardDescription>{item.label}</CardDescription>
+              <CardAction className="overview-stat-icon">
+                <item.icon size={17} />
+              </CardAction>
+            </CardHeader>
+            <CardContent>
+              <div className="overview-stat-value">{item.value}</div>
+              <p className="overview-stat-note">{item.note}</p>
+            </CardContent>
+          </Card>
         ))}
       </div>
+      <div className="overview-action-bar">
+        <div className="overview-action-copy">
+          <strong>{t("overview.quickDeploy")}</strong>
+          <span>{t("overview.quickDeployHint")}</span>
+        </div>
+        <div className="overview-action-buttons">
+          {KINDS.map((kind) => {
+            const Icon = KIND_META[kind].icon;
+            return (
+              <Button
+                key={kind}
+                disabled={!canWrite(role)}
+                onClick={() =>
+                  navigate(`/deployment/${KIND_META[kind].deployKey}`)
+                }
+              >
+                <Icon size={15} style={{ color: KIND_META[kind].color }} />
+                <Plus size={12} />
+                {t(`common.${kind}`)}
+              </Button>
+            );
+          })}
+        </div>
+      </div>
       <div className="stack section-gap">
+        {show("alerts") && (
+          <OverviewPanel
+            title={t("overview.alerts")}
+            className="overview-alert-panel"
+            action={
+              attentionItems.length > 2 ? (
+                <Button onClick={() => setExpandedAlerts((value) => !value)}>
+                  {expandedAlerts
+                    ? t("overview.alertLess")
+                    : t("overview.alertMore", {
+                        count: attentionItems.length - 2,
+                      })}
+                </Button>
+              ) : undefined
+            }
+          >
+            {attentionItems.length ? (
+              <div className="overview-alert-grid">
+                {(expandedAlerts
+                  ? attentionItems
+                  : attentionItems.slice(0, 2)
+                ).map((item) => item)}
+              </div>
+            ) : (
+              <p className="overview-no-alerts">
+                {t("header.noNotifications")}
+              </p>
+            )}
+          </OverviewPanel>
+        )}
         {show("insights") && (
           <div className="grid grid-2 overview-insights">
-            <Panel
+            <OverviewPanel
               title={t("overview.gpuModels")}
               hint={t("overview.gpuModelsScope")}
               action={
@@ -319,8 +458,8 @@ export default function OverviewPage() {
                 ))}
               </div>
               <small className="muted">{t("overview.gpuZeroNote")}</small>
-            </Panel>
-            <Panel
+            </OverviewPanel>
+            <OverviewPanel
               title={t("overview.projectLoad")}
               hint={t("overview.projectLoadScope")}
               action={
@@ -359,7 +498,7 @@ export default function OverviewPage() {
               ) : (
                 <Empty text={t("overview.noProjects")} />
               )}
-            </Panel>
+            </OverviewPanel>
           </div>
         )}
         {(show("health") || show("spendMix")) && (
@@ -371,7 +510,7 @@ export default function OverviewPage() {
             }
           >
             {show("health") && (
-              <Panel
+              <OverviewPanel
                 title={t("overview.health")}
                 hint={t("overview.healthScope")}
               >
@@ -430,10 +569,10 @@ export default function OverviewPage() {
                     );
                   })}
                 </div>
-              </Panel>
+              </OverviewPanel>
             )}
             {show("spendMix") && (
-              <Panel
+              <OverviewPanel
                 title={t("overview.spendMix")}
                 hint={t("overview.spendMixScope")}
                 action={
@@ -468,12 +607,15 @@ export default function OverviewPage() {
                 ) : (
                   <Empty text={t("overview.noSpend")} />
                 )}
-              </Panel>
+              </OverviewPanel>
             )}
           </div>
         )}
         {show("matrix") && (
-          <Panel title={t("overview.matrix")} hint={t("overview.matrixScope")}>
+          <OverviewPanel
+            title={t("overview.matrix")}
+            hint={t("overview.matrixScope")}
+          >
             <div className="table-wrap overview-distribution">
               <table>
                 <thead>
@@ -566,10 +708,13 @@ export default function OverviewPage() {
                 </tfoot>
               </table>
             </div>
-          </Panel>
+          </OverviewPanel>
         )}
         {show("quotas") && (
-          <Panel title={t("overview.quotas")} hint={t("overview.quotaScope")}>
+          <OverviewPanel
+            title={t("overview.quotas")}
+            hint={t("overview.quotaScope")}
+          >
             <div className="grid grid-3">
               {REGIONS.map((region) => (
                 <div key={region}>
@@ -620,10 +765,10 @@ export default function OverviewPage() {
                 </div>
               ))}
             </div>
-          </Panel>
+          </OverviewPanel>
         )}
         {show("trend") && (
-          <Panel
+          <OverviewPanel
             title={t("overview.trend")}
             hint={t("overview.trendScope")}
             action={
@@ -653,10 +798,10 @@ export default function OverviewPage() {
                 )}
               />
             </Suspense>
-          </Panel>
+          </OverviewPanel>
         )}
         {show("recentDeployments") && (
-          <Panel
+          <OverviewPanel
             title={t("overview.recentDeployments")}
             hint={t("overview.recentDeploymentsScope")}
           >
@@ -709,71 +854,22 @@ export default function OverviewPage() {
             ) : (
               <Empty text={t("overview.noResources")} />
             )}
-          </Panel>
+          </OverviewPanel>
         )}
-        <div className="grid grid-2">
-          {show("alerts") && (
-            <Panel title={t("overview.alerts")}>
-              {data.alerts.length ||
-              data.balance < data.account.lowBalanceThresholdUsd ||
-              data.month > data.account.budget ||
-              data.quotas.some((q) => q.usedValue / q.limitValue >= 0.8) ? (
-                <div className="stack">
-                  {data.balance < data.account.lowBalanceThresholdUsd && (
-                    <Link className="notice warning" to="/billing/bills">
-                      {t("billing.lowBalance")}
-                    </Link>
-                  )}
-                  {data.month > data.account.budget && (
-                    <Link className="notice warning" to="/billing/cost">
-                      {t("billing.overBudget")}
-                    </Link>
-                  )}
-                  {data.alerts.map((alert) => (
-                    <div className="notice warning" key={alert.id}>
-                      <div className="between">
-                        <span>
-                          {dt(alert.resource.name)} · {t("common.error")}
-                        </span>
-                        <Link to={resourceLink(alert.resource)}>
-                          <ArrowUpRight size={16} />
-                        </Link>
-                      </div>
-                    </div>
-                  ))}
-                  {data.quotas
-                    .filter((q) => q.usedValue / q.limitValue >= 0.8)
-                    .map((q) => (
-                      <Link
-                        to="/ops/quotas"
-                        key={q.region + q.metric}
-                        className="notice warning"
-                      >
-                        {t(`common.${q.region}`)} · {t(`quota.${q.metric}`)}{" "}
-                        {number((q.usedValue / q.limitValue) * 100, 1)}%
-                      </Link>
-                    ))}
-                </div>
-              ) : (
-                <Empty text={t("header.noNotifications")} />
-              )}
-            </Panel>
-          )}
-          {show("activity") && (
-            <Panel
-              title={t("overview.activity")}
-              hint={t("overview.activityScope")}
-            >
-              <EventTimeline
-                events={data.events.slice(0, 6).map((e) => ({
-                  ...e,
-                  reason: dt(e.reason),
-                  action: dt(e.action),
-                }))}
-              />
-            </Panel>
-          )}
-        </div>
+        {show("activity") && (
+          <OverviewPanel
+            title={t("overview.activity")}
+            hint={t("overview.activityScope")}
+          >
+            <EventTimeline
+              events={data.events.slice(0, 6).map((e) => ({
+                ...e,
+                reason: dt(e.reason),
+                action: dt(e.action),
+              }))}
+            />
+          </OverviewPanel>
+        )}
       </div>
       <Modal
         open={custom}

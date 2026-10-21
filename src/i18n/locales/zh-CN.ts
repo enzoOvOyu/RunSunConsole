@@ -219,6 +219,8 @@ export default {
   "overview.title": "总览",
   "overview.subtitle": "您的算力、用量与费用，一目了然",
   "overview.customize": "自定义模块",
+  "overview.quickDeploy": "快速部署",
+  "overview.quickDeployHint": "从四类资源中选择，直接进入创建流程",
   "overview.insights": "费用与项目",
   "overview.health": "资源运行状态",
   "overview.healthScope":
@@ -261,6 +263,8 @@ export default {
   "overview.trend": "花费趋势",
   "overview.trendScope": "近 30 日用量金额汇总 · USD",
   "overview.alerts": "告警与待办",
+  "overview.alertMore": "展开其余 {count} 项",
+  "overview.alertLess": "收起",
   "overview.activity": "最近活动",
   "overview.activityScope": "当前用户资源的最近 10 条事件",
   "overview.noResources": "尚未创建资源 · 去部署中心创建",

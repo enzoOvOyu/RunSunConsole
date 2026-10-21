@@ -221,6 +221,8 @@ export default {
   "overview.title": "Overview",
   "overview.subtitle": "Your compute, usage and spend at a glance",
   "overview.customize": "Customize modules",
+  "overview.quickDeploy": "Quick deploy",
+  "overview.quickDeployHint": "Choose a resource type to start a deployment",
   "overview.insights": "Cost and projects",
   "overview.health": "Resource status by type",
   "overview.healthScope":
@@ -267,6 +269,8 @@ export default {
   "overview.trend": "Spend trend",
   "overview.trendScope": "Last 30 days of usage charges · USD",
   "overview.alerts": "Alerts & tasks",
+  "overview.alertMore": "Show {count} more",
+  "overview.alertLess": "Show less",
   "overview.activity": "Recent activity",
   "overview.activityScope": "Last 10 events for your resources",
   "overview.noResources": "No resources yet · create your first deployment",

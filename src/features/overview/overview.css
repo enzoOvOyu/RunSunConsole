@@ -1,0 +1,218 @@
+.overview-panel > .shadcn-card-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  border-bottom: 1px solid var(--rs-border);
+}
+
+.overview-panel > .shadcn-card-content {
+  padding: var(--rs-s4) 20px 20px;
+}
+
+.overview-panel-heading {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.overview-panel-heading .shadcn-card-description {
+  max-width: 72ch;
+}
+
+.overview-panel .shadcn-card-action {
+  align-self: center;
+  white-space: nowrap;
+  font-size: var(--rs-fs-sm);
+}
+
+.overview-stats {
+  grid-template-columns: minmax(0, 1.2fr) repeat(3, minmax(0, 1fr));
+  gap: var(--rs-s4);
+}
+
+.overview-stat-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 182px;
+}
+
+.overview-stat-card > .shadcn-card-header {
+  padding-bottom: var(--rs-s2);
+}
+
+.overview-stat-card .shadcn-card-description {
+  color: var(--rs-text-secondary);
+  font-size: var(--rs-fs-sm);
+  font-weight: 500;
+}
+
+.overview-stat-icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid var(--rs-border);
+  border-radius: var(--rs-r-md);
+  background: var(--rs-surface);
+  color: var(--rs-text-secondary);
+}
+
+.overview-stat-primary {
+  border-color: color-mix(in srgb, var(--rs-brand) 32%, var(--rs-border));
+  box-shadow: inset 0 3px 0 var(--rs-brand);
+}
+
+.overview-stat-primary .overview-stat-icon {
+  color: var(--rs-brand-strong);
+  background: var(--rs-brand-soft);
+}
+
+.overview-stat-card > .shadcn-card-content {
+  display: grid;
+  flex: 1;
+  align-content: end;
+  gap: var(--rs-s2);
+  padding-bottom: var(--rs-s4);
+}
+
+.overview-stat-value {
+  font-size: clamp(23px, 2vw, 30px);
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.overview-stat-note {
+  min-height: var(--rs-lh-sm);
+  color: var(--rs-text-secondary);
+  font-size: var(--rs-fs-xs);
+  line-height: var(--rs-lh-xs);
+}
+
+.overview-stat-primary > .shadcn-card-content {
+  padding-bottom: var(--rs-s2);
+}
+
+.overview-region-summary {
+  gap: 6px;
+  flex-wrap: wrap;
+  padding-top: 0;
+  font-size: var(--rs-fs-xs);
+}
+
+.overview-region-summary > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 7px;
+  border: 1px solid var(--rs-border);
+  border-radius: var(--rs-r-sm);
+  background: var(--rs-surface);
+  color: var(--rs-text-secondary);
+}
+
+.overview-region-summary strong {
+  color: var(--rs-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.overview-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rs-s4);
+  margin-top: var(--rs-s4);
+  padding: var(--rs-s3) var(--rs-s4);
+  border: 1px solid var(--rs-border);
+  border-radius: var(--rs-r-lg);
+  background: var(--rs-surface);
+}
+
+.overview-action-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.overview-action-copy strong {
+  font-size: var(--rs-fs-sm);
+  font-weight: 600;
+}
+
+.overview-action-copy span {
+  color: var(--rs-text-secondary);
+  font-size: var(--rs-fs-xs);
+  line-height: var(--rs-lh-xs);
+}
+
+.overview-action-buttons {
+  display: flex;
+  gap: var(--rs-s2);
+  flex-wrap: wrap;
+}
+
+.overview-action-buttons .btn {
+  min-height: 32px;
+  white-space: nowrap;
+}
+
+.overview-alert-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--rs-s2);
+}
+
+.overview-alert-grid .notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rs-s2);
+  margin: 0;
+  min-width: 0;
+}
+
+.overview-no-alerts {
+  color: var(--rs-text-secondary);
+  font-size: var(--rs-fs-sm);
+}
+
+@media (width <= 1200px) {
+  .overview-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .overview-action-bar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (width <= 720px) {
+  .overview-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .overview-stat-card {
+    min-height: 150px;
+  }
+
+  .overview-alert-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .overview-action-buttons {
+    width: 100%;
+  }
+
+  .overview-action-buttons .btn {
+    flex: 1 1 calc(50% - var(--rs-s2));
+  }
+
+  .overview-panel .shadcn-card-action {
+    grid-column: 1 / -1;
+    grid-row: auto;
+    justify-self: start;
+  }
+}

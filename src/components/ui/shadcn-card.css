@@ -1,0 +1,47 @@
+.shadcn-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--rs-border);
+  border-radius: var(--rs-r-lg);
+  background: var(--rs-bg);
+  color: var(--rs-text);
+  box-shadow: var(--rs-shadow-sm);
+}
+
+.shadcn-card-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--rs-s2) var(--rs-s4);
+  padding: var(--rs-s4) 20px;
+}
+
+.shadcn-card-title {
+  font-size: var(--rs-fs-md);
+  line-height: var(--rs-lh-md);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.shadcn-card-description {
+  color: var(--rs-text-secondary);
+  font-size: var(--rs-fs-sm);
+  line-height: var(--rs-lh-sm);
+}
+
+.shadcn-card-action {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  justify-self: end;
+}
+
+.shadcn-card-content {
+  padding: 0 20px var(--rs-s4);
+}
+
+.shadcn-card-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--rs-s2);
+  padding: var(--rs-s4) 20px;
+}
