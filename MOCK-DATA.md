@@ -153,7 +153,7 @@
 
 | 字段 | `H100_SXM` | `H200_NVL` | `B200_NVL72` | `B300` | `GB300_NVL72` |
 | --- | --- | --- | --- | --- | --- |
-| 产品名 | H100 SXM | H200 SXM | B200 SXM | B300 SXM | GB300 NVL72 机柜 |
+| 产品名 | H100 SXM | H200 SXM | B200 | B300 SXM | GB300 NVL72 机柜 |
 | 架构 | Hopper (TSMC 4N) | Hopper (TSMC 4N) | Blackwell (TSMC 4NP) | Blackwell Ultra | Blackwell Ultra |
 | GPU/节点 | 8 | 8 | 8（单节点；不表示 NVL72 机柜） | 8 | 72（机柜级） |
 | 显存/GPU | 80 GB HBM3 | 141 GB HBM3e | 180 GB HBM3e | 288 GB HBM3e | 288 GB HBM3e |
@@ -169,7 +169,7 @@
 | 散热 | 风冷 | 风冷 | 液冷（机柜级） | 液冷 | 液冷（仅限） |
 
 > **口径声明**：B200/B300 的 FP8 dense 取 NVIDIA DGX 口径（DGX B200/B300 FP8 均为 72 PFLOPS sparse / 8 GPU = 9 PFLOPS sparse = **4.5 PFLOPS dense** 每卡）；FP4 dense 取 DGX B200 72 PFLOPS / DGX B300 108 PFLOPS 每 8 卡，即 9 / 13.5 PFLOPS 每卡。全文统一采用此口径，禁止混用其他第三方估算值。
-> **`B200_NVL72` 命名说明**：该值仅作为历史内部节点池代码保留；控制台展示为 **B200 SXM**，对应 8 卡 HGX B200 节点。显存规格按 NVIDIA 官方 B200 SXM 产品资料记录为 180 GB。
+> **`B200_NVL72` 命名说明**：该值仅作为历史内部节点池代码保留；控制台展示为 **B200**，对应 8 卡 HGX B200 节点。显存规格按 NVIDIA 官方 B200 产品资料记录为 180 GB。
 
 ### 3.2 节点 / 服务器配套规格（用于裸金属与云服务器的实例规格派生）
 

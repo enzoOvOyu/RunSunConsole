@@ -39,7 +39,7 @@ export const GPU_SPECS: Record<
   },
   B200_NVL72: {
     code: "B200_NVL72",
-    gpuModel: "B200 SXM",
+    gpuModel: "B200",
     networkTechnology: "NDR InfiniBand / Spectrum-X Ethernet",
     networkPorts: 8,
     networkSpeedGbps: 400,
