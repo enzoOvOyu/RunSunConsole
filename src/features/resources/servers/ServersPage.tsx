@@ -5,6 +5,7 @@ import { money } from "../../../lib/money";
 import { Badge } from "../../../components/ui";
 import { t } from "../../../i18n";
 import { duration } from "../../../lib/date";
+import { gpuModelDisplayName, poolDisplayName } from "../../../lib/gpu-labels";
 export default function ServersPage() {
   const columns: ColumnDef<ResourceOf<"gpu_vm">>[] = [
     {
@@ -26,7 +27,11 @@ export default function ServersPage() {
       header: t("common.region"),
       cell: ({ row }) => t(`common.${row.original.region}`),
     },
-    { accessorKey: "nodePool", header: t("resource.pool") },
+    {
+      id: "nodePool",
+      header: t("resource.pool"),
+      cell: ({ row }) => poolDisplayName(row.original.nodePool),
+    },
     {
       id: "family",
       header: t("resource.specFamily"),
@@ -44,7 +49,7 @@ export default function ServersPage() {
       id: "gpu",
       header: t("resource.gpu"),
       cell: ({ row }) =>
-        `${row.original.spec.gpuModel} × ${row.original.spec.gpuCount}`,
+        `${gpuModelDisplayName(row.original.spec.gpuModel)} × ${row.original.spec.gpuCount}`,
     },
     {
       id: "cpu",
@@ -79,7 +84,12 @@ export default function ServersPage() {
       kind="gpu_vm"
       columns={columns}
       facets={[
-        { id: "pool", label: t("resource.pool"), value: (r) => r.nodePool },
+        {
+          id: "pool",
+          label: t("resource.pool"),
+          value: (r) => r.nodePool,
+          format: poolDisplayName,
+        },
         {
           id: "cards",
           label: t("resource.gpuPerInstance"),

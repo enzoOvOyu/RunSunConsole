@@ -1,3 +1,4 @@
+import { gpuModelDisplayName } from "../../../lib/gpu-labels";
 import { ResourceNetwork } from "../../network/ResourceNetwork";
 import { MachineInventory, MachineFirmware } from "./MachinePanels";
 import type { BaremetalMachine } from "../../../types/baremetal";
@@ -91,7 +92,7 @@ export function BaremetalDetail({
           <Panel title={t("tab.overview")}>
             <KeyValues
               items={[
-                [t("resource.gpuModel"), r.spec.gpuModel],
+                [t("resource.gpuModel"), gpuModelDisplayName(r.spec.gpuModel)],
 
                 [
                   t("resource.machineCount"),

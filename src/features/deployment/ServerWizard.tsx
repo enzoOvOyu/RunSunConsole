@@ -1,4 +1,5 @@
 import { StorageRows } from "./shared/StorageRows";
+import { gpuModelDisplayName } from "../../lib/gpu-labels";
 import { z } from "zod";
 import type { ServerSpec } from "../../types/domain";
 import { t } from "../../i18n";
@@ -75,7 +76,7 @@ function ServerForm({ step, pools, images }: FormContext) {
         onSelect={(p) => {
           form.setValue("nodePool", p.code);
           update({
-            gpuModel: p.gpuModel,
+            gpuModel: gpuModelDisplayName(p.gpuModel),
             gpuCount: spec.gpuPerInstance * spec.quantity,
           });
         }}

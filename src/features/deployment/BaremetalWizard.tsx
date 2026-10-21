@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { gpuModelDisplayName } from "../../lib/gpu-labels";
 import { StorageRows } from "./shared/StorageRows";
 import { z } from "zod";
 import type { BaremetalSpec } from "../../types/domain";
@@ -50,7 +51,7 @@ function BaremetalForm({ step, pools, images }: FormContext) {
         form.setValue("nodePool", p.code);
         update({
           machineType: p.code,
-          gpuModel: p.gpuModel,
+          gpuModel: gpuModelDisplayName(p.gpuModel),
           gpuCount: p.gpusPerNode * spec.machineCount,
           cpuModel: p.cpu,
           memoryGb: p.memorySystemGb,

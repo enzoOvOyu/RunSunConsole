@@ -23,6 +23,7 @@ import { useAuth } from "../../../stores/auth";
 import { canWrite } from "../../../lib/rbac";
 import { t } from "../../../i18n";
 import { money, unitMoney } from "../../../lib/money";
+import { gpuModelDisplayName } from "../../../lib/gpu-labels";
 import {
   Button,
   PageHeader,
@@ -87,7 +88,7 @@ export function PoolCards({
             onClick={() => onSelect(pool)}
             className={`catalog-card ${selected === pool.code ? "selected" : ""}`}
           >
-            <strong>{pool.gpuModel}</strong>
+            <strong>{gpuModelDisplayName(pool.gpuModel)}</strong>
             <small>
               {kind === "gpu_baremetal"
                 ? t("wizard.machineHint", { count: pool.gpusPerNode })

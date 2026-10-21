@@ -4,6 +4,7 @@ import { ResourceListShell, ResourceName } from "../shared/ResourceListShell";
 import { money } from "../../../lib/money";
 import { Badge } from "../../../components/ui";
 import { t } from "../../../i18n";
+import { poolDisplayName } from "../../../lib/gpu-labels";
 export default function VgpuPage() {
   const columns: ColumnDef<ResourceOf<"vgpu">>[] = [
     {
@@ -34,7 +35,9 @@ export default function VgpuPage() {
       id: "pool",
       header: t("resource.pool"),
       cell: ({ row }) =>
-        row.original.spec.nodePools.map((p) => p.poolCode).join(", "),
+        row.original.spec.nodePools
+          .map((p) => poolDisplayName(p.poolCode))
+          .join(", "),
     },
     {
       id: "controlTier",

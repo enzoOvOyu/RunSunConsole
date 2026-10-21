@@ -5,6 +5,7 @@ import { money } from "../../../lib/money";
 import { Badge } from "../../../components/ui";
 import { t } from "../../../i18n";
 import { size } from "../../../lib/money";
+import { gpuModelDisplayName } from "../../../lib/gpu-labels";
 export default function BaremetalPage() {
   const columns: ColumnDef<ResourceOf<"gpu_baremetal">>[] = [
     {
@@ -44,7 +45,7 @@ export default function BaremetalPage() {
     {
       id: "gpuModel",
       header: t("resource.gpuModel"),
-      cell: ({ row }) => row.original.spec.gpuModel,
+      cell: ({ row }) => gpuModelDisplayName(row.original.spec.gpuModel),
     },
     {
       id: "gpu",
@@ -82,7 +83,7 @@ export default function BaremetalPage() {
         {
           id: "machine",
           label: t("resource.gpuModel"),
-          value: (r) => r.spec.gpuModel,
+          value: (r) => gpuModelDisplayName(r.spec.gpuModel),
         },
         {
           id: "raid",

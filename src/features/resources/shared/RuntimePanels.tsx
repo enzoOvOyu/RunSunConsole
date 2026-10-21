@@ -1,3 +1,4 @@
+import { poolDisplayName } from "../../../lib/gpu-labels";
 import { useState } from "react";
 import type { ResourceOf } from "../../../types/domain";
 import type {
@@ -268,7 +269,7 @@ export function NodePoolsPanel({
   return (
     <div className="stack">
       {r.spec.nodePools.map((p, i) => (
-        <Panel key={i} title={p.poolCode}>
+        <Panel key={i} title={poolDisplayName(p.poolCode)}>
           <KeyValues
             items={[
               [t("resource.nodeCount"), p.nodeCount],

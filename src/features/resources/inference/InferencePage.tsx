@@ -1,3 +1,4 @@
+import { poolDisplayName } from "../../../lib/gpu-labels";
 import { precisionLabel } from "../../../lib/inference-precision";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { ResourceOf } from "../../../types/domain";
@@ -55,7 +56,7 @@ export default function InferencePage() {
       id: "gpu",
       header: t("resource.gpu"),
       cell: ({ row }) =>
-        `${row.original.nodePool} × ${row.original.spec.gpuPerReplica}`,
+        `${poolDisplayName(row.original.nodePool)} × ${row.original.spec.gpuPerReplica}`,
     },
     {
       id: "port",

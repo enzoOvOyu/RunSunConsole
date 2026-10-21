@@ -1,6 +1,7 @@
 import type { BaremetalMachine } from "../../../types/baremetal";
 import type { ResourceOf } from "../../../types/domain";
 import type { HardwareSnapshot } from "../../../types/monitoring";
+import { gpuModelDisplayName } from "../../../lib/gpu-labels";
 import { EP, query } from "../../../lib/api-client";
 import { useData } from "../../shared/hooks";
 import { t } from "../../../i18n";
@@ -47,7 +48,8 @@ export function MachineInventory({
             header: "GPU",
             cell: ({ row }) => (
               <span>
-                {row.original.gpuCount} × {row.original.gpuModel}
+                {row.original.gpuCount} ×{" "}
+                {gpuModelDisplayName(row.original.gpuModel)}
               </span>
             ),
           },

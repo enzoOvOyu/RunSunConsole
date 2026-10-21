@@ -1,4 +1,5 @@
 import "./overview.css";
+import { poolDisplayName } from "../../lib/gpu-labels";
 import { lazy, Suspense, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -223,7 +224,7 @@ export default function OverviewPage() {
   }));
   const gpuModels = POOLS.map((code) => ({
     code,
-    name: code.replaceAll("_", " "),
+    name: poolDisplayName(code),
     regions: gpuByModel[code],
     total: REGIONS.reduce((sum, region) => sum + gpuByModel[code][region], 0),
   })).sort((left, right) => right.total - left.total);

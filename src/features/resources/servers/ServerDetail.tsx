@@ -1,3 +1,4 @@
+import { gpuModelDisplayName, poolDisplayName } from "../../../lib/gpu-labels";
 import { ResourceNetwork } from "../../network/ResourceNetwork";
 import { useState } from "react";
 import type { ResourceOf } from "../../../types/domain";
@@ -46,14 +47,17 @@ export function ServerDetail({
           <Panel title={t("tab.overview")}>
             <KeyValues
               items={[
-                [t("resource.gpu"), `${r.spec.gpuModel} × ${r.spec.gpuCount}`],
+                [
+                  t("resource.gpu"),
+                  `${gpuModelDisplayName(r.spec.gpuModel)} × ${r.spec.gpuCount}`,
+                ],
                 [
                   t("resource.cpu"),
                   `${r.spec.vcpu} vCPU / ${r.spec.memoryGb} GB`,
                 ],
                 [t("wizard.imageStorage"), r.spec.imageRef],
                 [t("common.region"), t("common." + r.region)],
-                [t("resource.pool"), r.nodePool],
+                [t("resource.pool"), poolDisplayName(r.nodePool)],
                 [t("common.createdAt"), date(r.createdAt)],
               ]}
             />

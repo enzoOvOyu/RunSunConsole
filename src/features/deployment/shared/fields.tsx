@@ -1,3 +1,4 @@
+import { poolDisplayName } from "../../../lib/gpu-labels";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { EP, query } from "../../../lib/api-client";
@@ -680,13 +681,18 @@ export function Review() {
   const renderValue = (key: string, value: unknown) => {
     if (typeof value === "boolean")
       return t(value ? "common.enabled" : "common.disabled");
+    if (
+      (key === "machineType" || key === "nodePool") &&
+      typeof value === "string"
+    )
+      return poolDisplayName(value);
     if (value === null || value === undefined || value === "") return "—";
     if (Array.isArray(value)) {
       if (key === "nodePools")
         return value
           .map(
             (pool) =>
-              `${pool.poolCode} · ${pool.nodeCount} ${t("common.nodes")} · ${pool.slicingPolicy} ${pool.migProfile}`,
+              `${poolDisplayName(pool.poolCode)} · ${pool.nodeCount} ${t("common.nodes")} · ${pool.slicingPolicy} ${pool.migProfile}`,
           )
           .join(" / ");
       return value.join(", ");
