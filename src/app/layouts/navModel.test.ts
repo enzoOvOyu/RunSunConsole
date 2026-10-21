@@ -27,6 +27,8 @@ it("assigns distinct semantic submenu icons through the shared navigation model"
   expect(
     buildGroups("billing").find((g) => g.id === "billing")?.items[0].path,
   ).toBe("/billing/cost");
+  expect(dictionaries["zh-CN"]["nav.ssh-keys"]).toBe("SSH 公钥管理");
+  expect(dictionaries["en-US"]["nav.ssh-keys"]).toBe("SSH key management");
   expect(dictionaries["zh-CN"]["nav.ops"]).toBe("项目与支持");
   expect(dictionaries["en-US"]["nav.ops"]).toBe("Projects & Support");
   expect(dictionaries["zh-CN"]["nav.resources"]).toBe("我的资源");

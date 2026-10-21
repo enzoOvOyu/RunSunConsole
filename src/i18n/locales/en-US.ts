@@ -22,7 +22,7 @@ export default {
   "nav.images": "Images & models",
   "nav.apps": "AI applications",
   "nav.scaling": "Elastic scaling",
-  "nav.sshKeys": "SSH keys",
+  "nav.ssh-keys": "SSH key management",
   "nav.datasets": "Datasets",
   "nav.storage": "Storage",
   "nav.block": "Block storage",

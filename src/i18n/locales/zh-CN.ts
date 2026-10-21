@@ -20,7 +20,7 @@ export default {
   "nav.images": "镜像商城 · 模型",
   "nav.apps": "AI 应用模板",
   "nav.scaling": "弹性伸缩",
-  "nav.sshKeys": "SSH 公钥",
+  "nav.ssh-keys": "SSH 公钥管理",
   "nav.datasets": "数据集",
   "nav.storage": "存储",
   "nav.block": "块存储",

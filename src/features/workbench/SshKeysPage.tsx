@@ -48,7 +48,7 @@ export default function SshKeysPage() {
 
   return (
     <div className="stack">
-      <PageHeader title={t("nav.sshKeys")} subtitle={t("pageDescription.sshKeys")} />
+      <PageHeader title={t("nav.ssh-keys")} subtitle={t("pageDescription.sshKeys")} />
       <Panel title={t("sshKeys.importTitle")}>
         <div className="stack">
           <div className="form-grid">
