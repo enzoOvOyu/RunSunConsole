@@ -7,8 +7,20 @@ import {
   type RefObject,
   type ButtonHTMLAttributes,
 } from "react";
-import { Dialog as ShadDialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "./dialog";
-import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "./sheet";
+import {
+  Dialog as ShadDialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "./dialog";
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetDescription,
+  SheetTitle,
+} from "./sheet";
 import { Button as ShadButton } from "./button";
 import { Card, CardContent, CardHeader, CardTitle } from "./card";
 import { Badge as ShadBadge } from "./badge";
@@ -17,7 +29,14 @@ import { Skeleton } from "./skeleton";
 import { Checkbox } from "./checkbox";
 import { Progress as ShadProgress } from "./progress";
 import { Alert, AlertDescription } from "./alert";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "./table";
 import {
   Inbox,
   Info,
@@ -48,8 +67,22 @@ export function Button({
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "default" | "primary" | "danger" | "ghost";
 }) {
-  const mapped = variant === "primary" ? "default" : variant === "danger" ? "destructive" : variant === "ghost" ? "ghost" : "outline";
-  return <ShadButton type="button" {...props} variant={mapped} className={`btn btn-${variant} ${className}`} />;
+  const mapped =
+    variant === "primary"
+      ? "default"
+      : variant === "danger"
+        ? "destructive"
+        : variant === "ghost"
+          ? "ghost"
+          : "outline";
+  return (
+    <ShadButton
+      type="button"
+      {...props}
+      variant={mapped}
+      className={`btn btn-${variant} ${className}`}
+    />
+  );
 }
 export function Panel({
   title,
@@ -89,8 +122,20 @@ export function Panel({
   );
 }
 export function Badge({ status, label }: { status: string; label?: string }) {
-  const variant = /error|failed|denied|expired|abnormal/i.test(status) ? "destructive" : "secondary";
-  return <ShadBadge variant={variant} className={`badge ${status}`} data-status={status}>{label || t(`common.${status}`)}</ShadBadge>;
+  const variant = /error|failed|denied|expired|abnormal/i.test(status)
+    ? "destructive"
+    : "secondary";
+  const animated = status === "provisioning" || status === "terminating";
+  return (
+    <ShadBadge
+      variant={variant}
+      className={`badge ${status}`}
+      data-status={status}
+    >
+      {animated && <span className="status-light" aria-hidden="true" />}
+      {label || t(`common.${status}`)}
+    </ShadBadge>
+  );
 }
 export function FilterReset() {
   const [params, setParams] = useSearchParams();
@@ -215,7 +260,15 @@ export function Tabs({
   return (
     <ShadTabs value={value} onValueChange={onChange} className="tabs">
       <TabsList>
-        {items.map((item) => <TabsTrigger key={item.id} value={item.id} className={`tab ${value === item.id ? "active" : ""}`}>{item.label}</TabsTrigger>)}
+        {items.map((item) => (
+          <TabsTrigger
+            key={item.id}
+            value={item.id}
+            className={`tab ${value === item.id ? "active" : ""}`}
+          >
+            {item.label}
+          </TabsTrigger>
+        ))}
       </TabsList>
     </ShadTabs>
   );
@@ -260,7 +313,12 @@ export function Check({
   const id = useId();
   return (
     <label className="check" htmlFor={id}>
-      <Checkbox id={id} checked={checked} onCheckedChange={(value) => onChange(value === true)} disabled={disabled} />
+      <Checkbox
+        id={id}
+        checked={checked}
+        onCheckedChange={(value) => onChange(value === true)}
+        disabled={disabled}
+      />
       <span>{label}</span>
     </label>
   );
@@ -299,7 +357,12 @@ export function Modal({
 
   if (drawer) {
     return (
-      <Sheet open={open} onOpenChange={(value) => { if (!value) onClose(); }}>
+      <Sheet
+        open={open}
+        onOpenChange={(value) => {
+          if (!value) onClose();
+        }}
+      >
         <SheetContent
           side="right"
           showCloseButton={false}
@@ -312,7 +375,14 @@ export function Modal({
               <SheetTitle className="dialog-title">{title}</SheetTitle>
               <SheetClose asChild>{closeButton}</SheetClose>
             </div>
-            {description && <SheetDescription id={descriptionId} className="dialog-description">{description}</SheetDescription>}
+            {description && (
+              <SheetDescription
+                id={descriptionId}
+                className="dialog-description"
+              >
+                {description}
+              </SheetDescription>
+            )}
           </div>
           <div className="drawer-content">{children}</div>
         </SheetContent>
@@ -321,7 +391,12 @@ export function Modal({
   }
 
   return (
-    <ShadDialog open={open} onOpenChange={(value) => { if (!value) onClose(); }}>
+    <ShadDialog
+      open={open}
+      onOpenChange={(value) => {
+        if (!value) onClose();
+      }}
+    >
       <DialogContent
         showCloseButton={false}
         onOpenAutoFocus={onOpenAutoFocus}
@@ -333,7 +408,14 @@ export function Modal({
             <DialogTitle className="dialog-title">{title}</DialogTitle>
             <DialogClose asChild>{closeButton}</DialogClose>
           </div>
-          {description && <DialogDescription id={descriptionId} className="dialog-description">{description}</DialogDescription>}
+          {description && (
+            <DialogDescription
+              id={descriptionId}
+              className="dialog-description"
+            >
+              {description}
+            </DialogDescription>
+          )}
         </div>
         {children}
       </DialogContent>
@@ -344,7 +426,14 @@ export function Modal({
 export function Progress({ value }: { value: number }) {
   const safeValue = Math.min(100, Math.max(0, value));
   const level = value >= 100 ? "critical" : value >= 80 ? "warning" : "normal";
-  return <ShadProgress value={safeValue} aria-label={`${Math.round(safeValue)}%`} data-level={level} className="progress" />;
+  return (
+    <ShadProgress
+      value={safeValue}
+      aria-label={`${Math.round(safeValue)}%`}
+      data-level={level}
+      className="progress"
+    />
+  );
 }
 
 export function KeyValues({ items }: { items: [string, ReactNode][] }) {

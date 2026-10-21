@@ -1607,6 +1607,48 @@ button.catalog-card:disabled {
   background: var(--rs-success);
 }
 
+.status-light {
+  display: inline-block;
+  color: var(--rs-info);
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: var(--rs-info);
+  vertical-align: middle;
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--rs-info) 42%, transparent);
+  animation: rs-status-pulse 1.6s ease-out infinite;
+}
+
+.badge.terminating .status-light {
+  color: var(--rs-warning);
+  background: var(--rs-warning);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--rs-warning) 42%, transparent);
+}
+
+@keyframes rs-status-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, currentcolor 36%, transparent);
+    opacity: 1;
+  }
+
+  70% {
+    box-shadow: 0 0 0 7px transparent;
+    opacity: 0.72;
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-light {
+    animation: none;
+  }
+}
+
 .kbd {
   font:
     11px ui-monospace,
@@ -1937,4 +1979,52 @@ a:focus-visible {
 
 [data-slot="progress"][data-level="critical"] [data-slot="progress-indicator"] {
   background: var(--rs-danger);
+}
+
+.inference-memory-card {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--rs-border);
+  border-radius: var(--rs-r-md);
+  background: var(--rs-surface);
+}
+
+.inference-memory-card .between {
+  gap: 12px;
+  color: var(--rs-text-secondary);
+  font-size: var(--rs-fs-sm);
+}
+
+.inference-memory-card .between strong {
+  color: var(--rs-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.inference-memory-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--rs-surface-2);
+}
+
+.inference-memory-card .inference-memory-track .inference-memory-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--rs-success);
+  transition: width 200ms ease, background-color 150ms ease;
+}
+
+.inference-memory-card.insufficient {
+  border-color: color-mix(in srgb, var(--rs-danger) 55%, var(--rs-border));
+  background: color-mix(in srgb, var(--rs-danger) 5%, var(--rs-bg));
+}
+
+.inference-memory-card.insufficient .inference-memory-track .inference-memory-fill {
+  background: var(--rs-danger);
+}
+
+.inference-memory-card .field-error {
+  margin: 0;
 }

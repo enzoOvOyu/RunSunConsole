@@ -462,6 +462,21 @@ export interface Order {
   sourceRefId: string;
   createdAt: string;
 }
+export interface OperationLog {
+  id: string;
+  operation: "create" | "delete";
+  status: "processing" | "succeeded" | "failed" | "canceled";
+  startedAt: string;
+  completedAt: string | null;
+  elapsedSeconds: number;
+  resourceUuid: ResourceUuid;
+  displayId: DisplayId;
+  resourceName: string;
+  projectId: string;
+  projectName: string;
+  region: Region;
+  kind: Kind;
+}
 export interface MetricPoint {
   at: string;
   value: number | null;

@@ -260,19 +260,12 @@ export function meteringLines(estimate: PriceEstimate): PriceLine[] {
 }
 export function provisioningSeconds(
   r: Pick<Resource, "kind" | "spec">,
-  models: Model[],
+  _models: Model[],
 ) {
-  const spec = r.spec;
-  if (r.kind === "gpu_baremetal") return 900;
-  if (r.kind === "vgpu") return 300;
-  if (r.kind === "inference" && "modelRef" in spec) {
-    const model = models.find((m) => m.id === spec.modelRef);
-    return model
-      ? Math.max(
-          60,
-          modelMemory(model, spec.quantization, spec.maxModelLen).loadS + 30,
-        )
-      : 60;
-  }
-  return 180;
+  void _models;
+  if (r.kind === "gpu_vm") return 30;
+  if (r.kind === "gpu_baremetal") return 180;
+  if (r.kind === "vgpu") return 120;
+  if (r.kind === "inference") return 60;
+  return 30;
 }

@@ -24,6 +24,7 @@ import {
   ShieldCheck,
   Cable,
   KeyRound,
+  ClipboardList,
 } from "lucide-react";
 import { KINDS, type Role } from "../../types/domain";
 import { KIND_META } from "../../lib/ids";
@@ -48,6 +49,7 @@ const itemIcons: Record<string, typeof LayoutDashboard> = {
   eips: Globe2,
   "security-groups": ShieldCheck,
   tunnels: Cable,
+  "operation-logs": ClipboardList,
   projects: FolderKanban,
   quotas: Gauge,
   cost: ChartNoAxesCombined,
@@ -112,7 +114,7 @@ export function buildGroups(role: Role): NavGroup[] {
       {
         id: "ops",
         icon: Briefcase,
-        items: ["projects", "quotas", "tickets"],
+        items: ["projects", "quotas", "tickets", "operation-logs"],
       },
       {
         id: "workbench",

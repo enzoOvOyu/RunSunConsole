@@ -20,6 +20,7 @@ export const EP = {
   account: "/api/account",
   metrics: "/api/metrics",
   events: "/api/events",
+  operations: "/api/operations",
   notifications: "/api/notifications",
   notebooks: "/api/workbench/notebooks",
   images: "/api/images",

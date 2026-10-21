@@ -16,6 +16,9 @@ export default {
   "nav.quotas": "配额",
   "nav.cost": "成本分析",
   "nav.tickets": "工单",
+  "nav.operation-logs": "操作日志",
+  "pageDescription.operationLogs":
+    "查看资源创建、部署和删除任务的状态、耗时与关联项目。",
   "nav.notebooks": "Notebook / IDE",
   "nav.images": "镜像商城 · 模型",
   "nav.apps": "AI 应用模板",
@@ -29,6 +32,17 @@ export default {
   "nav.pipelines": "数据预处理",
   "nav.bills": "我的账单",
   "nav.vouchers": "代金券",
+  "operation.action": "操作",
+  "operation.create": "创建资源",
+  "operation.delete": "删除资源",
+  "operation.resource": "资源",
+  "operation.startedAt": "开始时间",
+  "operation.elapsed": "耗时",
+  "operation.empty": "暂无资源创建或删除任务",
+  "operation.status.processing": "进行中",
+  "operation.status.succeeded": "已完成",
+  "operation.status.failed": "失败",
+  "operation.status.canceled": "已取消",
   "pageDescription.sshKeys":
     "导入和管理用于云服务器 SSH 登录的公钥。公钥仅保存在当前浏览器中。",
   "pageDescription.resources.gpu_vm":
@@ -466,6 +480,10 @@ export default {
   "wizard.context": "上下文长度 · 4096–1048576",
   "wizard.memoryRequired":
     "每副本估算显存 {required} GB / 已选容量 {capacity} GB",
+  "wizard.memoryNeededLabel": "模型预计需要显存",
+  "wizard.memoryAvailableLabel": "当前可用显存 · {gpu} 张 GPU",
+  "wizard.memoryShortfall":
+    "显存不足 {shortfall} GB：部署需要 {required} GB，当前容量 {capacity} GB。",
   "wizard.memoryError": "显存不足，请增加张量并行卡数或降低量化精度",
   "wizard.review": "请确认配置与费用后创建资源",
   "wizard.leave": "离开将保留草稿，确定继续？",

@@ -6,7 +6,7 @@
 .sidebar {
   position: fixed;
   inset: 0 auto 0 0;
-  width: 248px;
+  width: 296px;
   background: var(--rs-bg);
   border-right: 1px solid var(--rs-border);
   z-index: 50;
@@ -53,10 +53,14 @@
 
 .groupButton,
 .navLink {
+  box-sizing: border-box;
   width: 100%;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: flex-start;
+  white-space: normal;
+  overflow-wrap: anywhere;
   gap: 10px;
   min-height: 37px;
   border: 0;
@@ -127,7 +131,7 @@
 }
 
 .main {
-  margin-left: 248px;
+  margin-left: 296px;
   min-width: 0;
   flex: 1;
   background: var(--rs-surface);

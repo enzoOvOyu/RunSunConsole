@@ -609,6 +609,7 @@ function settleEips() {
   }
 }
 function tick() {
+  let lifecycleChanged = false;
   if (db.account.creditBalance >= 0) db.account.depletedAt = null;
   else db.account.depletedAt ??= new Date().toISOString();
 
@@ -623,6 +624,7 @@ function tick() {
         r.stoppedAt = new Date(start + 86400000).toISOString();
         addEvent(r, "stopped", "running", "stopped");
         settle(r);
+        lifecycleChanged = true;
       }
       if (age >= 8 * 86400000) {
         releaseResourceNetwork(db.network, r.resourceUuid);
@@ -630,6 +632,7 @@ function tick() {
         r.status = "terminating";
         r.runningSince = null;
         addEvent(r, "deleted", "stopped", "terminating");
+        lifecycleChanged = true;
         continue;
       }
     }
@@ -638,7 +641,7 @@ function tick() {
         (Date.now() - new Date(r.provisioningSince || r.createdAt).getTime()) /
         1000;
       const duration = provisioningSeconds(r, db.models);
-      if (age > duration) {
+      if (age >= duration) {
         r.status = "running";
         r.runningSince = new Date(
           new Date(r.provisioningSince || r.createdAt).getTime() +
@@ -650,10 +653,12 @@ function tick() {
         if (order) order.status = "completed";
         addEvent(r, "ready", "provisioning", "running");
         db.events[0].at = r.runningSince;
+        lifecycleChanged = true;
       }
     }
   }
   settleEips();
+  if (lifecycleChanged) persist();
 }
 function summary(
   region: string | null,
@@ -1740,6 +1745,78 @@ async function dispatch(request: Request) {
         )
         .sort((a, b) => b.at.localeCompare(a.at)),
     );
+  if (path === "/api/operations") {
+    const now = Date.now();
+    const operations = db.resources.flatMap((r) => {
+      const history = db.events.filter(
+        (event) => event.resourceUuid === r.resourceUuid,
+      );
+      const deletedEvent = history.find((event) => event.type === "deleted");
+      const readyEvent = history.find((event) => event.type === "ready");
+      const failedEvent = history.find((event) => event.type === "failed");
+      const creationCanceled = deletedEvent?.before === "provisioning";
+      const createStatus = creationCanceled
+        ? "canceled"
+        : r.status === "provisioning"
+          ? "processing"
+          : r.status === "error" || failedEvent
+            ? "failed"
+            : "succeeded";
+      const expectedReadyAt = new Date(
+        new Date(r.createdAt).getTime() +
+          provisioningSeconds(r, db.models) * 1000,
+      ).toISOString();
+      const createCompletedAt =
+        createStatus === "processing"
+          ? null
+          : creationCanceled
+            ? deletedEvent.at
+            : createStatus === "failed"
+              ? failedEvent?.at || r.stoppedAt || expectedReadyAt
+              : r.runningSince || readyEvent?.at || expectedReadyAt;
+      const rows = [
+        {
+          id: `create-${r.resourceUuid}`,
+          operation: "create",
+          status: createStatus,
+          startedAt: r.createdAt,
+          completedAt: createCompletedAt,
+        },
+      ];
+      if (r.deletedAt) {
+        const at = deletedEvent?.at || r.deletedAt;
+        rows.push({
+          id: `delete-${r.resourceUuid}`,
+          operation: "delete",
+          status: "succeeded",
+          startedAt: at,
+          completedAt: at,
+        });
+      }
+      return rows.map((operation) => {
+        const start = Date.parse(operation.startedAt);
+        const end = operation.completedAt
+          ? Date.parse(operation.completedAt)
+          : now;
+        return {
+          ...operation,
+          resourceUuid: r.resourceUuid,
+          displayId: r.displayId,
+          resourceName: r.name,
+          projectId: r.projectId,
+          projectName:
+            db.projects.find((project) => project.id === r.projectId)?.name ||
+            r.projectId,
+          region: r.region,
+          kind: r.kind,
+          elapsedSeconds: Math.max(0, Math.floor((end - start) / 1000)),
+        };
+      });
+    });
+    return json(
+      operations.sort((a, b) => b.startedAt.localeCompare(a.startedAt)),
+    );
+  }
   if (path === "/api/notifications") {
     const items: {
       id: string;
@@ -1959,11 +2036,19 @@ async function dispatch(request: Request) {
                     1000,
               ),
             ),
+            overallProgress: Math.round(progress * 100),
             status: r.deletedAt
               ? "skipped"
-              : i / names.length < progress
+              : r.status === "running" ||
+                  i < Math.floor(progress * names.length)
                 ? "success"
-                : "pending",
+                : i ===
+                    Math.min(
+                      names.length - 1,
+                      Math.floor(progress * names.length),
+                    )
+                  ? "in_progress"
+                  : "pending",
           })),
         );
       }

@@ -18,6 +18,9 @@ export default {
   "nav.quotas": "Quotas",
   "nav.cost": "Cost analysis",
   "nav.tickets": "Support tickets",
+  "nav.operation-logs": "Operation logs",
+  "pageDescription.operationLogs":
+    "Review resource creation, deployment and deletion task status, duration and project scope.",
   "nav.notebooks": "Notebook / IDE",
   "nav.images": "Images & models",
   "nav.apps": "AI applications",
@@ -31,6 +34,17 @@ export default {
   "nav.pipelines": "Data pipelines",
   "nav.bills": "My bills",
   "nav.vouchers": "Vouchers",
+  "operation.action": "Action",
+  "operation.create": "Create resource",
+  "operation.delete": "Delete resource",
+  "operation.resource": "Resource",
+  "operation.startedAt": "Started",
+  "operation.elapsed": "Duration",
+  "operation.empty": "No resource creation or deletion tasks",
+  "operation.status.processing": "In progress",
+  "operation.status.succeeded": "Completed",
+  "operation.status.failed": "Failed",
+  "operation.status.canceled": "Canceled",
   "pageDescription.sshKeys":
     "Import and manage public keys for GPU cloud server SSH access. Keys are stored in this browser only.",
   "pageDescription.resources.gpu_vm":
@@ -481,6 +495,10 @@ export default {
   "wizard.context": "Context length · 4096–1048576",
   "wizard.memoryRequired":
     "Estimated memory per replica {required} GB / selected capacity {capacity} GB",
+  "wizard.memoryNeededLabel": "Estimated VRAM required",
+  "wizard.memoryAvailableLabel": "Current VRAM · {gpu} GPUs",
+  "wizard.memoryShortfall":
+    "VRAM is short by {shortfall} GB: deployment needs {required} GB, current capacity is {capacity} GB.",
   "wizard.memoryError":
     "Insufficient VRAM. Increase tensor parallel GPUs or use a smaller precision.",
   "wizard.review": "Review configuration and cost before creating",

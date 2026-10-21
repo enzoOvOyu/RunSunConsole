@@ -870,3 +870,26 @@
     justify-self: start;
   }
 }
+
+.overview-panel,
+.overview-stat-card,
+.overview-distribution-region,
+.overview-health-tile,
+.overview-quota-region {
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+
+.overview-panel:hover,
+.overview-stat-card:hover,
+.overview-distribution-region:hover,
+.overview-health-tile:hover,
+.overview-quota-region:hover {
+  border-color: color-mix(in srgb, var(--rs-brand) 42%, var(--rs-border));
+  background-color: color-mix(in srgb, var(--rs-brand-soft) 28%, var(--rs-bg));
+  box-shadow: var(--rs-shadow-sm);
+  transform: translateY(-1px);
+}

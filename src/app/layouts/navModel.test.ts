@@ -12,13 +12,14 @@ it("assigns distinct semantic submenu icons through the shared navigation model"
       true,
     );
   }
-  expect(groups.find((g) => g.id === "workbench")?.items.map((i) => i.id)).toContain(
-    "ssh-keys",
-  );
+  expect(
+    groups.find((g) => g.id === "workbench")?.items.map((i) => i.id),
+  ).toContain("ssh-keys");
   expect(groups.find((g) => g.id === "ops")?.items.map((i) => i.id)).toEqual([
     "projects",
     "quotas",
     "tickets",
+    "operation-logs",
   ]);
   expect(
     groups.find((g) => g.id === "billing")?.items.map((i) => i.id),

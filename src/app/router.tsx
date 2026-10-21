@@ -156,6 +156,14 @@ export const router = createBrowserRouter([
         }),
       },
       {
+        path: "ops/operation-logs",
+        lazy: async () => ({
+          Component: withLocale(
+            (await import("../features/ops/OperationLogsPage")).default,
+          ),
+        }),
+      },
+      {
         path: "workbench/notebooks",
         lazy: async () => ({
           Component: withLocale(

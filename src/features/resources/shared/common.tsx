@@ -261,7 +261,11 @@ export function EventsPanel({ resource: r }: { resource: Resource }) {
             : e.type === "NODE_UNCORDONED"
               ? t("cluster.nodeUncordonedEvent", { node: e.reason })
               : e.type === "NODE_POOL_RESIZED"
-                ? t("cluster.nodePoolResizedEvent", { pool: poolDisplayName(e.reason), before: e.before, after: e.after })
+                ? t("cluster.nodePoolResizedEvent", {
+                    pool: poolDisplayName(e.reason),
+                    before: e.before,
+                    after: e.after,
+                  })
                 : dt(e.reason),
         action:
           e.action === "NODE_CORDONED"
@@ -670,7 +674,13 @@ export function SpecPanel({ resource: r }: { resource: Resource }) {
 }
 export function Provisioning({ resource: r }: { resource: Resource }) {
   const steps = useData<
-    { name: string; status: string; durationS?: number; etaS?: number }[]
+    {
+      name: string;
+      status: string;
+      durationS?: number;
+      etaS?: number;
+      overallProgress?: number;
+    }[]
   >(["steps", r.resourceUuid], `${EP.resources}/${r.resourceUuid}/steps`, {
     poll: r.status === "provisioning",
   });
@@ -684,15 +694,26 @@ export function Provisioning({ resource: r }: { resource: Resource }) {
       </p>
       <Progress
         value={
+          steps.data?.[0]?.overallProgress ??
           ((steps.data?.filter((s) => s.status === "success").length || 0) /
             (steps.data?.length || 1)) *
-          100
+            100
         }
       />
       <div className="row" style={{ marginTop: 12 }}>
         {steps.data?.map((s) => (
           <span className="chip" key={s.name}>
-            {s.status === "success" ? "✓" : "○"} {t("provisioning." + s.name)}
+            {s.status === "success" ? (
+              "✓"
+            ) : s.status === "in_progress" ? (
+              <span
+                className="status-light"
+                aria-label={t("common.provisioning")}
+              />
+            ) : (
+              "○"
+            )}{" "}
+            {t("provisioning." + s.name)}
           </span>
         ))}
       </div>

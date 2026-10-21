@@ -431,26 +431,56 @@ function InferenceForm({ step, pools, models }: FormContext) {
       <p className="notice">
         {t("wizard.gpuPerReplicaSummary", { count: spec.gpuPerReplica })}
       </p>
-      <p
-        className={
-          memory.isError || (required !== undefined && required > capacity)
-            ? "field-error"
-            : "notice"
-        }
-      >
-        {memory.isError
-          ? t("wizard.memoryCheckFailed")
-          : !selectedModel
-            ? t("wizard.textModelRequired")
-            : required === undefined
-              ? t("wizard.memoryChecking")
-              : required > capacity
-                ? t("wizard.memoryError")
-                : t("wizard.memoryRequired", {
-                    required: required.toFixed(1),
-                    capacity,
-                  })}
-      </p>
+      {memory.isError ? (
+        <p className="field-error">{t("wizard.memoryCheckFailed")}</p>
+      ) : !selectedModel ? (
+        <p className="field-error">{t("wizard.textModelRequired")}</p>
+      ) : required === undefined ? (
+        <p className="notice">{t("wizard.memoryChecking")}</p>
+      ) : (
+        <div
+          className={`inference-memory-card ${required > capacity ? "insufficient" : ""}`}
+          role="status"
+          aria-live="polite"
+        >
+          <div className="between">
+            <span>{t("wizard.memoryNeededLabel")}</span>
+            <strong>{required.toFixed(1)} GB</strong>
+          </div>
+          <div className="inference-memory-track" aria-hidden="true">
+            <span
+              className="inference-memory-fill"
+              style={{
+                width: `${Math.min(100, (capacity / Math.max(required, 0.1)) * 100)}%`,
+              }}
+            />
+          </div>
+          <div className="between">
+            <span>
+              {t("wizard.memoryAvailableLabel", {
+                gpu: spec.gpuPerReplica,
+              })}
+            </span>
+            <strong>{capacity.toLocaleString()} GB</strong>
+          </div>
+          {required > capacity ? (
+            <p className="field-error">
+              {t("wizard.memoryShortfall", {
+                required: required.toFixed(1),
+                capacity,
+                shortfall: (required - capacity).toFixed(1),
+              })}
+            </p>
+          ) : (
+            <small className="muted">
+              {t("wizard.memoryRequired", {
+                required: required.toFixed(1),
+                capacity,
+              })}
+            </small>
+          )}
+        </div>
+      )}
       <ScalingToggle kind="inference" />
     </div>
   ) : step === 3 ? (
