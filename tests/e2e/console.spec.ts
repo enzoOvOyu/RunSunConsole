@@ -519,10 +519,14 @@ test("overview uses regional allocations and realistic separate memory quotas", 
   ).toHaveCount(0);
   await expect(page.locator(".overview-stats")).not.toContainText("运行中资源");
   const matrix = page.locator(".overview-distribution");
-  await expect(matrix.locator("tbody tr")).toHaveCount(4);
-  await expect(matrix.locator("th").filter({ hasText: "日本" })).toBeVisible();
-  await expect(matrix).toContainText("14 台设备");
-  await expect(matrix).toContainText("128 GPU");
+  await expect(matrix.locator(".overview-distribution-region")).toHaveCount(3);
+  await expect(
+    matrix.locator(".overview-distribution-region").first(),
+  ).toContainText("日本");
+  await expect(matrix.locator(".overview-distribution-resource")).toHaveCount(
+    12,
+  );
+  await expect(matrix).toContainText("台设备");
   await expect(page.getByText("主机内存 GB", { exact: true })).toHaveCount(3);
   await expect(page.getByText("块存储 · TB", { exact: true })).toHaveCount(3);
   await expect(page.getByText("文件存储 · TB", { exact: true })).toHaveCount(3);
@@ -530,7 +534,12 @@ test("overview uses regional allocations and realistic separate memory quotas", 
   await page.getByRole("button", { name: "自定义模块", exact: true }).click();
   await expect(page.getByRole("dialog")).not.toContainText("区域分布");
   await page.keyboard.press("Escape");
-  await matrix.locator("tbody tr").nth(1).locator("button").first().click();
+  await matrix
+    .locator(".overview-distribution-region")
+    .first()
+    .locator("button")
+    .nth(1)
+    .click();
   await expect(page).toHaveURL(/resources\/baremetal\?region=jp/);
 });
 test("deployment estimates remain beside the form on laptop and desktop screens", async ({

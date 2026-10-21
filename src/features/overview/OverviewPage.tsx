@@ -71,6 +71,7 @@ import {
   CardHeader,
   CardTitle,
 } from "../../components/ui/card";
+import { Button as UiButton } from "../../components/ui/button";
 import {
   Select,
   SelectContent,
@@ -272,10 +273,6 @@ export default function OverviewPage() {
     .sort((a, b) => b.amount - a.amount);
   const spendTotal = spendMix.reduce((total, row) => total + row.amount, 0);
   const hoveredSpend = spendMix.find((item) => item.kind === hoveredSpendKind);
-  const largestDistributionCell = Math.max(
-    1,
-    ...data.distribution.map((cell) => cell.gpuCount),
-  );
   const recentResources = data.resources
     .slice()
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
@@ -872,108 +869,78 @@ export default function OverviewPage() {
             icon={LayoutGrid}
             hint={t("overview.matrixScope")}
           >
-            <div className="table-wrap overview-distribution">
-              <table>
-                <thead>
-                  <tr>
-                    <th>{t("common.type")}</th>
-                    {REGIONS.map((region) => (
-                      <th key={region}>
-                        {t("common." + region)} · {region.toUpperCase()}
-                      </th>
-                    ))}
-                    <th>{t("overview.gpuTotal")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {KINDS.map((kind) => {
-                    const Icon = KIND_META[kind].icon;
-                    return (
-                      <tr key={kind}>
-                        <td>
-                          <span className="row">
-                            <Icon
-                              size={16}
-                              style={{ color: KIND_META[kind].color }}
-                            />
-                            {t("common." + kind)}
+            <div className="overview-distribution">
+              {REGIONS.map((region) => (
+                <Card className="overview-distribution-region" key={region}>
+                  <CardHeader>
+                    <div className="overview-distribution-region-heading">
+                      <span className="overview-distribution-code">
+                        {region.toUpperCase()}
+                      </span>
+                      <div>
+                        <CardTitle>{t("common." + region)}</CardTitle>
+                        <CardDescription>
+                          {t("overview.allocated")}
+                        </CardDescription>
+                      </div>
+                    </div>
+                    <div className="overview-distribution-region-total">
+                      <strong>{number(gpuRegionTotals[region])}</strong>
+                      <span>GPU</span>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {KINDS.map((kind) => {
+                      const cell = data.distribution.find(
+                        (item) => item.kind === kind && item.region === region,
+                      );
+                      const Icon = KIND_META[kind].icon;
+                      return (
+                        <UiButton
+                          key={kind}
+                          type="button"
+                          variant="ghost"
+                          className="overview-distribution-resource"
+                          disabled={!cell?.unitCount}
+                          onClick={() =>
+                            navigate(
+                              `/resources/${KIND_META[kind].routeKey}?region=${region}`,
+                            )
+                          }
+                        >
+                          <span
+                            className="overview-distribution-icon"
+                            style={{ color: KIND_META[kind].color }}
+                          >
+                            <Icon size={18} aria-hidden="true" />
                           </span>
-                        </td>
-                        {REGIONS.map((region) => {
-                          const cell = data.distribution.find(
-                            (d) => d.kind === kind && d.region === region,
-                          );
-                          return (
-                            <td key={region}>
-                              {cell?.unitCount ? (
-                                <button
-                                  type="button"
-                                  className="distribution-cell"
-                                  onClick={() =>
-                                    navigate(
-                                      `/resources/${KIND_META[kind].routeKey}?region=${region}`,
-                                    )
-                                  }
-                                >
-                                  <strong className="mono">
-                                    {number(cell.gpuCount)} <small>GPU</small>
-                                  </strong>
-                                  <span
-                                    className="overview-distribution-track"
-                                    aria-hidden="true"
-                                  >
-                                    <span
-                                      style={{
-                                        width: `${(cell.gpuCount / largestDistributionCell) * 100}%`,
-                                        background: KIND_META[kind].color,
-                                      }}
-                                    />
-                                  </span>
-                                  <small>
-                                    {t("overview.units." + kind, {
-                                      count: number(cell.unitCount),
-                                    })}
-                                    {kind === "vgpu"
-                                      ? " · " +
-                                        t("overview.nodes", {
-                                          count: number(cell.nodeCount),
-                                        })
-                                      : ""}
-                                  </small>
-                                </button>
-                              ) : (
-                                <span className="muted">—</span>
-                              )}
-                            </td>
-                          );
-                        })}
-                        <td className="mono">
-                          {number(
-                            data.distribution
-                              .filter((d) => d.kind === kind)
-                              .reduce((n, d) => n + d.gpuCount, 0),
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <th>{t("overview.gpuTotal")}</th>
-                    {REGIONS.map((region) => (
-                      <td key={region} className="mono">
-                        {number(
-                          data.distribution
-                            .filter((d) => d.region === region)
-                            .reduce((n, d) => n + d.gpuCount, 0),
-                        )}
-                      </td>
-                    ))}
-                    <td className="mono">{number(data.allocated)}</td>
-                  </tr>
-                </tfoot>
-              </table>
+                          <span className="overview-distribution-resource-copy">
+                            <strong>{t("common." + kind)}</strong>
+                            <small>
+                              {t("overview.units." + kind, {
+                                count: number(cell?.unitCount ?? 0),
+                              })}
+                              {kind === "vgpu" && cell?.nodeCount
+                                ? " · " +
+                                  t("overview.nodes", {
+                                    count: number(cell.nodeCount),
+                                  })
+                                : ""}
+                            </small>
+                          </span>
+                          <span className="overview-distribution-resource-gpu">
+                            <strong>{number(cell?.gpuCount ?? 0)}</strong>
+                            <small>GPU</small>
+                          </span>
+                          {cell?.unitCount ? (
+                            <ArrowUpRight size={15} aria-hidden="true" />
+                          ) : null}
+                        </UiButton>
+                      );
+                    })}
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           </OverviewPanel>
         )}

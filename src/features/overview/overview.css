@@ -305,6 +305,161 @@
   white-space: nowrap;
 }
 
+.overview-distribution {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.overview-distribution-region {
+  min-width: 0;
+  overflow: hidden;
+  border-color: var(--rs-border);
+  background: var(--rs-surface);
+  box-shadow: none;
+}
+
+.overview-distribution-region > [data-slot="card-header"] {
+  gap: 12px;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid var(--rs-border);
+}
+
+.overview-distribution-region-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.overview-distribution-code {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  place-items: center;
+  border: 1px solid var(--rs-border);
+  border-radius: var(--rs-r-md);
+  background: var(--rs-bg);
+  color: var(--rs-text-secondary);
+  font-size: var(--rs-fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.overview-distribution-region-heading [data-slot="card-title"] {
+  overflow: hidden;
+  font-size: var(--rs-fs-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overview-distribution-region-heading [data-slot="card-description"] {
+  margin-top: 4px;
+  font-size: var(--rs-fs-xs);
+}
+
+.overview-distribution-region-total {
+  display: grid;
+  justify-items: end;
+  flex: 0 0 auto;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.overview-distribution-region-total strong {
+  color: var(--rs-text);
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.overview-distribution-region-total span {
+  color: var(--rs-text-secondary);
+  font-size: var(--rs-fs-xs);
+}
+
+.overview-distribution-region > [data-slot="card-content"] {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+}
+
+.overview-distribution-resource {
+  width: 100%;
+  height: 72px;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid transparent;
+  text-align: left;
+}
+
+.overview-distribution-resource:hover {
+  border-color: var(--rs-border);
+}
+
+.overview-distribution-resource:disabled {
+  opacity: 0.6;
+}
+
+.overview-distribution-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  border: 1px solid var(--rs-border);
+  border-radius: var(--rs-r-md);
+  background: var(--rs-bg);
+}
+
+.overview-distribution-resource-copy {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.overview-distribution-resource-copy strong {
+  overflow: hidden;
+  color: var(--rs-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overview-distribution-resource-copy small {
+  overflow: hidden;
+  color: var(--rs-text-secondary);
+  font-size: var(--rs-fs-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overview-distribution-resource-gpu {
+  display: grid;
+  justify-items: end;
+  flex: 0 0 auto;
+  gap: 2px;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.overview-distribution-resource-gpu strong {
+  color: var(--rs-text);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.overview-distribution-resource-gpu small {
+  color: var(--rs-text-secondary);
+  font-size: var(--rs-fs-xs);
+}
+
+.overview-distribution-resource > svg {
+  color: var(--rs-text-muted);
+}
+
 .overview-operations > .overview-panel > [data-slot="card-content"] {
   display: flex;
   flex: 1;
@@ -488,25 +643,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.overview-distribution .distribution-cell {
-  width: 100%;
-  max-width: 190px;
-}
-
-.overview-distribution-track {
-  width: 100%;
-  height: 5px;
-  overflow: hidden;
-  border-radius: var(--rs-r-pill);
-  background: var(--rs-surface-2);
-}
-
-.overview-distribution-track > span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-}
-
 .overview-insights > .overview-panel > [data-slot="card-content"] {
   flex: 1;
 }
@@ -651,6 +787,14 @@
 }
 
 @media (width <= 1250px) {
+  .overview-distribution {
+    grid-template-columns: 1fr;
+  }
+
+  .overview-distribution-region > [data-slot="card-content"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .overview-quota-regions {
     grid-template-columns: 1fr;
   }
@@ -667,6 +811,10 @@
 }
 
 @media (width <= 720px) {
+  .overview-distribution-region > [data-slot="card-content"] {
+    grid-template-columns: 1fr;
+  }
+
   .overview-spend-layout {
     grid-template-columns: 1fr;
     justify-items: center;
