@@ -3,6 +3,7 @@ import { lazy, Suspense, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Cpu,
+  Layers3,
   Wallet,
   TrendingUp,
   Settings2,
@@ -277,7 +278,7 @@ export default function OverviewPage() {
           <CardHeader>
             <CardDescription>{t("overview.allocated")}</CardDescription>
             <CardAction className="overview-stat-icon">
-              <Cpu size={17} />
+              <Cpu size={18} strokeWidth={2} aria-hidden="true" />
             </CardAction>
           </CardHeader>
           <CardContent>
@@ -396,7 +397,14 @@ export default function OverviewPage() {
         {show("insights") && (
           <div className="grid grid-2 overview-insights">
             <OverviewPanel
-              title={t("overview.gpuModels")}
+              title={
+                <span className="overview-panel-title">
+                  <span className="overview-title-icon" aria-hidden="true">
+                    <Layers3 size={16} strokeWidth={2} />
+                  </span>
+                  {t("overview.gpuModels")}
+                </span>
+              }
               hint={t("overview.gpuModelsScope")}
               action={
                 <Link to="/deployment/server">

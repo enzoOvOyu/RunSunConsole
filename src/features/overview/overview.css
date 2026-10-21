@@ -9,6 +9,24 @@
   padding: var(--rs-s4) 20px 20px;
 }
 
+.overview-panel-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.overview-title-icon {
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--rs-brand) 22%, var(--rs-border));
+  border-radius: var(--rs-r-md);
+  background: var(--rs-brand-soft);
+  color: var(--rs-brand-strong);
+}
+
 .overview-panel-heading {
   display: grid;
   gap: 3px;
