@@ -580,15 +580,17 @@ export function ProjectDetail() {
               disabled={!canManageOrg(role) || !!p.deletedAt || p.isDefault}
               onClick={async () => {
                 if (
-                  !(await confirmAction(t("common.delete") + " " + dt(p.name)))
+                  !(await confirmAction(
+                    t("common.delete") + " " + dt(p.name),
+                    p.id,
+                  ))
                 )
                   return;
-                try {
+                const deleted = await run(async () => {
                   await remove(`${EP.projects}/${p.id}`);
-                  navigate("/ops/projects");
-                } catch {
-                  await run(() => remove(`${EP.projects}/${p.id}`));
-                }
+                  return true;
+                }, "success.deleted");
+                if (deleted) navigate("/ops/projects");
               }}
             >
               {t("common.delete")}
