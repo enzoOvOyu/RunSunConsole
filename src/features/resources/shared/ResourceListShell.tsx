@@ -32,6 +32,7 @@ import {
   Field,
   toast,
 } from "../../../components/ui";
+import { Checkbox } from "../../../components/ui/checkbox";
 import { ResourceDrawer } from "./ResourceDrawer";
 export function ResourceName({ resource: r }: { resource: Resource }) {
   return (
@@ -131,27 +132,33 @@ export function ResourceListShell<K extends Kind>({
     );
   const checkbox: ColumnDef<Extract<Resource, { kind: K }>> = {
     id: "select",
+    enableSorting: false,
     header: () => (
-      <input
+      <Checkbox
         aria-label={t("common.all")}
-        type="checkbox"
-        checked={!!shown.length && selected.length === shown.length}
-        onChange={(e) =>
+        checked={
+          shown.length > 0 &&
+          shown.every((resource) => selected.includes(resource.resourceUuid))
+            ? true
+            : shown.some((resource) => selected.includes(resource.resourceUuid))
+              ? "indeterminate"
+              : false
+        }
+        onCheckedChange={(checked) =>
           setSelected(
-            e.target.checked
-              ? shown.slice(0, 20).map((r) => r.resourceUuid)
+            checked === true
+              ? shown.map((resource) => resource.resourceUuid)
               : [],
           )
         }
       />
     ),
     cell: ({ row }) => (
-      <input
+      <Checkbox
         aria-label={row.original.displayId}
-        type="checkbox"
         checked={selected.includes(row.original.resourceUuid)}
-        onClick={(e) => e.stopPropagation()}
-        onChange={() => toggle(row.original.resourceUuid)}
+        onClick={(event) => event.stopPropagation()}
+        onCheckedChange={() => toggle(row.original.resourceUuid)}
       />
     ),
   };

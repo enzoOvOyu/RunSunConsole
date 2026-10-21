@@ -400,13 +400,14 @@ export function DataTable<T>({
               <TableRow key={g.id}>
                 {g.headers.map((h) => (
                   <TableHead key={h.id}>
-                    <button
-                      onClick={h.column.getToggleSortingHandler()}
-                      disabled={!h.column.getCanSort()}
-                    >
-                      {flexRender(h.column.columnDef.header, h.getContext())}
-                      {h.column.getCanSort() && <ArrowUpDown size={11} />}
-                    </button>
+                    {h.column.getCanSort() ? (
+                      <button onClick={h.column.getToggleSortingHandler()}>
+                        {flexRender(h.column.columnDef.header, h.getContext())}
+                        <ArrowUpDown size={11} />
+                      </button>
+                    ) : (
+                      flexRender(h.column.columnDef.header, h.getContext())
+                    )}
                   </TableHead>
                 ))}
               </TableRow>
