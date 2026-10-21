@@ -16,7 +16,6 @@ import {
   Field,
   Loading,
   ErrorState,
-  Progress,
 } from "../../components/ui";
 import { BillingUsageTable } from "./BillingTables";
 const TrendChart = lazy(() => import("../../components/charts/TrendChart"));
@@ -95,23 +94,19 @@ export default function CostPage() {
       ) : (
         <div className="stack">
           <div className="grid grid-3">
-            <Panel title={t("common.mtd")}>
+            <Panel title={t("common.mtd")} className="cost-metric-card">
               <div className="stat-value">{money(summary.data.month)}</div>
-              <small>
+              <small className="cost-metric-note">
                 {t("common." + region)} · {period}
               </small>
             </Panel>
-            <Panel title={t("common.today")}>
+            <Panel title={t("common.today")} className="cost-metric-card">
               <div className="stat-value">{money(summary.data.today)}</div>
-              <small>UTC</small>
+              <small className="cost-metric-note">UTC</small>
             </Panel>
-            <Panel title={t("common.budget")}>
-              <div className="stat-value">
-                {money(account.data?.budget || 0)}
-              </div>
-              <Progress
-                value={(summary.data.month / (account.data?.budget || 1)) * 100}
-              />
+            <Panel title={t("billing.dimensions")} className="cost-metric-card">
+              <div className="stat-value">{usage.data?.length ?? 0}</div>
+              <small className="cost-metric-note">{t("billing.dimension.resource")}</small>
             </Panel>
           </div>
           <Panel title={t("overview.trend")}>
@@ -169,8 +164,8 @@ export default function CostPage() {
               </table>
             </div>
           </Panel>
-          <Panel title={t("common.budget")}>
-            <div className="row">
+          <Panel title={t("common.budget")} hint={t("billing.setBudget")} className="budget-settings-card">
+            <div className="budget-settings-form">
               <Field label={t("common.budget") + " · USD"}>
                 <input
                   className="input"

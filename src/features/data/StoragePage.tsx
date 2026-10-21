@@ -138,20 +138,23 @@ export default function StoragePage() {
           </Button>
         }
       />
-      <div className="grid grid-3">
-        <Panel title={t("storage.bucketCount")}>
-          <strong>{q.data?.length ?? "—"}</strong>
+      <div className="grid grid-3 resource-summary-grid">
+        <Panel title={t("storage.bucketCount")} className="resource-summary-card">
+          <div className="resource-summary-value">{q.data?.length ?? "—"}</div>
+          <small>{t("nav.object")}</small>
         </Panel>
-        <Panel title={t("storage.allocatedCapacity")}>
-          <strong>{objectQuota?.usedGb.toLocaleString() || "—"} GB</strong>
+        <Panel title={t("storage.allocatedCapacity")} className="resource-summary-card">
+          <div className="resource-summary-value">{objectQuota?.usedGb.toLocaleString() || "—"}<span className="resource-unit">GB</span></div>
+          <small>{t("storage.allocatedCapacity")}</small>
         </Panel>
-        <Panel title={t("storage.availableCapacity")}>
-          <strong>
-            {objectQuota
-              ? (objectQuota.limitGb - objectQuota.usedGb).toLocaleString()
-              : "—"}{" "}
-            GB
-          </strong>
+        <Panel title={t("storage.availableCapacity")} className="resource-summary-card">
+          <div className="resource-summary-value">
+            {objectQuota ? (objectQuota.limitGb - objectQuota.usedGb).toLocaleString() : "—"}<span className="resource-unit">GB</span>
+          </div>
+          {objectQuota && <div className="resource-summary-progress">
+            <Progress value={(objectQuota.usedGb / objectQuota.limitGb) * 100} />
+            <small>{objectQuota.usedGb.toLocaleString()} / {objectQuota.limitGb.toLocaleString()} GB</small>
+          </div>}
         </Panel>
       </div>
       <div className="toolbar">

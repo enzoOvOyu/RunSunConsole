@@ -105,23 +105,23 @@ export default function VolumePage() {
           </Button>
         }
       />
-      <div className="grid grid-3">
-        <Panel title={t("storage.volumeList")}>
-          <strong>{rows.length}</strong>
+      <div className="grid grid-3 resource-summary-grid">
+        <Panel title={t("storage.volumeList")} className="resource-summary-card">
+          <div className="resource-summary-value">{rows.length}</div>
+          <small>{t("storage.kind." + kind)}</small>
         </Panel>
-        <Panel title={t("storage.allocatedCapacity")}>
-          <strong>{capacity?.usedGb.toLocaleString() || "—"} GB</strong>
+        <Panel title={t("storage.allocatedCapacity")} className="resource-summary-card">
+          <div className="resource-summary-value">{capacity?.usedGb.toLocaleString() || "—"}<span className="resource-unit">GB</span></div>
+          <small>{t("storage.allocatedCapacity")}</small>
         </Panel>
-        <Panel title={t("storage.availableCapacity")}>
-          <strong>
-            {capacity
-              ? (capacity.limitGb - capacity.usedGb).toLocaleString()
-              : "—"}{" "}
-            GB
-          </strong>
-          {capacity && (
+        <Panel title={t("storage.availableCapacity")} className="resource-summary-card">
+          <div className="resource-summary-value">
+            {capacity ? (capacity.limitGb - capacity.usedGb).toLocaleString() : "—"}<span className="resource-unit">GB</span>
+          </div>
+          {capacity && <div className="resource-summary-progress">
             <Progress value={(capacity.usedGb / capacity.limitGb) * 100} />
-          )}
+            <small>{capacity.usedGb.toLocaleString()} / {capacity.limitGb.toLocaleString()} GB</small>
+          </div>}
         </Panel>
       </div>
       <div className="toolbar">
