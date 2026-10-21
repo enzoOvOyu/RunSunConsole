@@ -53,8 +53,19 @@ function InferenceForm({ step, pools, models }: FormContext) {
   const selectedPool = form.watch("nodePool");
   const pool = pools.find((item) => item.code === selectedPool) || pools[0];
   const precisions = useMemo(
-    () => (model ? compatiblePrecisions(model, selectedPool, spec.engine) : []),
-    [model, selectedPool, spec.engine],
+    () =>
+      model
+        ? model.quantizations.filter((precision) =>
+            pools.some(
+              (item) =>
+                item.available &&
+                compatiblePrecisions(model, item.code, spec.engine).includes(
+                  precision,
+                ),
+            ),
+          )
+        : [],
+    [model, pools, spec.engine],
   );
   const [autoNotice, setAutoNotice] = useState("");
   const memory = useQuery({
@@ -82,17 +93,32 @@ function InferenceForm({ step, pools, models }: FormContext) {
   const capacity = (pool?.memoryGb || 0) * spec.gpuPerReplica;
   const precisionOptions = (
     nextModel: (typeof textModels)[number],
-    nextPool = selectedPool,
     nextEngine = spec.engine,
-  ) => compatiblePrecisions(nextModel, nextPool, nextEngine);
+    nextPool?: string,
+  ) =>
+    nextPool
+      ? compatiblePrecisions(
+          nextModel,
+          nextPool as typeof selectedPool,
+          nextEngine,
+        )
+      : nextModel.quantizations.filter((precision) =>
+          pools.some(
+            (item) =>
+              item.available &&
+              compatiblePrecisions(nextModel, item.code, nextEngine).includes(
+                precision,
+              ),
+          ),
+        );
   const setDependencies = (
     patch: Partial<InferenceSpec>,
     nextModel = model,
-    nextPool = selectedPool,
+    nextPool: string | undefined = undefined,
     nextEngine = spec.engine,
   ) => {
     if (!nextModel) return;
-    const available = precisionOptions(nextModel, nextPool, nextEngine);
+    const available = precisionOptions(nextModel, nextEngine, nextPool);
     const nextPrecision = available.includes(
       patch.quantization || spec.quantization,
     )
@@ -136,7 +162,7 @@ function InferenceForm({ step, pools, models }: FormContext) {
   const { setError, clearErrors } = form;
   useEffect(() => {
     if (
-      step === 1 &&
+      step === 2 &&
       (!selectedModel || !required || required > capacity || memory.isError)
     ) {
       setError("spec", {
@@ -208,6 +234,7 @@ function InferenceForm({ step, pools, models }: FormContext) {
                           ),
                         },
                         nextModel,
+                        undefined,
                       );
                   }}
                 >
@@ -231,7 +258,7 @@ function InferenceForm({ step, pools, models }: FormContext) {
               <select
                 value={spec.engine}
                 onChange={(event) =>
-                  setDependencies({}, model, selectedPool, event.target.value)
+                  setDependencies({}, model, undefined, event.target.value)
                 }
               >
                 {["vllm", "sglang", "trt-llm"].map((engine) => (
@@ -287,50 +314,46 @@ function InferenceForm({ step, pools, models }: FormContext) {
         )}
         {autoNotice && <p className="notice">{autoNotice}</p>}
         <p className="notice">{t("wizard.precisionHint")}</p>
-        <div className="stack">
-          <strong>{t("wizard.gpuPool")}</strong>
-          <PoolCards
-            kind="inference"
-            pools={pools.map((item) => ({
-              ...item,
-              available:
-                item.available &&
-                (!required || item.memoryGb * spec.gpuPerReplica >= required) &&
-                !!model &&
-                compatiblePrecisions(model, item.code, spec.engine).length > 0,
-            }))}
-            selected={selectedPool}
-            onSelect={(item) => {
-              form.setValue("nodePool", item.code, { shouldDirty: true });
-              if (model) setDependencies({}, model, item.code);
-            }}
-          />
-        </div>
-        <p
-          className={
-            memory.isError || (required !== undefined && required > capacity)
-              ? "field-error"
-              : "notice"
-          }
-        >
-          {memory.isError
-            ? t("wizard.memoryCheckFailed")
-            : !selectedModel
-              ? t("wizard.textModelRequired")
-              : required === undefined
-                ? t("wizard.memoryChecking")
-                : required > capacity
-                  ? t("wizard.memoryError")
-                  : t("wizard.memoryRequired", {
-                      required: required.toFixed(1),
-                      capacity,
-                    })}
-        </p>
       </section>
     </div>
   ) : step === 2 ? (
     <div className="stack">
+      <strong>{t("wizard.gpuPool")}</strong>
+      <PoolCards
+        kind="inference"
+        pools={pools.map((item) => ({
+          ...item,
+          available:
+            item.available &&
+            !!model &&
+            item.memoryGb * 8 >= (required || 0) &&
+            compatiblePrecisions(model, item.code, spec.engine).length > 0,
+        }))}
+        selected={selectedPool}
+        onSelect={(item) => {
+          form.setValue("nodePool", item.code, { shouldDirty: true });
+          if (model) setDependencies({}, model, item.code);
+        }}
+      />
       <div className="form-grid">
+        <Field label={t("resource.gpu")}>
+          <select
+            value={spec.gpuPerReplica}
+            onChange={(event) => {
+              const gpuPerReplica = Number(event.target.value);
+              update({
+                gpuPerReplica,
+                gpuCount: gpuPerReplica * spec.replicas,
+              });
+            }}
+          >
+            {[1, 2, 4, 8].map((count) => (
+              <option key={count} value={count}>
+                {count} GPU
+              </option>
+            ))}
+          </select>
+        </Field>
         <Field label={t("resource.replicas") + " · 1–32"}>
           <input
             className="input"
@@ -338,16 +361,36 @@ function InferenceForm({ step, pools, models }: FormContext) {
             min={1}
             max={32}
             value={spec.replicas}
-            onChange={(e) => {
-              const replicas = Number(e.target.value);
+            onChange={(event) => {
+              const replicas = Number(event.target.value);
               update({ replicas, gpuCount: replicas * spec.gpuPerReplica });
             }}
           />
         </Field>
-        <div className="notice">
-          {t("wizard.gpuPerReplicaSummary", { count: spec.gpuPerReplica })}
-        </div>
       </div>
+      <p className="notice">
+        {t("wizard.gpuPerReplicaSummary", { count: spec.gpuPerReplica })}
+      </p>
+      <p
+        className={
+          memory.isError || (required !== undefined && required > capacity)
+            ? "field-error"
+            : "notice"
+        }
+      >
+        {memory.isError
+          ? t("wizard.memoryCheckFailed")
+          : !selectedModel
+            ? t("wizard.textModelRequired")
+            : required === undefined
+              ? t("wizard.memoryChecking")
+              : required > capacity
+                ? t("wizard.memoryError")
+                : t("wizard.memoryRequired", {
+                    required: required.toFixed(1),
+                    capacity,
+                  })}
+      </p>
       <ScalingToggle kind="inference" />
     </div>
   ) : step === 3 ? (
