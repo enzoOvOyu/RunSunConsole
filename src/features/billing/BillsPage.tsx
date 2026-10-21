@@ -40,7 +40,7 @@ export default function BillsPage() {
   );
   const invoices = useData<
     { id: string; period: string; status: string; amount: number }[]
-  >(["invoices"], EP.invoices);
+  >(["invoices", period], EP.invoices + query({ billing_period: period }));
   return (
     <>
       <PageHeader
@@ -80,7 +80,7 @@ export default function BillsPage() {
         </div>
       )}
       <div className="stack section-gap">
-        <BillingUsageTable usage={usage.data || []} />
+        <BillingUsageTable usage={usage.data || []} billingPeriod={period} />
         <Panel title={t("common.transactions")}>
           <TransactionTable rows={transactions.data || []} />
         </Panel>

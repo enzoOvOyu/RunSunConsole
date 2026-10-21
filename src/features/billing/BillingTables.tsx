@@ -29,9 +29,13 @@ export function aggregateUsage(rows: Usage[]) {
 export function BillingUsageTable({
   usage,
   title,
+  billingPeriod = new Date().toISOString().slice(0, 7),
+  region,
 }: {
   usage: Usage[];
   title?: string;
+  billingPeriod?: string;
+  region?: string | null;
 }) {
   const [id, setId] = useState("");
   const navigate = useNavigate();
@@ -40,8 +44,13 @@ export function BillingUsageTable({
     EP.resources + "?size=1000&includeDeleted=true",
   );
   const detail = useData<Usage[]>(
-    ["usage-detail", id],
-    EP.usage + query({ resource_id: id }),
+    ["usage-detail", id, billingPeriod, region],
+    EP.usage +
+      query({
+        resource_id: id,
+        billing_period: billingPeriod,
+        region,
+      }),
     { enabled: !!id },
   );
   const cols = [
@@ -91,8 +100,11 @@ export function BillingUsageTable({
           <Button
             onClick={() =>
               csv(
-                "billing-usage.csv",
-                usage as unknown as Record<string, unknown>[],
+                `billing-usage-${billingPeriod}.csv`,
+                usage.map((row) => ({
+                  ...row,
+                  billingPeriod,
+                })) as unknown as Record<string, unknown>[],
               )
             }
           >
@@ -135,13 +147,28 @@ export function BillingUsageTable({
           {detail.isPending ? (
             <Loading />
           ) : (
-            <DataTable
-              data={detail.data || []}
-              columns={[
-                { accessorKey: "usageHour", header: t("common.time") },
-                ...cols,
-              ]}
-            />
+            <>
+              <Button
+                onClick={() =>
+                  csv(
+                    `billing-usage-${billingPeriod}-${id}.csv`,
+                    (detail.data || []).map((row) => ({
+                      ...row,
+                      billingPeriod,
+                    })) as unknown as Record<string, unknown>[],
+                  )
+                }
+              >
+                {t("common.export")}
+              </Button>
+              <DataTable
+                data={detail.data || []}
+                columns={[
+                  { accessorKey: "usageHour", header: t("common.time") },
+                  ...cols,
+                ]}
+              />
+            </>
           )}
         </div>
       </Modal>

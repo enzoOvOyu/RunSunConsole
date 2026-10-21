@@ -698,8 +698,15 @@ function summary(
           (!projectId || e.projectId === projectId),
       )
       .reduce((n, e) => n + ipHourly(e.region), 0);
-  const dates = Array.from({ length: 30 }, (_, i) =>
-    new Date(Date.now() - (29 - i) * 86400000).toISOString().slice(0, 10),
+  const [year, monthOfPeriod] = billingPeriod.split("-").map(Number);
+  const daysInPeriod =
+    year && monthOfPeriod >= 1 && monthOfPeriod <= 12
+      ? new Date(Date.UTC(year, monthOfPeriod, 0)).getUTCDate()
+      : 0;
+  const dates = Array.from({ length: daysInPeriod }, (_, i) =>
+    new Date(Date.UTC(year, monthOfPeriod - 1, i + 1))
+      .toISOString()
+      .slice(0, 10),
   );
   const trend = dates.map((day) => ({
     date: day,
@@ -2842,7 +2849,10 @@ async function dispatch(request: Request) {
         .slice(0, 100),
     );
   if (path === "/api/billing/invoices") {
-    const periods = [...new Set(db.usage.map((u) => u.usageHour.slice(0, 7)))];
+    const selectedPeriod = qs.get("billing_period");
+    const periods = [
+      ...new Set(db.usage.map((u) => u.usageHour.slice(0, 7))),
+    ].filter((p) => !selectedPeriod || p === selectedPeriod);
     return json(
       periods.map((p) => ({
         id: `invoice-${p}`,

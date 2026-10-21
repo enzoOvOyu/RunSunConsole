@@ -7,12 +7,7 @@ import { useData } from "../shared/hooks";
 import { RegionFilter } from "../shared/RegionFilter";
 import { t, dt } from "../../i18n";
 import { money } from "../../lib/money";
-import {
-  PageHeader,
-  Panel,
-  Loading,
-  ErrorState,
-} from "../../components/ui";
+import { PageHeader, Panel, Loading, ErrorState } from "../../components/ui";
 import { BillingUsageTable } from "./BillingTables";
 const TrendChart = lazy(() => import("../../components/charts/TrendChart"));
 export default function CostPage() {
@@ -36,6 +31,16 @@ export default function CostPage() {
     EP.usage + query({ region, billing_period: period }),
   );
   const projects = useData<Project[]>(["projects"], EP.projects);
+  const resourceCount = new Set(
+    (usage.data || []).map((row) => row.resourceUuid).filter(Boolean),
+  ).size;
+  const currentPeriod = period === new Date().toISOString().slice(0, 7);
+  const periodDays = (() => {
+    const [year, month] = period.split("-").map(Number);
+    return year && month >= 1 && month <= 12
+      ? new Date(Date.UTC(year, month, 0)).getUTCDate()
+      : 1;
+  })();
   const groups = new Map<string, Usage[]>();
   for (const u of usage.data || []) {
     const key =
@@ -50,10 +55,7 @@ export default function CostPage() {
   }
   return (
     <>
-      <PageHeader
-        title={t("nav.cost")}
-        subtitle={t("pageDescription.cost")}
-      />
+      <PageHeader title={t("nav.cost")} subtitle={t("pageDescription.cost")} />
       <div className="toolbar">
         <RegionFilter />
         <label className="row">
@@ -86,19 +88,38 @@ export default function CostPage() {
       ) : (
         <div className="stack">
           <div className="grid grid-3">
-            <Panel title={t("common.mtd")} className="cost-metric-card">
+            <Panel
+              title={t("billing.periodTotal")}
+              className="cost-metric-card"
+            >
               <div className="stat-value">{money(summary.data.month)}</div>
               <small className="cost-metric-note">
                 {t("common." + region)} · {period}
               </small>
             </Panel>
-            <Panel title={t("common.today")} className="cost-metric-card">
-              <div className="stat-value">{money(summary.data.today)}</div>
-              <small className="cost-metric-note">{t("billing.todayBasis")}</small>
+            <Panel
+              title={t(currentPeriod ? "common.today" : "billing.dailyAverage")}
+              className="cost-metric-card"
+            >
+              <div className="stat-value">
+                {money(
+                  currentPeriod
+                    ? summary.data.today
+                    : summary.data.month / periodDays,
+                )}
+              </div>
+              <small className="cost-metric-note">
+                {currentPeriod ? t("billing.todayBasis") : period}
+              </small>
             </Panel>
-            <Panel title={t("billing.dimensions")} className="cost-metric-card">
-              <div className="stat-value">{usage.data?.length ?? 0}</div>
-              <small className="cost-metric-note">{t("billing.dimension.resource")}</small>
+            <Panel
+              title={t("billing.resourceCount")}
+              className="cost-metric-card"
+            >
+              <div className="stat-value">{resourceCount}</div>
+              <small className="cost-metric-note">
+                {t("billing.distinctResourceBasis")}
+              </small>
             </Panel>
           </div>
           <Panel title={t("overview.trend")}>
@@ -113,7 +134,7 @@ export default function CostPage() {
                   <tr>
                     <th>{t("billing.dimension." + dimension)}</th>
                     <th>{t("common.amount")}</th>
-                    <th>{t("common.count")}</th>
+                    <th>{t("billing.resourceCount")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -139,13 +160,25 @@ export default function CostPage() {
                               : key}
                         </td>
                         <td>{money(rows.reduce((a, u) => a + u.amount, 0))}</td>
-                        <td>{rows.length}</td>
+                        <td>
+                          {
+                            new Set(
+                              rows
+                                .map((row) => row.resourceUuid)
+                                .filter(Boolean),
+                            ).size
+                          }
+                        </td>
                       </tr>
                       {expanded === key && (
                         <tr>
                           <td colSpan={3}>
                             <div className="inline-detail">
-                              <BillingUsageTable usage={rows} />
+                              <BillingUsageTable
+                                usage={rows}
+                                billingPeriod={period}
+                                region={region}
+                              />
                             </div>
                           </td>
                         </tr>
@@ -156,7 +189,6 @@ export default function CostPage() {
               </table>
             </div>
           </Panel>
-
         </div>
       )}
     </>
