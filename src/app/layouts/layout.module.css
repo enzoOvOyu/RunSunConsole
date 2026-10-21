@@ -84,7 +84,8 @@
 
 .groupButton:hover,
 .navLink:hover {
-  background: var(--rs-surface-2);
+  background: var(--rs-brand-soft);
+  color: var(--rs-brand-strong);
 }
 
 .groupButton svg:last-child {
@@ -96,8 +97,8 @@
 }
 
 .navLink.active {
-  background: var(--rs-surface-2);
-  color: var(--rs-text);
+  background: var(--rs-brand-soft);
+  color: var(--rs-brand-strong);
   font-weight: 600;
 }
 
