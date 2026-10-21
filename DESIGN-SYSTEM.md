@@ -29,7 +29,7 @@
 | `--rs-border`         | `#E3E8EF` | 描边/分割线    |
 | `--rs-text`           | `#0E1726` | 主文本（墨黑）   |
 | `--rs-text-secondary` | `#51607A` | 次级文本      |
-| `--rs-text-muted`     | `#8A94A6` | 占位/禁用     |
+| `--rs-text-muted`     | `#68778E` | 占位/禁用     |
 | `--rs-text-inverse`   | `#FFFFFF` | **渐变底上的文本**（消费点：§5.1 Button Primary） |
 
 ### 2.2 品牌（Sun）
@@ -112,7 +112,7 @@
   - 西文：`Inter, "Helvetica Neue", Arial, sans-serif`
   - 中文：`"PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif`
   - 等宽（代码/指标）：`"JetBrains Mono", ui-monospace, "SFMono-Regular", monospace`
-- **字号阶梯**（base=14px 工作台密度）：
+- **字号阶梯**（base=14px 工作台密度；代码以 `--rs-fs-*` 和对应的 `--rs-lh-*` 令牌统一使用）：
 
 | Token          | 字号  | 行高  | 典型      |
 | -------------- | --- | --- | ------- |
@@ -133,9 +133,9 @@
 ## 4. 栅格、间距与断点
 
 - **基线**：8pt 网格。间距 Token：`--rs-s1=4` `--rs-s2=8` `--rs-s3=12` `--rs-s4=16` `--rs-s5=24` `--rs-s6=32` `--rs-s7=40` `--rs-s8=48`。
-- **容器**：最大宽 1440，主内容 Padding 24；侧边栏宽 248（折叠 64）。
+- **容器**：最大宽 1440（`--rs-content-max`），主内容 Padding 24；侧边栏宽 248（折叠 64）。
 - **断点**：`sm 640` `md 768` `lg 1280` `xl 1536`。≥1280 双栏工作台；<1280 侧栏转抽屉。
-- **圆角**：`--rs-r-sm=6` `--rs-r-md=10` `--rs-r-lg=16` `--rs-r-pill=999`。
+- **圆角**：`--rs-r-sm=6` `--rs-r-md=8` `--rs-r-lg=12` `--rs-r-pill=999`。
 - **阴影/高程**：`--rs-shadow-sm`（卡片）`--rs-shadow-md`（悬浮/弹层）`--rs-shadow-lg`（抽屉/模态）；暗色下以边框+微光代替重阴影。
 
 ---
@@ -163,7 +163,7 @@
 
 ### 5.4 Table
 
-- 斑马纹可选（奇数行 `--rs-surface-2`）；表头 13/600/secondary；行高 44；排序/筛选在表头；支持 TanStack 虚拟滚动与列固定；空态插画 + 引导按钮。
+- 斑马纹可选（奇数行 `--rs-surface-2`）；表头 13/600/secondary；单行内容最小行高约 44、双行内容随内容增高；排序/筛选在表头；支持 TanStack 虚拟滚动与列固定；空态插画 + 引导按钮。
 
 ### 5.5 Tabs / Segmented
 
@@ -175,7 +175,7 @@
 
 ### 5.7 Input / Select / Search
 
-- 统一 34h，聚焦品牌描边 + 浅光环；Select 支持搜索；Search 支持高级筛选（Vast.ai 风格多条件）。
+- 统一 34h（`--rs-control-height`），键盘焦点使用品牌橙 `--rs-focus-ring`，聚焦品牌描边 + 浅光环；Select 支持搜索；Search 支持高级筛选（Vast.ai 风格多条件）。
 
 ### 5.8 Modal / Drawer
 

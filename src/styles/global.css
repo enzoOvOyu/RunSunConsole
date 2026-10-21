@@ -6,12 +6,10 @@ body {
   margin: 0;
   background: var(--rs-bg);
   color: var(--rs-text);
-  font:
-    14px/1.5 Inter,
-    "PingFang SC",
-    "Microsoft YaHei",
-    Arial,
-    sans-serif;
+  font-family: Inter, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", Arial, sans-serif;
+  font-size: var(--rs-fs-base);
+  line-height: var(--rs-lh-base);
+  -webkit-font-smoothing: antialiased;
 }
 
 button,
@@ -26,7 +24,7 @@ a,
 input,
 select,
 textarea {
-  outline-offset: 3px;
+  outline-offset: 2px;
 }
 
 *:focus-visible {
@@ -70,18 +68,21 @@ p {
 }
 
 h1 {
-  font-size: 24px;
-  line-height: 32px;
-  letter-spacing: -0.6px;
+  font-size: var(--rs-fs-2xl);
+  line-height: var(--rs-lh-2xl);
+  font-weight: 600;
+  letter-spacing: -0.025em;
 }
 
 h2 {
-  font-size: 16px;
+  font-size: var(--rs-fs-md);
+  line-height: var(--rs-lh-md);
   font-weight: 600;
 }
 
 h3 {
-  font-size: 14px;
+  font-size: var(--rs-fs-base);
+  line-height: var(--rs-lh-base);
   font-weight: 600;
 }
 
@@ -91,7 +92,8 @@ small,
 }
 
 small {
-  font-size: 12px;
+  font-size: var(--rs-fs-xs);
+  line-height: var(--rs-lh-xs);
 }
 
 .mono,
@@ -156,15 +158,17 @@ code {
   align-items: center;
   justify-content: center;
   gap: 7px;
-  padding: 8px 14px;
-  min-height: 36px;
+  padding: 6px 12px;
+  min-height: var(--rs-control-height);
   border: 1px solid var(--rs-border);
   border-radius: var(--rs-r-sm);
   background: var(--rs-bg);
   color: var(--rs-text);
-  font-size: 13px;
+  font-size: var(--rs-fs-sm);
+  line-height: var(--rs-lh-sm);
   font-weight: 500;
   white-space: nowrap;
+  transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
 }
 
 .btn:hover {
@@ -179,6 +183,7 @@ code {
 }
 
 .btn-primary:hover {
+  background: var(--rs-brand-gradient);
   filter: brightness(0.96);
 }
 
@@ -199,14 +204,14 @@ code {
 
 .panel {
   border: 1px solid var(--rs-border);
-  border-radius: var(--rs-r-md);
+  border-radius: var(--rs-r-lg);
   background: var(--rs-bg);
   box-shadow: var(--rs-shadow-sm);
   overflow: hidden;
 }
 
 .panel-head {
-  padding: 18px 20px;
+  padding: var(--rs-s4) 20px;
   border-bottom: 1px solid var(--rs-border);
   display: flex;
   align-items: center;
@@ -219,13 +224,13 @@ code {
 }
 
 .page {
-  max-width: 1440px;
+  max-width: var(--rs-content-max);
   margin: 0 auto;
-  padding: 28px 24px 48px;
+  padding: var(--rs-s5) var(--rs-s5) var(--rs-s8);
 }
 
 .page-header {
-  margin-bottom: 24px;
+  margin-bottom: var(--rs-s5);
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -234,9 +239,10 @@ code {
 }
 
 .page-header p {
-  margin-top: 5px;
+  margin-top: var(--rs-s1);
   color: var(--rs-text-secondary);
-  font-size: 13px;
+  font-size: var(--rs-fs-sm);
+  line-height: var(--rs-lh-sm);
 }
 
 .toolbar {
@@ -254,9 +260,10 @@ textarea {
   background: var(--rs-bg);
   color: var(--rs-text);
   padding: 8px 11px;
-  border-radius: 6px;
-  min-height: 36px;
+  border-radius: var(--rs-r-sm);
+  min-height: var(--rs-control-height);
   max-width: 100%;
+  line-height: var(--rs-lh-sm);
 }
 
 .input {
@@ -275,9 +282,11 @@ textarea {
 label.field {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  font-size: 13px;
-  color: var(--rs-text-secondary);
+  gap: var(--rs-s2);
+  min-width: 0;
+  font-size: var(--rs-fs-sm);
+  line-height: var(--rs-lh-sm);
+  color: var(--rs-text);
 }
 
 .check input {
@@ -307,9 +316,11 @@ label.field select {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 12px;
+  font-size: var(--rs-fs-xs);
+  line-height: var(--rs-lh-xs);
+  font-weight: 500;
   padding: 3px 8px;
-  border-radius: 5px;
+  border-radius: var(--rs-r-sm);
   background: var(--rs-surface-2);
   color: var(--rs-text-secondary);
   white-space: nowrap;
@@ -364,7 +375,8 @@ label.field select {
 }
 
 .stat-label {
-  font-size: 12px;
+  font-size: var(--rs-fs-sm);
+  line-height: var(--rs-lh-sm);
   color: var(--rs-text-secondary);
   display: flex;
   align-items: center;
@@ -373,15 +385,17 @@ label.field select {
 }
 
 .stat-value {
-  font-size: 28px;
-  font-weight: 600;
-  letter-spacing: -1px;
+  font-size: var(--rs-fs-3xl);
+  line-height: var(--rs-lh-3xl);
+  font-weight: 700;
+  letter-spacing: -0.035em;
   font-variant-numeric: tabular-nums;
   margin: 10px 0 3px;
 }
 
 .stat-note {
-  font-size: 11px;
+  font-size: var(--rs-fs-xs);
+  line-height: var(--rs-lh-xs);
   color: var(--rs-text-secondary);
 }
 
@@ -438,22 +452,24 @@ label.field select {
 table {
   border-collapse: collapse;
   width: 100%;
-  font-size: 13px;
+  font-size: var(--rs-fs-sm);
+  line-height: var(--rs-lh-sm);
+  font-variant-numeric: tabular-nums;
   text-align: left;
   white-space: nowrap;
 }
 
 th {
-  padding: 12px 16px;
-  font-weight: 500;
+  padding: 10px 16px;
+  font-weight: 600;
   color: var(--rs-text-secondary);
   background: var(--rs-surface);
-  font-size: 12px;
+  font-size: var(--rs-fs-sm);
   border-bottom: 1px solid var(--rs-border);
 }
 
 td {
-  padding: 14px 16px;
+  padding: 10px 16px;
   border-bottom: 1px solid var(--rs-border);
 }
 
@@ -526,7 +542,13 @@ tr.clickable {
   border-bottom: 2px solid transparent;
   background: none;
   color: var(--rs-text-secondary);
-  font-size: 13px;
+  font-size: var(--rs-fs-sm);
+  line-height: var(--rs-lh-sm);
+  font-weight: 500;
+}
+
+.tab:hover {
+  color: var(--rs-text);
 }
 
 .tab.active {
@@ -590,7 +612,8 @@ tr.clickable {
 }
 
 .dialog-title {
-  font-size: 18px;
+  font-size: var(--rs-fs-lg);
+  line-height: var(--rs-lh-lg);
   font-weight: 600;
   margin-bottom: 16px;
 }
@@ -682,7 +705,7 @@ tr.clickable {
 }
 
 .event small {
-  font-size: 11px;
+  font-size: var(--rs-fs-xs);
 }
 
 .event p {
@@ -693,7 +716,8 @@ tr.clickable {
 .chart {
   height: 240px;
   width: 100%;
-  font-size: 11px;
+  font-size: var(--rs-fs-xs);
+  line-height: var(--rs-lh-xs);
 }
 
 .region-card {
@@ -1200,7 +1224,8 @@ button.catalog-card {
   padding: 12px;
   border-radius: 6px;
   color: var(--rs-text-secondary);
-  font-size: 12px;
+  font-size: var(--rs-fs-sm);
+  line-height: var(--rs-lh-sm);
 }
 
 .wizard-step.current {
@@ -1230,7 +1255,9 @@ button.catalog-card {
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  font-size: 12px;
+  font-size: var(--rs-fs-sm);
+  line-height: var(--rs-lh-sm);
+  font-variant-numeric: tabular-nums;
   padding: 10px 0;
   border-bottom: 1px solid var(--rs-border);
 }
@@ -1244,9 +1271,11 @@ button.catalog-card {
 }
 
 .cost-total {
-  font-size: 26px;
-  font-weight: 600;
-  letter-spacing: -0.7px;
+  font-size: var(--rs-fs-2xl);
+  line-height: var(--rs-lh-2xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.025em;
   margin-top: 16px;
 }
 
@@ -1523,3 +1552,13 @@ button.catalog-card {
 .skeleton div:last-child {
   width: 65%;
 }
+
+label.field > span:first-child {
+  font-weight: 500;
+}
+
+label.field small {
+  color: var(--rs-text-secondary);
+  font-weight: 400;
+}
+

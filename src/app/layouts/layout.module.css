@@ -61,27 +61,28 @@
   border: 0;
   background: transparent;
   color: var(--rs-text-secondary);
-  font-size: 13px;
+  font-size: var(--rs-fs-sm);
+  line-height: var(--rs-lh-sm);
   padding: 8px 12px;
-  border-radius: 6px;
+  border-radius: var(--rs-r-sm);
   text-align: left;
 }
 
 .groupButton {
   font-weight: 600;
   color: var(--rs-text);
-  font-size: 12px;
+  font-size: var(--rs-fs-sm);
 }
 
 .navLink {
-  font-size: 12px;
+  font-size: var(--rs-fs-sm);
   position: relative;
   margin: 2px 0;
 }
 
 .groupButton:hover,
 .navLink:hover {
-  background: var(--rs-surface);
+  background: var(--rs-surface-2);
 }
 
 .groupButton svg:last-child {
@@ -151,7 +152,8 @@
   background: var(--rs-surface);
   padding: 6px 10px;
   min-width: 230px;
-  font-size: 12px;
+  font-size: var(--rs-fs-sm);
+  line-height: var(--rs-lh-sm);
 }
 
 .searchButton kbd {
@@ -159,7 +161,7 @@
 }
 
 .breadcrumb {
-  font-size: 12px;
+  font-size: var(--rs-fs-sm);
   color: var(--rs-text-secondary);
 }
 
@@ -174,7 +176,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: var(--rs-fs-xs);
+  line-height: var(--rs-lh-xs);
   gap: 12px;
   border-bottom: 1px solid var(--rs-border);
   background: var(--rs-surface-2);
@@ -196,7 +199,7 @@
 .localeButton {
   border: 0;
   background: none;
-  font-size: 11px;
+  font-size: var(--rs-fs-xs);
   color: var(--rs-text-secondary);
   padding: 5px;
 }
