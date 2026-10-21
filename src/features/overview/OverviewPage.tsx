@@ -42,6 +42,19 @@ import {
   Badge,
 } from "../../components/ui";
 import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  LabelList,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import {
   Card,
   CardAction,
   CardContent,
@@ -162,6 +175,23 @@ export default function OverviewPage() {
       gpuByModel[resource.nodePool][resource.region] += resource.spec.gpuCount;
     }
   }
+  const gpuRegionTotals = Object.fromEntries(
+    REGIONS.map((region) => [
+      region,
+      data.distribution
+        .filter((item) => item.region === region)
+        .reduce((total, item) => total + item.gpuCount, 0),
+    ]),
+  ) as Record<Region, number>;
+  const gpuRegionTotal = REGIONS.reduce(
+    (total, region) => total + gpuRegionTotals[region],
+    0,
+  );
+  const gpuRegionChartData = REGIONS.map((region) => ({
+    region,
+    name: t(`common.${region}`),
+    cards: gpuRegionTotals[region],
+  }));
   const gpuModels = POOLS.map((code) => ({
     code,
     name: code.replaceAll("_", " "),
@@ -281,21 +311,74 @@ export default function OverviewPage() {
               <Cpu size={18} strokeWidth={2} aria-hidden="true" />
             </CardAction>
           </CardHeader>
-          <CardContent>
-            <div className="overview-stat-value">{number(data.allocated)}</div>
+          <CardContent className="overview-total-chart-content">
+            <div
+              className="overview-total-chart"
+              role="img"
+              aria-label={t("overview.gpuBarLabel", {
+                model: t("overview.allocated"),
+                breakdown: REGIONS.map(
+                  (region) =>
+                    `${region.toUpperCase()} ${number(gpuRegionTotals[region])}`,
+                ).join(" · "),
+              })}
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={
+                      gpuRegionTotal
+                        ? gpuRegionChartData
+                        : [{ region: "jp", name: "", cards: 1 }]
+                    }
+                    dataKey="cards"
+                    nameKey="name"
+                    innerRadius="72%"
+                    outerRadius="94%"
+                    paddingAngle={gpuRegionTotal ? 3 : 0}
+                    stroke="none"
+                    isAnimationActive={false}
+                  >
+                    {gpuRegionTotal ? (
+                      gpuRegionChartData.map(({ region }) => (
+                        <Cell
+                          key={region}
+                          fill={`var(--overview-region-${region})`}
+                        />
+                      ))
+                    ) : (
+                      <Cell fill="var(--rs-border)" />
+                    )}
+                  </Pie>
+                  {gpuRegionTotal > 0 && (
+                    <Tooltip
+                      contentStyle={{
+                        background: "var(--rs-bg)",
+                        border: "1px solid var(--rs-border)",
+                        borderRadius: 8,
+                      }}
+                      formatter={(value, name) => [
+                        t("overview.gpuCards", {
+                          count: number(Number(value)),
+                        }),
+                        String(name),
+                      ]}
+                    />
+                  )}
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="overview-total-chart-center" aria-hidden="true">
+                <strong>{number(data.allocated)}</strong>
+                <span>GPU</span>
+              </div>
+            </div>
           </CardContent>
-          <CardFooter className="overview-region-summary">
+          <CardFooter className="overview-region-summary overview-gpu-legend">
             {REGIONS.map((region) => (
               <span key={region} title={t("common." + region)}>
-                <span className={`overview-gpu-key region-${region}`} />
-                {region.toUpperCase()}
-                <strong>
-                  {number(
-                    data.distribution
-                      .filter((item) => item.region === region)
-                      .reduce((total, item) => total + item.gpuCount, 0),
-                  )}
-                </strong>
+                <i className={`overview-gpu-key region-${region}`} />
+                <span>{t("common." + region)}</span>
+                <strong>{number(gpuRegionTotals[region])}</strong>
               </span>
             ))}
           </CardFooter>
@@ -420,49 +503,74 @@ export default function OverviewPage() {
                   {t("overview.gpuRegionCount", { count: REGIONS.length })}
                 </span>
               </div>
-              <div className="overview-gpu-legend">
-                {REGIONS.map((region) => (
-                  <span key={region}>
-                    <i className={`overview-gpu-key region-${region}`} />
-                    {region.toUpperCase()}
-                  </span>
-                ))}
-              </div>
-              <div className="overview-gpu-list">
-                {gpuModels.map((model) => (
-                  <div className="overview-gpu-row" key={model.code}>
-                    <div className="between">
-                      <strong>{model.name}</strong>
-                      <span className="mono">
-                        {t("overview.gpuCards", { count: number(model.total) })}
-                      </span>
-                    </div>
-                    <div
-                      className="overview-gpu-track"
-                      role="img"
-                      aria-label={t("overview.gpuBarLabel", {
-                        model: model.name,
-                        breakdown: REGIONS.map(
-                          (region) =>
-                            `${region.toUpperCase()} ${number(model.regions[region])}`,
-                        ).join(" · "),
-                      })}
+              <div
+                className="overview-gpu-chart"
+                role="img"
+                aria-label={t("overview.gpuModels")}
+                style={{
+                  height: `${Math.max(220, gpuModels.length * 42 + 44)}px`,
+                }}
+              >
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={gpuModels}
+                    layout="vertical"
+                    margin={{ top: 4, right: 36, bottom: 4, left: 4 }}
+                    barCategoryGap="24%"
+                  >
+                    <CartesianGrid
+                      horizontal={false}
+                      stroke="var(--rs-border)"
+                      strokeDasharray="3 3"
+                    />
+                    <XAxis
+                      type="number"
+                      domain={[0, Math.max(1, largestGpuModel)]}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={(value) => number(Number(value))}
+                      stroke="var(--rs-text-secondary)"
+                      fontSize={11}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      width={104}
+                      tickLine={false}
+                      axisLine={false}
+                      stroke="var(--rs-text-secondary)"
+                      fontSize={11}
+                    />
+                    <Tooltip
+                      cursor={{ fill: "var(--rs-surface-2)" }}
+                      contentStyle={{
+                        background: "var(--rs-bg)",
+                        border: "1px solid var(--rs-border)",
+                        borderRadius: 8,
+                      }}
+                      formatter={(value) => [
+                        t("overview.gpuCards", {
+                          count: number(Number(value)),
+                        }),
+                        t("overview.allocated"),
+                      ]}
+                    />
+                    <Bar
+                      dataKey="total"
+                      fill="var(--rs-brand)"
+                      radius={[0, 5, 5, 0]}
+                      maxBarSize={20}
+                      isAnimationActive={false}
                     >
-                      {REGIONS.map((region) =>
-                        model.regions[region] ? (
-                          <span
-                            key={region}
-                            className={`overview-gpu-segment region-${region}`}
-                            style={{
-                              width: `${(model.regions[region] / largestGpuModel) * 100}%`,
-                            }}
-                            title={`${region.toUpperCase()} · ${number(model.regions[region])}`}
-                          />
-                        ) : null,
-                      )}
-                    </div>
-                  </div>
-                ))}
+                      <LabelList
+                        dataKey="total"
+                        position="right"
+                        formatter={(value) => number(Number(value))}
+                        className="overview-gpu-total-label"
+                      />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
               <small className="muted">{t("overview.gpuZeroNote")}</small>
             </OverviewPanel>

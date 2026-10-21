@@ -63,12 +63,13 @@ test("overview groups allocated GPU models across every region", async ({
 }) => {
   await page.goto("/overview");
   await expect(page.getByText("GPU 型号与已分配量")).toBeVisible();
-  await expect(page.locator(".overview-gpu-row")).toHaveCount(5);
-  await expect(page.locator(".overview-gpu-legend")).toContainText("JP");
-  await expect(page.locator(".overview-gpu-legend")).toContainText("SG");
-  await expect(page.locator(".overview-gpu-legend")).toContainText("US");
+  await expect(page.locator(".overview-gpu-chart")).toBeVisible();
+  await expect(page.locator(".overview-gpu-total-label")).toHaveCount(5);
+  await expect(page.locator(".overview-gpu-legend")).toContainText("日本");
+  await expect(page.locator(".overview-gpu-legend")).toContainText("新加坡");
+  await expect(page.locator(".overview-gpu-legend")).toContainText("美国");
   const counts = await page
-    .locator(".overview-gpu-row .mono")
+    .locator(".overview-gpu-total-label")
     .allTextContents();
   expect(
     counts.reduce((sum, label) => sum + Number(label.replace(/\D/g, "")), 0),

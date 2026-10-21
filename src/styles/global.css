@@ -832,44 +832,33 @@ tbody tr.clickable:focus-visible {
   border-radius: 2px;
 }
 
-.overview-gpu-key.region-jp,
-.overview-gpu-segment.region-jp {
-  background: var(--rs-brand);
+.overview-gpu-key.region-jp {
+  background: var(--overview-region-jp, var(--rs-info));
 }
 
-.overview-gpu-key.region-sg,
-.overview-gpu-segment.region-sg {
-  background: var(--rs-info);
+.overview-gpu-key.region-sg {
+  background: var(--overview-region-sg, var(--rs-success));
 }
 
-.overview-gpu-key.region-us,
-.overview-gpu-segment.region-us {
-  background: var(--rs-gold);
+.overview-gpu-key.region-us {
+  background: var(--overview-region-us, var(--rs-purple));
 }
 
-.overview-gpu-list {
-  display: grid;
-  gap: 13px;
-  margin-bottom: 14px;
-}
-
-.overview-gpu-row .between {
-  gap: 12px;
-  margin-bottom: 5px;
-  font-size: 13px;
-}
-
-.overview-gpu-track {
-  display: flex;
+.overview-gpu-chart {
   width: 100%;
-  height: 9px;
+  min-width: 0;
+  padding: 10px 8px 6px 0;
   overflow: hidden;
-  border-radius: 5px;
-  background: var(--rs-surface-2);
+  border: 1px solid var(--rs-border);
+  border-radius: var(--rs-r-lg);
+  background: var(--rs-surface);
 }
 
-.overview-gpu-segment {
-  height: 100%;
+.overview-gpu-total-label {
+  fill: var(--rs-text);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .overview-project-heading {
