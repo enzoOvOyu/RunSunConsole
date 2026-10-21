@@ -7,6 +7,8 @@
   --rs-text-secondary: #475569;
   --rs-text-muted: #64748b;
   --rs-text-inverse: #fff;
+  --rs-font-sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", "WenQuanYi Micro Hei", system-ui, sans-serif;
+  --rs-font-mono: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --rs-brand: #ff7a1a;
   --rs-brand-strong: #f2640a;
   --rs-brand-soft: #fff3e8;

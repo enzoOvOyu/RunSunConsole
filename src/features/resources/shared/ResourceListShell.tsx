@@ -39,7 +39,7 @@ export function ResourceName({ resource: r }: { resource: Resource }) {
     <div>
       <strong style={{ fontWeight: 500 }}>{dt(r.name)}</strong>
       <div>
-        <small className="mono">{r.displayId}</small>
+        <small className="resource-id">{r.displayId}</small>
       </div>
     </div>
   );
@@ -404,7 +404,7 @@ export function ResourceListShell<K extends Kind>({
         <div className="stack">
           {chosen.map((r) => (
             <div className="row" key={r.resourceUuid}>
-              <code>{r.displayId}</code>
+              <code className="resource-id">{r.displayId}</code>
               <Badge status={r.status} />
             </div>
           ))}

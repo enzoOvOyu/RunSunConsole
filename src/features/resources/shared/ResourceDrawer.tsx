@@ -100,9 +100,12 @@ export function ResourceDrawer() {
           )
         }
         description={
-          r
-            ? `${r.displayId} · ${t("common." + r.region)} · ${r.project ? dt(r.project.name) : r.projectId}`
-            : undefined
+          r ? (
+            <>
+              <span className="resource-id">{r.displayId}</span>
+              {` · ${t("common." + r.region)} · ${r.project ? dt(r.project.name) : r.projectId}`}
+            </>
+          ) : undefined
         }
       >
         {q.isPending ? (
@@ -270,7 +273,7 @@ export function ResourceDrawer() {
               items={[
                 [t("common.name"), dt(r.name)],
                 [t("common.type"), t(`common.${r.kind}`)],
-                ["ID", r.displayId],
+                ["ID", <span className="resource-id">{r.displayId}</span>],
                 [t("common.status"), <Badge status={r.status} />],
                 ["GPU", r.spec.gpuCount],
                 [t("quota.storage"), `${r.spec.storageGb} GB`],

@@ -118,9 +118,10 @@
 ## 3. 字体排印
 
 - **字体族**：
-  - 西文：本地加载 Inter Variable（Latin 与 Latin Extended），`Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif`
-  - 中文：沿用系统中文字体，不额外下载中文字体文件。
-  - 等宽（代码/指标）：`"JetBrains Mono", ui-monospace, "SFMono-Regular", monospace`
+  - 西文：本地加载 Inter Variable（Latin 与 Latin Extended）。
+  - 中文：`PingFang SC`、`Microsoft YaHei`、`Noto Sans CJK SC` 等系统无衬线字体；栈末使用 `system-ui, sans-serif`，避免回落到仿宋/衬线字体。
+  - 等宽（代码）：使用 `ui-monospace`、`SFMono-Regular`、Consolas、Liberation Mono 等系统字体，不声明未加载的 JetBrains Mono。
+  - 资源 ID：使用 Inter 无衬线字形、等宽数字与 12px 辅助字号，不使用代码等宽字体。
 - **字号阶梯**（桌面控制台密度；页面标题、区块、卡片、正文、表格、导航和按钮共享此层级）：
 
 

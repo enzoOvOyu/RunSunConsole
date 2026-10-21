@@ -278,7 +278,7 @@ export function Modal({
   open: boolean;
   onClose: () => void;
   title: ReactNode;
-  description?: string;
+  description?: ReactNode;
   children: ReactNode;
   drawer?: boolean;
   small?: boolean;

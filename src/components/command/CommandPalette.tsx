@@ -65,7 +65,7 @@ export function CommandPalette({
               onSelect={() => select(() => navigate(resourceLink(r)))}
             >
               <span>{dt(r.name)}</span>
-              <small>{r.displayId}</small>
+              <small className="resource-id">{r.displayId}</small>
             </Command.Item>
           ))}
         </Command.Group>
