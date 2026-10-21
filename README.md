@@ -1,31 +1,52 @@
 # RunSunConsole
 
-> GPU cloud tenant console with a PostgreSQL-backed development API and optional MSW mode.
+> **Stable baseline · v1.0** — GPU cloud tenant console for resource allocation, deployment, model discovery, networking, storage, projects and billing.
 
 [![CI](https://github.com/enzoOvOyu/RunSunConsole/actions/workflows/ci.yml/badge.svg)](https://github.com/enzoOvOyu/RunSunConsole/actions/workflows/ci.yml)
-![Stack](https://img.shields.io/badge/stack-React%20%2B%20Vite%20%2B%20TypeScript-61dafb)
-![Scope](https://img.shields.io/badge/scope-frontend%20%2B%20PostgreSQL%20API-blue)
+![Stack](https://img.shields.io/badge/stack-React%2019%20%2B%20Vite%20%2B%20TypeScript-61dafb)
+![UI](https://img.shields.io/badge/UI-shadcn%2Fui%20%2B%20Tailwind%20v4-111827)
 ![Node](https://img.shields.io/badge/node-22%2B-339933)
 
-RunSunConsole is a web console for managing GPU cloud tenants. Product behavior follows
-[`PRD.md`](./PRD.md), component behavior follows [`DESIGN-SYSTEM.md`](./DESIGN-SYSTEM.md), and
-API/data contracts follow [`ARCHITECTURE.md`](./ARCHITECTURE.md) and [`MOCK-DATA.md`](./MOCK-DATA.md).
+RunSunConsole brings GPU cloud operations into one workspace. The stable v1.0 interface covers four resource types, guided deployment, a searchable model catalog, regional networking and storage, project quotas, cost analysis, bills and support tickets.
 
-**Scope:** The console keeps MSW as its default preview mode and includes an opt-in internal PostgreSQL API for resource, project, quota, storage, network and billing records. High frequency GPU utilization, temperature and QPS telemetry still use the existing simulation. Physical provisioning, SSH/Jupyter/BMC sessions, public object endpoints and invoice issuance remain outside this API.
+The browser preview uses typed MSW data by default. An optional internal API persists selected business records in PostgreSQL. High-frequency GPU utilization, temperature and QPS remain simulated; physical provisioning and live model serving are outside this console baseline.
 
-## Preview
+Product behavior follows [`PRD.md`](./PRD.md), UI rules follow [`DESIGN-SYSTEM.md`](./DESIGN-SYSTEM.md), and API/data contracts follow [`ARCHITECTURE.md`](./ARCHITECTURE.md) and [`MOCK-DATA.md`](./MOCK-DATA.md).
 
-**Overview** — aggregate spend, region × type GPU allocation matrix, quotas, trend and activity:
+## Product walkthrough
 
-![RunSunConsole overview](./assets/overview.png)
+The animations show the current preview UI and representative interactions. They do not submit deployments or change account data.
 
-**Resource creation flow** (server instance) — project/region/name → GPU pool → spec → network →
-review & create, with a live cost estimate on the right:
+<table>
+  <tr>
+    <td width="50%"><strong>Overview</strong><br><sub>Regional GPU allocation, status, quotas, spend and activity.</sub><br><img src="./assets/overview.gif" alt="RunSunConsole overview walkthrough" width="100%"></td>
+    <td width="50%"><strong>Resource creation</strong><br><sub>Five-step GPU server wizard with a live cost estimate.</sub><br><img src="./assets/resource-creation.gif" alt="GPU server creation walkthrough" width="100%"></td>
+  </tr>
+  <tr>
+    <td width="50%"><strong>My resources</strong><br><sub>Filtered resource list and a resource detail drawer.</sub><br><img src="./assets/resource-management.gif" alt="Resource list and details walkthrough" width="100%"></td>
+    <td width="50%"><strong>Model catalog</strong><br><sub>Search, model details and a preselected inference deployment.</sub><br><img src="./assets/model-catalog.gif" alt="Model catalog walkthrough" width="100%"></td>
+  </tr>
+</table>
 
-![RunSunConsole resource creation flow](./assets/resource-creation.gif)
+## Stable v1.0 scope
+
+- **Overview:** derived GPU totals and regional allocation, model availability, project spend, resource status, quota use, cost trend, recent deployments and activity.
+- **Deployment and resources:** dedicated wizards and lifecycle pages for GPU cloud servers, GPU bare metal, vGPU clusters and inference services.
+- **Workbench:** notebooks, images and model catalog, application templates and scaling policies. Model cards show publisher, model reference, parameter/context details, modality, license and deployment entry points.
+- **Network and storage:** regional VPCs/subnets, public IPs, security groups and IPsec tunnels; block, file and object storage with lifecycle management.
+- **Projects and billing:** project ownership, regional quotas, support tickets, cost analysis, bills and vouchers.
+- **Shared UI:** shadcn/ui components, semantic theme tokens, responsive layouts, English and Chinese locales, and role-aware navigation.
+
+## Preview modes
+
+- **MSW preview (default):** typed browser Mock handlers and local preview state for product walkthroughs.
+- **Internal API (optional):** PostgreSQL-backed domain records and derived resource, quota, storage, network and billing summaries. This is a development mode; the role header is not tenant authentication.
 
 ## Table of Contents
 
+- [Product walkthrough](#product-walkthrough)
+- [Stable v1.0 scope](#stable-v10-scope)
+- [Preview modes](#preview-modes)
 - [Features](#features)
 - [Tech Stack](#tech-stack)
 - [Quick Start](#quick-start)
@@ -45,9 +66,9 @@ review & create, with a live cost estimate on the right:
 - **Four resource kinds** — server instances, bare metal clusters, vGPU clusters, inference services,
   each with type-specific lists, Drawers, filters and specification fields.
 - **Deployment & lifecycle** — four deployment wizards, lifecycle actions and scaling integration.
-- **Operations** — projects, quotas, cost analysis, support tickets; Workbench (Notebook, image/model
-  catalog, app templates, scaling policies); Data (dataset versions/previews, object storage, pipeline DAG);
-  Billing (usage, transactions, invoices, vouchers).
+- **Projects & Support** — projects, quotas and support tickets. **Workbench** — notebooks, image/model
+  catalog, app templates and scaling policies. **Storage** — block, file and object storage. **Billing** —
+  cost analysis, bills and vouchers.
 - **Runtime diagnostics** — per-machine hardware health (ECC, PCIe, IB, NVMe, power, cooling), vGPU
   node/workload diagnostics, inference replica counters and restarts.
 - **Inference governance** — weighted stable/canary releases, QPS limits, request timeouts, change review
@@ -62,7 +83,7 @@ review & create, with a live cost estimate on the right:
 | Framework    | React 19 + TypeScript + Vite                                      |
 | Runtime      | Node 22, pnpm                                                     |
 | State        | Zustand (theme & locale), TanStack Query, React Hook Form + Zod   |
-| UI           | Radix UI primitives, `lucide-react` icons, `recharts` / `@visx` charts |
+| UI           | shadcn/ui (Radix), Tailwind CSS v4, Lucide icons, Recharts / visx |
 | Routing      | React Router                                                      |
 | Data Mock    | MSW (Mock Service Worker) with typed contracts                   |
 | Testing      | Vitest (unit), Playwright (browser)                              |
