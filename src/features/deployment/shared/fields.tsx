@@ -29,6 +29,14 @@ import { t, dt } from "../../../i18n";
 import { defaultScaling, normalizeSpec } from "../../../lib/config";
 import { SCALING_METRIC_LIMITS } from "../../../lib/schema";
 import { readSshKeys } from "../../../lib/ssh-keys";
+import {
+  imageArchitectures,
+  imageCompatibleWithOs,
+  imageFrameworks,
+  imageOsFamily,
+  imageSupportsArchitecture,
+  imageSupportsPool,
+} from "./image-compat";
 export interface WizardValues {
   projectId: string;
   region: Region;
@@ -489,9 +497,9 @@ export function ImageCards({
   const compatible = images.filter(
     (image) =>
       image.type === (runtime ? "container" : os ? "os" : image.type) &&
-      (!architecture || image.architectures.includes(architecture)) &&
-      (!gpuModel || image.supportedGpuModels.includes(gpuModel)) &&
-      (!runtime || !osFamily || image.compatibleOsFamilies.includes(osFamily)),
+      (!architecture || imageSupportsArchitecture(image, architecture)) &&
+      (!gpuModel || imageSupportsPool(image, gpuModel)) &&
+      (!runtime || !osFamily || imageCompatibleWithOs(image, osFamily)),
   );
   return (
     <section className="stack">
@@ -525,11 +533,10 @@ export function ImageCards({
                 );
                 const runtimeFits =
                   activeRuntime &&
-                  activeRuntime.compatibleOsFamilies.includes(image.osFamily) &&
+                  imageCompatibleWithOs(activeRuntime, imageOsFamily(image)) &&
                   (!architecture ||
-                    activeRuntime.architectures.includes(architecture)) &&
-                  (!gpuModel ||
-                    activeRuntime.supportedGpuModels.includes(gpuModel));
+                    imageSupportsArchitecture(activeRuntime, architecture)) &&
+                  (!gpuModel || imageSupportsPool(activeRuntime, gpuModel));
                 update({
                   imageRef: image.id,
                   ...(runtimeFits ? {} : { runtimeImageRef: "" }),
@@ -539,8 +546,8 @@ export function ImageCards({
           >
             <strong>{image.name}</strong>
             <small>
-              {t("images.cpuArchitecture")}: {image.architectures.join(" / ")} ·{" "}
-              {image.sizeGb} GB
+              {t("images.cpuArchitecture")}:{" "}
+              {imageArchitectures(image).join(" / ")} · {image.sizeGb} GB
             </small>
             <small>
               {t("images.gpuDriver")}:{" "}
@@ -549,14 +556,17 @@ export function ImageCards({
             </small>
             <small>
               {t("images.frameworksIncluded")}:{" "}
-              {image.frameworks.length
-                ? image.frameworks.join(", ")
+              {imageFrameworks(image).length
+                ? imageFrameworks(image).join(", ")
                 : t("images.noneIncluded")}
             </small>
             {runtime && (
               <small>
                 {t("images.compatibleOperatingSystems")}:{" "}
-                {image.compatibleOsFamilies.join(", ")}
+                {(Array.isArray(image.compatibleOsFamilies)
+                  ? image.compatibleOsFamilies
+                  : ["Ubuntu", "Rocky Linux", "Debian"]
+                ).join(", ")}
               </small>
             )}
           </button>

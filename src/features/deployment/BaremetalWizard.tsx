@@ -1,5 +1,9 @@
 import { useEffect } from "react";
 import { gpuModelDisplayName } from "../../lib/gpu-labels";
+import {
+  imageSupportsArchitecture,
+  imageSupportsPool,
+} from "./shared/image-compat";
 import { StorageRows } from "./shared/StorageRows";
 import { z } from "zod";
 import type { BaremetalSpec } from "../../types/domain";
@@ -52,8 +56,8 @@ function BaremetalForm({ step, pools, images }: FormContext) {
         const currentImage = images.find((image) => image.id === spec.imageRef);
         const compatible = (image: (typeof images)[number]) =>
           image.type === "os" &&
-          image.supportedGpuModels.includes(p.code) &&
-          image.architectures.includes(p.cpuArchitecture);
+          imageSupportsPool(image, p.code) &&
+          imageSupportsArchitecture(image, p.cpuArchitecture);
         const nextImage =
           currentImage && compatible(currentImage)
             ? currentImage

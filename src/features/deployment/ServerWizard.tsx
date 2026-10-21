@@ -1,5 +1,11 @@
 import { StorageRows } from "./shared/StorageRows";
 import { gpuModelDisplayName } from "../../lib/gpu-labels";
+import {
+  imageCompatibleWithOs,
+  imageOsFamily,
+  imageSupportsArchitecture,
+  imageSupportsPool,
+} from "./shared/image-compat";
 import { z } from "zod";
 import type { ServerSpec } from "../../types/domain";
 import { t } from "../../i18n";
@@ -76,11 +82,21 @@ function ServerForm({ step, pools, images }: FormContext) {
         onSelect={(p) => {
           form.setValue("nodePool", p.code);
           const fits = (image: (typeof images)[number]) =>
-            image.supportedGpuModels.includes(p.code) && image.architectures.includes(p.cpuArchitecture);
+            imageSupportsPool(image, p.code) &&
+            imageSupportsArchitecture(image, p.cpuArchitecture);
           const baseImage = images.find((image) => image.id === spec.imageRef);
-          const nextImage = baseImage && fits(baseImage) ? baseImage : images.find((image) => image.type === "os" && fits(image));
-          const runtimeImage = images.find((image) => image.id === spec.runtimeImageRef);
-          const runtimeFits = runtimeImage && nextImage && fits(runtimeImage) && runtimeImage.compatibleOsFamilies.includes(nextImage.osFamily);
+          const nextImage =
+            baseImage && fits(baseImage)
+              ? baseImage
+              : images.find((image) => image.type === "os" && fits(image));
+          const runtimeImage = images.find(
+            (image) => image.id === spec.runtimeImageRef,
+          );
+          const runtimeFits =
+            runtimeImage &&
+            nextImage &&
+            fits(runtimeImage) &&
+            imageCompatibleWithOs(runtimeImage, imageOsFamily(nextImage));
           update({
             gpuModel: gpuModelDisplayName(p.gpuModel),
             gpuCount: spec.gpuPerInstance * spec.quantity,
@@ -142,8 +158,23 @@ function ServerForm({ step, pools, images }: FormContext) {
     </div>
   ) : step === 2 ? (
     <div className="stack">
-      <ImageCards images={images} os architecture={selectedPool?.cpuArchitecture} gpuModel={selectedPool?.code} />
-      <ImageCards images={images} runtime architecture={selectedPool?.cpuArchitecture} gpuModel={selectedPool?.code} osFamily={images.find((image) => image.id === spec.imageRef)?.osFamily} />
+      <ImageCards
+        images={images}
+        os
+        architecture={selectedPool?.cpuArchitecture}
+        gpuModel={selectedPool?.code}
+      />
+      <ImageCards
+        images={images}
+        runtime
+        architecture={selectedPool?.cpuArchitecture}
+        gpuModel={selectedPool?.code}
+        osFamily={
+          images.find((image) => image.id === spec.imageRef)
+            ? imageOsFamily(images.find((image) => image.id === spec.imageRef)!)
+            : undefined
+        }
+      />
       <div className="form-grid">
         <SpecNumber
           name="systemDiskGb"
@@ -181,23 +212,18 @@ function ServerForm({ step, pools, images }: FormContext) {
         ]}
       />
       {spec.authMethod === "password" ? (
-        <Field
-          label={t("wizard.password")}
-          hint={t("wizard.passwordRule")}
-        >
+        <Field label={t("wizard.password")} hint={t("wizard.passwordRule")}>
           <input
             className="input"
             type="password"
             autoComplete="new-password"
-            aria-invalid={
-              password.length < 8 ||
-              password.length > 128
-            }
+            aria-invalid={password.length < 8 || password.length > 128}
             {...form.register("password")}
           />
-          {(password.length < 8 ||
-            password.length > 128) && (
-            <small className="field-error">{t("wizard.passwordRequired")}</small>
+          {(password.length < 8 || password.length > 128) && (
+            <small className="field-error">
+              {t("wizard.passwordRequired")}
+            </small>
           )}
         </Field>
       ) : (
