@@ -197,12 +197,13 @@ function InferenceForm({ step, pools, models }: FormContext) {
       <section className="stack">
         <strong>{t("wizard.inferenceConfigGroup")}</strong>
         <p className="muted">{t("wizard.textModelsOnly")}</p>
-        <div className="stack">
+        <div className="inference-model-groups">
           {modelGroups.map(([publisher, items]) => (
             <details
               key={publisher}
+              name="inference-model-publishers"
               open={items.some((item) => item.id === spec.modelRef)}
-              className="panel"
+              className="panel inference-model-group"
             >
               <summary className="between">
                 <strong>{publisher}</strong>
@@ -238,7 +239,7 @@ function InferenceForm({ step, pools, models }: FormContext) {
                       );
                   }}
                 >
-                  <option value="">{t("common.select")}</option>
+                  <option value="">{t("wizard.selectModel")}</option>
                   {items.map((item) => (
                     <option key={item.id} value={item.id}>
                       {item.name} · {item.paramsB}B

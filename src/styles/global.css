@@ -1201,38 +1201,115 @@ tbody tr.clickable:focus-visible {
   padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: var(--rs-s3);
+  gap: 10px;
   min-width: 0;
   background: var(--rs-bg);
-  transition: border-color 120ms ease, box-shadow 120ms ease;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
 }
 
 button.catalog-card {
+  position: relative;
+  min-height: 148px;
   text-align: left;
   color: var(--rs-text);
   font: inherit;
+  cursor: pointer;
 }
 
-.catalog-card:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--rs-brand) 45%, var(--rs-border));
-  box-shadow: var(--rs-shadow-sm);
+button.catalog-card:focus-visible {
+  outline: 2px solid var(--rs-brand);
+  outline-offset: 2px;
 }
 
-.catalog-card.selected {
-  border-color: var(--rs-brand);
-  box-shadow: 0 0 0 1px var(--rs-brand);
-  background: var(--rs-brand-soft);
-}
-
-.catalog-card .price {
-  font-size: 21px;
-  font-weight: 600;
+.catalog-card strong {
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .catalog-card small {
   color: var(--rs-text-secondary);
   font-size: var(--rs-fs-xs);
-  line-height: var(--rs-lh-xs);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.catalog-card:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--rs-brand) 45%, var(--rs-border));
+  box-shadow: var(--rs-shadow-sm);
+  transform: translateY(-1px);
+}
+
+.catalog-card.selected {
+  border-color: var(--rs-brand);
+  box-shadow: inset 0 0 0 1px var(--rs-brand);
+  background: color-mix(in srgb, var(--rs-brand-soft) 68%, var(--rs-bg));
+}
+
+button.catalog-card:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.wizard-main .grid.grid-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+}
+
+.inference-model-groups {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+  gap: 12px;
+}
+
+.inference-model-group {
+  min-width: 0;
+  overflow: hidden;
+  border-color: var(--rs-border);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.inference-model-group[open] {
+  border-color: color-mix(in srgb, var(--rs-brand) 35%, var(--rs-border));
+}
+
+.inference-model-group > summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 6px;
+  min-height: 64px;
+  padding: 16px 20px;
+  cursor: pointer;
+  list-style-position: inside;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.inference-model-group > summary::marker {
+  color: var(--rs-text-secondary);
+}
+
+.inference-model-group > summary .muted {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  text-align: left;
+  font-size: var(--rs-fs-xs);
+}
+
+.inference-model-group > .field,
+.inference-model-group > label {
+  margin: 0 20px 20px;
+}
+
+.catalog-card .price {
+  font-size: 21px;
+  font-weight: 600;
 }
 
 .form-grid {
@@ -1649,7 +1726,21 @@ button.catalog-card {
   }
 }
 
+@media (width <= 1080px) {
+  .inference-model-groups {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (width <= 720px) {
+  .inference-model-groups {
+    grid-template-columns: 1fr;
+  }
+
+  .wizard-main .grid.grid-2 {
+    grid-template-columns: 1fr;
+  }
+
   .project-detail-stats {
     grid-template-columns: 1fr;
   }
