@@ -458,6 +458,9 @@ export default {
     "正在按当前模型、引擎、机型、精度和每副本 GPU 重新校验显存…",
   "wizard.memoryCheckFailed": "显存校验失败，请检查模型与部署配置后重试。",
   "wizard.quantization": "部署精度",
+  "wizard.selectPrecision": "选择精度",
+  "wizard.noCompatiblePrecision":
+    "当前模型、推理引擎与 GPU 机型没有兼容精度，请调整配置。",
   "wizard.precisionHint":
     "部署精度受 GPU 架构和推理引擎约束；NVFP4 仅适用于 Blackwell。显存为估算值。",
   "wizard.context": "上下文长度 · 4096–1048576",

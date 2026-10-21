@@ -67,6 +67,13 @@ function InferenceForm({ step, pools, models }: FormContext) {
         : [],
     [model, pools, spec.engine],
   );
+  const selectedPoolPrecisions = useMemo(
+    () =>
+      model && pool?.available
+        ? compatiblePrecisions(model, pool.code, spec.engine)
+        : [],
+    [model, pool, spec.engine],
+  );
   const [autoNotice, setAutoNotice] = useState("");
   const memory = useQuery({
     queryKey: [
@@ -78,7 +85,10 @@ function InferenceForm({ step, pools, models }: FormContext) {
       spec.gpuPerReplica,
       spec.maxModelLen,
     ],
-    enabled: !!selectedModel,
+    enabled:
+      step === 2 &&
+      !!selectedModel &&
+      selectedPoolPrecisions.includes(spec.quantization),
     queryFn: () =>
       post<{ requiredGb: number; weightsGb: number; kvGb: number }>(
         EP.models + "/memory",
@@ -119,15 +129,18 @@ function InferenceForm({ step, pools, models }: FormContext) {
   ) => {
     if (!nextModel) return;
     const available = precisionOptions(nextModel, nextEngine, nextPool);
-    const nextPrecision = available.includes(
-      patch.quantization || spec.quantization,
-    )
-      ? patch.quantization || spec.quantization
+    const requestedPrecision = patch.quantization || spec.quantization;
+    const nextPrecision = available.includes(requestedPrecision)
+      ? requestedPrecision
       : available[0];
-    const changedPrecision = nextPrecision !== spec.quantization;
+    const changedPrecision =
+      !!nextPrecision && nextPrecision !== spec.quantization;
     const nextContext = patch.maxModelLen ?? spec.maxModelLen;
     const changedContext = nextContext !== spec.maxModelLen;
-    update({ ...patch, quantization: nextPrecision });
+    update({
+      ...patch,
+      ...(nextPrecision ? { quantization: nextPrecision } : {}),
+    });
     setAutoNotice(
       [
         changedPrecision
@@ -148,8 +161,13 @@ function InferenceForm({ step, pools, models }: FormContext) {
     );
   };
   useEffect(() => {
-    if (model && precisions.length && !precisions.includes(spec.quantization)) {
-      const nextPrecision = precisions[0];
+    const activePrecisions = step === 2 ? selectedPoolPrecisions : precisions;
+    if (
+      model &&
+      activePrecisions.length &&
+      !activePrecisions.includes(spec.quantization)
+    ) {
+      const nextPrecision = activePrecisions[0];
       update({ quantization: nextPrecision });
       setAutoNotice(
         t("wizard.precisionAutoChanged", {
@@ -158,25 +176,51 @@ function InferenceForm({ step, pools, models }: FormContext) {
         }),
       );
     }
-  }, [model, precisions, selectedPool, spec.engine, spec.quantization, update]);
+  }, [
+    model,
+    precisions,
+    selectedPoolPrecisions,
+    selectedPool,
+    spec.engine,
+    spec.quantization,
+    step,
+    update,
+  ]);
   const { setError, clearErrors } = form;
   useEffect(() => {
     if (
+      (step === 1 && selectedModel && !precisions.length) ||
+      (step === 2 && selectedModel && !selectedPoolPrecisions.length)
+    ) {
+      setError("spec", {
+        type: "precision",
+        message: "INFERENCE_PRECISION_UNAVAILABLE",
+      });
+    } else if (
       step === 2 &&
-      (!selectedModel || !required || required > capacity || memory.isError)
+      (!selectedModel ||
+        !selectedPoolPrecisions.includes(spec.quantization) ||
+        !required ||
+        required > capacity ||
+        memory.isError)
     ) {
       setError("spec", {
         type: "memory",
         message: !selectedModel
           ? "MODEL_MODALITY_UNSUPPORTED"
-          : memory.isError
-            ? "MODEL_MEMORY_CHECK_FAILED"
-            : "MODEL_MEMORY_EXCEEDED",
+          : !selectedPoolPrecisions.includes(spec.quantization)
+            ? "INFERENCE_PRECISION_UNAVAILABLE"
+            : memory.isError
+              ? "MODEL_MEMORY_CHECK_FAILED"
+              : "MODEL_MEMORY_EXCEEDED",
       });
     } else clearErrors("spec");
   }, [
     step,
     selectedModel,
+    precisions,
+    selectedPoolPrecisions,
+    spec.quantization,
     required,
     capacity,
     memory.isError,
@@ -269,25 +313,6 @@ function InferenceForm({ step, pools, models }: FormContext) {
                 ))}
               </select>
             </Field>
-            <Field label={t("wizard.quantization")}>
-              <select
-                value={
-                  precisions.includes(spec.quantization)
-                    ? spec.quantization
-                    : ""
-                }
-                onChange={(event) => {
-                  update({ quantization: event.target.value });
-                  setAutoNotice("");
-                }}
-              >
-                {precisions.map((precision) => (
-                  <option key={precision} value={precision}>
-                    {precisionLabel(precision)}
-                  </option>
-                ))}
-              </select>
-            </Field>
             <Field label={t("resource.gpu")}>
               <select
                 value={spec.gpuPerReplica}
@@ -313,8 +338,10 @@ function InferenceForm({ step, pools, models }: FormContext) {
             />
           </div>
         )}
+        {!precisions.length && model && (
+          <p className="field-error">{t("wizard.noCompatiblePrecision")}</p>
+        )}
         {autoNotice && <p className="notice">{autoNotice}</p>}
-        <p className="notice">{t("wizard.precisionHint")}</p>
       </section>
     </div>
   ) : step === 2 ? (
@@ -327,7 +354,6 @@ function InferenceForm({ step, pools, models }: FormContext) {
           available:
             item.available &&
             !!model &&
-            item.memoryGb * 8 >= (required || 0) &&
             compatiblePrecisions(model, item.code, spec.engine).length > 0,
         }))}
         selected={selectedPool}
@@ -336,6 +362,39 @@ function InferenceForm({ step, pools, models }: FormContext) {
           if (model) setDependencies({}, model, item.code);
         }}
       />
+      <Field label={t("wizard.quantization")}>
+        <select
+          value={
+            selectedPoolPrecisions.includes(spec.quantization)
+              ? spec.quantization
+              : ""
+          }
+          disabled={!selectedPoolPrecisions.length}
+          onChange={(event) => {
+            if (event.target.value)
+              update({ quantization: event.target.value });
+            setAutoNotice("");
+          }}
+        >
+          <option value="" disabled>
+            {t(
+              selectedPoolPrecisions.length
+                ? "wizard.selectPrecision"
+                : "wizard.noCompatiblePrecision",
+            )}
+          </option>
+          {selectedPoolPrecisions.map((precision) => (
+            <option key={precision} value={precision}>
+              {precisionLabel(precision)}
+            </option>
+          ))}
+        </select>
+      </Field>
+      {!selectedPoolPrecisions.length && model && (
+        <p className="field-error">{t("wizard.noCompatiblePrecision")}</p>
+      )}
+      <p className="notice">{t("wizard.precisionHint")}</p>
+      {autoNotice && <p className="notice">{autoNotice}</p>}
       <div className="form-grid">
         <Field label={t("resource.gpu")}>
           <select

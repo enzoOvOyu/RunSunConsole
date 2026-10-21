@@ -473,6 +473,9 @@ export default {
   "wizard.memoryCheckFailed":
     "VRAM validation failed. Review the model and deployment configuration, then retry.",
   "wizard.quantization": "Serving precision",
+  "wizard.selectPrecision": "Select a precision",
+  "wizard.noCompatiblePrecision":
+    "No precision is compatible with this model, engine, and GPU model. Adjust the configuration.",
   "wizard.precisionHint":
     "Serving precision depends on GPU architecture and engine. NVFP4 requires Blackwell. Memory is an estimate.",
   "wizard.context": "Context length · 4096–1048576",
