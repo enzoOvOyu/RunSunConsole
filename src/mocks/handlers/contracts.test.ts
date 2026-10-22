@@ -783,6 +783,20 @@ it("accepts all four resource types as orders with matching initial state", asyn
   }
 });
 
+it("limits initial cluster administrator grants to project administrators", async () => {
+  const template = db.resources.find((item) => item.kind === "vgpu" && item.status === "running");
+  if (!template || template.kind !== "vgpu") throw new Error("Missing Kubernetes fixture");
+  const order = {
+    kind: "vgpu", name: "eks-admin-grant-check", projectId: template.projectId,
+    region: template.region, mode: "on_demand", labels: [], nodePool: template.nodePool,
+    spec: { ...structuredClone(template.spec), rbacDefaultAdmin: true },
+  };
+  expect((await request("/deployment-orders", "POST", order, "member")).status).toBe(403);
+  const created = await request("/deployment-orders", "POST", order, "owner");
+  expect(created.status).toBe(201);
+  expect(created.data.resource.spec.rbacDefaultAdmin).toBe(true);
+});
+
 it("keeps a created GPU cluster, node pool, workload and resize in one resource model", async () => {
   const template = db.resources.find((item) => item.kind === "vgpu" && item.status === "running");
   if (!template || template.kind !== "vgpu") throw new Error("Missing Kubernetes fixture");

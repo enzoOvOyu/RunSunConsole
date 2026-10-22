@@ -320,14 +320,16 @@ export function NodePoolsPanel({
         <Panel title={t("cluster.plugins")}>
           <KeyValues
             items={[
-              ["GPU Operator", q.data.plugins.gpuOperator],
+              [t("eks.gpuTargets"), r.spec.nodePools.filter((pool) => pool.role !== "general").map((pool) => pool.name).join(" / ") || t("eks.noGpuPool")],
+              ["GPU Operator", q.data.plugins.driverDesired ? `${q.data.plugins.gpuOperator} · ${t(q.data.plugins.gpuOperatorReady ? "eks.pluginReady" : "eks.pluginPending")}` : t("eks.noGpuPool")],
               [
                 "Device Plugin",
-                q.data.plugins.devicePluginHealthy
-                  ? t("common.ready")
-                  : t("common.pending"),
+                !q.data.plugins.driverDesired ? t("eks.noGpuPool") : q.data.plugins.devicePluginHealthy
+                  ? t("eks.pluginReady")
+                  : t("eks.pluginPending"),
               ],
-              ["NFD", q.data.plugins.nfdVersion],
+              ["NFD", q.data.plugins.driverDesired ? `${q.data.plugins.nfdVersion} · ${t(q.data.plugins.nfdReady ? "eks.pluginReady" : "eks.pluginPending")}` : t("eks.noGpuPool")],
+              [t("eks.deploymentPolicy"), t("eks.platformManagedWithNodes")],
               [
                 "Driver DaemonSet",
                 `${q.data.plugins.driverReady}/${q.data.plugins.driverDesired}`,
@@ -516,6 +518,9 @@ export function ClusterNetworkPanel({
             [t("eks.availableLocalCapacity"), `${q.data.nodes.filter((node) => node.state === "ready").reduce((total, node) => total + Math.max(0, (r.spec.localPvGb || 0) - node.allocatedLocalGb), 0)} GB`],
             ["CNI errors", q.data.network.cniErrors],
             ["Service P99", q.data.network.serviceP99Ms == null ? "—" : q.data.network.serviceP99Ms + " ms"],
+            [t("eks.clusterEntryTitle"), t(r.spec.ingressEnabled ? "eks.entryIngress" : "eks.entryInternal")],
+            [t("eks.ingressController"), r.spec.ingressEnabled ? `${r.spec.ingressClass.toUpperCase()} · ${t(q.data.plugins.ingressControllerReady ? "eks.pluginReady" : "eks.pluginPending")}` : t("eks.controllerDisabled")],
+            [t("eks.ingressResource"), r.spec.ingressEnabled ? t("eks.noIngressRoutes") : "—"],
             ["Ingress QPS", r.spec.ingressEnabled ? q.data.network.ingressQps : t("common.notEnabled")],
             ["VPC peering", t("common." + q.data.network.vpcPeering)],
             [

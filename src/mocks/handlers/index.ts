@@ -2555,6 +2555,7 @@ async function dispatch(request: Request, settleBilling = true) {
     if (parsed.kind === "gpu_baremetal" && "machineCount" in spec)
       spec.gpuCount = spec.machineCount * pool.gpusPerNode;
     if (parsed.kind === "vgpu" && "nodePools" in spec) {
+      if (spec.rbacDefaultAdmin && role !== "owner" && role !== "admin") fail(403, "FORBIDDEN");
       if (!/^[a-z][a-z0-9-]{1,61}[a-z0-9]$/.test(parsed.name))
         fail(422, "INVALID_CLUSTER_NAME");
       if (db.resources.some((item) => item.kind === "vgpu" && !item.deletedAt &&
@@ -2568,6 +2569,9 @@ async function dispatch(request: Request, settleBilling = true) {
         cidrOverlaps(podCidr, serviceCidr) ||
         (vpc && (cidrOverlaps(podCidr, vpc.cidr) || cidrOverlaps(serviceCidr, vpc.cidr))))
         fail(422, "CLUSTER_CIDR_CONFLICT");
+      if (spec.ingressEnabled && (spec.ingressClass !== "nginx" || !spec.securityGroups?.length || !spec.vpc || !spec.subnet))
+        fail(422, "VALIDATION_ERROR");
+      if (!spec.ingressEnabled) spec.ingressClass = "";
       if (!spec.nodePools.every((nodePool) =>
         (nodePool.minNodes ?? 1) <= nodePool.nodeCount &&
         nodePool.nodeCount <= (nodePool.maxNodes ?? 64)))

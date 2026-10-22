@@ -7,7 +7,8 @@ import { EP, query } from "../../lib/api-client";
 import { storageSelectionsSchema, nodePoolSchema, vgpuSchema, isCidr } from "../../lib/schema";
 import { imageSupportsArchitecture, imageSupportsPool } from "./shared/image-compat";
 import { t } from "../../i18n";
-import { Button, Field, Loading, Panel, KeyValues, ErrorState } from "../../components/ui";
+import { useAuth } from "../../stores/auth";
+import { Button, Field, Loading, Panel, KeyValues, ErrorState, Check } from "../../components/ui";
 import { useData } from "../shared/hooks";
 import { WizardLayout, PoolCards } from "./shared/WizardLayout";
 import {
@@ -73,7 +74,8 @@ function validStep(values: WizardValues, step: number, lookups?: { network?: Dep
           imageSupportsPool(image, pool.poolCode) && imageSupportsArchitecture(image, hardware.cpuArchitecture);
       });
   if (step === 4)
-    return (!spec.ingressEnabled || !!spec.ingressClass) && !!spec.kubeconfigAccess;
+    return (!spec.ingressEnabled || (spec.ingressClass === "nginx" && !!spec.vpc && selectedSubnets(spec).length > 0 && !!spec.securityGroups?.length)) &&
+      (!spec.rbacDefaultAdmin || ["owner", "admin"].includes(useAuth.getState().role));
   return vgpuSchema.safeParse(spec).success;
 }
 
@@ -278,11 +280,54 @@ function ClusterNodes({ pools, images }: FormContext) {
 }
 
 function ClusterAddons() {
-  const { spec } = useSpec<VgpuSpec>();
-  return <div className="stack"><p>{t("eks.addonsStepIntro")}</p>
-    <Panel title="GPU Operator / Device Plugin"><KeyValues items={[["GPU Operator", t("eks.managedAddon")], ["Device Plugin", t("eks.managedAddon")], ["NFD", t("eks.managedAddon")]]} /><small>{t("eks.gpuAddonHint")}</small></Panel>
-    <Panel title="Ingress"><SpecCheck name="ingressEnabled" label="Ingress" />{spec.ingressEnabled && <SpecSelect name="ingressClass" label="Ingress Class" options={["nginx", "traefik"]} />}</Panel>
-    <Panel title={t("eks.accessAndRbac")}><div className="form-grid"><SpecSelect name="kubeconfigAccess" label={t("wizard.accessConfirm")} options={["download", "managed-console"]} /><SpecCheck name="rbacDefaultAdmin" label="RBAC Admin" /></div></Panel>
+  const { spec, update, form } = useSpec<VgpuSpec>();
+  const role = useAuth((state) => state.role);
+  const region = form.watch("region"), projectId = form.watch("projectId");
+  const network = useData<DeploymentOptions>(["cluster-network-options", region, projectId],
+    EP.options + query({ region, project_id: projectId, kind: "vgpu" }), { enabled: !!projectId });
+  const vpc = network.data?.vpcs.find((item) => item.id === spec.vpc);
+  const subnetNames = vpc?.subnets.filter((item) => selectedSubnets(spec).includes(item.id)).map((item) => `${item.name} · ${item.zone}`) || [];
+  const gpuPools = spec.nodePools.filter((pool) => pool.role !== "general");
+  const canGrantAdmin = role === "owner" || role === "admin";
+  const setEntry = (ingress: boolean) => update({ ingressEnabled: ingress, ingressClass: ingress ? "nginx" : "" });
+  return <div className="stack">
+    <p>{t("eks.addonsStepIntro")}</p>
+    <Panel title={t("eks.gpuRuntimeTitle")} hint={t("eks.gpuRuntimeHint")}>
+      <KeyValues items={[
+        [t("eks.gpuTargets"), gpuPools.map((pool) => poolName(pool, spec.nodePools.indexOf(pool))).join(" / ") || t("eks.noGpuPool")],
+        ["GPU Operator", t("eks.operatorRole")],
+        ["Device Plugin", t("eks.devicePluginRole")],
+        ["NFD", t("eks.nfdRole")],
+        [t("eks.deploymentPolicy"), t("eks.platformManagedWithNodes")],
+      ]} />
+      <small>{t("eks.gpuRuntimeDependency")}</small>
+    </Panel>
+    <Panel title={t("eks.clusterEntryTitle")} hint={t("eks.clusterEntryHint")}>
+      <div className="cluster-storage-options">
+        {[false, true].map((ingress) => <button type="button" key={String(ingress)}
+          className={`cluster-storage-option ${spec.ingressEnabled === ingress ? "selected" : ""}`}
+          aria-pressed={spec.ingressEnabled === ingress} onClick={() => setEntry(ingress)}>
+          <strong>{t(ingress ? "eks.entryIngress" : "eks.entryInternal")}</strong>
+          <small>{t(ingress ? "eks.entryIngressHint" : "eks.entryInternalHint")}</small>
+        </button>)}
+      </div>
+      <KeyValues items={[["VPC", vpc ? `${vpc.name} · ${vpc.id}` : spec.vpc],
+        [t("eks.subnetConfig"), subnetNames.join(" / ") || "—"],
+        [t("field.securityGroups"), spec.securityGroups?.join(" / ") || "—"]]} />
+      {spec.ingressEnabled ? <div className="stack">
+        <KeyValues items={[[t("eks.ingressController"), "NGINX · " + t("eks.platformManagedMock")],
+          [t("eks.ingressResource"), t("eks.ingressCreatedAfterCluster")]]} />
+        <small>{t("eks.ingressNetworkHint")}</small>
+        {(!vpc || !selectedSubnets(spec).length || !spec.securityGroups?.length) && <p className="field-error">{t("eks.ingressNeedsNetwork")}</p>}
+      </div> : <small>{t("eks.internalAccessHint")}</small>}
+    </Panel>
+    <Panel title={t("eks.clusterPermissionsTitle")} hint={t("eks.clusterPermissionsHint")}>
+      <Check label={t("eks.grantProjectAdmin")} checked={spec.rbacDefaultAdmin}
+        disabled={!canGrantAdmin && !spec.rbacDefaultAdmin} onChange={(checked) => update({ rbacDefaultAdmin: checked && canGrantAdmin })} />
+      <small>{t(canGrantAdmin ? "eks.adminGrantScope" : "eks.adminGrantUnavailable")}</small>
+      <KeyValues items={[[t("eks.initialAuthorization"), t(spec.rbacDefaultAdmin ? "eks.projectAdminGranted" : "eks.projectReadOnly")],
+        [t("eks.kubeconfigAccess"), t("eks.kubeconfigAfterCreate")]]} />
+    </Panel>
   </div>;
 }
 
@@ -304,6 +349,8 @@ function ClusterConfirm({ context }: { context: FormContext }) {
       [t("eks.totalProvisionedCapacity"), `${spec.storageMode === "local_nvme" ? (spec.localPvGb || 0) * spec.nodePools.reduce((n, pool) => n + pool.nodeCount, 0) : spec.storageMode === "shared_file" ? spec.defaultPvcGb : spec.defaultPvcGb * spec.nodePools.reduce((n, pool) => n + pool.nodeCount, 0)} GB`],
       [t("cluster.nodePool"), spec.nodePools.map((pool, index) => `${poolName(pool, index)} · ${pool.poolCode} · ${pool.nodeCount} × ${pool.gpuPerNode} GPU`).join(" / ")],
       [t("resource.gpu"), spec.nodePools.reduce((sum, pool) => sum + pool.nodeCount * pool.gpuPerNode, 0)],
+      [t("eks.clusterEntryTitle"), t(spec.ingressEnabled ? "eks.entryIngress" : "eks.entryInternal")],
+      [t("eks.initialAuthorization"), t(spec.rbacDefaultAdmin ? "eks.projectAdminGranted" : "eks.projectReadOnly")],
     ]} /></Panel>
     <Review hideSpec />
   </div>;

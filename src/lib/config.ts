@@ -118,11 +118,11 @@ export function defaultSpec(kind: Kind, pool: Pool): Resource["spec"] {
       authorizedCidr: "",
       networkPlugin: "cilium",
       ingressEnabled: false,
-      ingressClass: "nginx",
+      ingressClass: "",
       storageClass: "ssd",
       defaultPvcGb: 0,
       kubeconfigAccess: "download",
-      rbacDefaultAdmin: true,
+      rbacDefaultAdmin: false,
       vpc: "default-vpc",
       subnet: "jp-default",
     };

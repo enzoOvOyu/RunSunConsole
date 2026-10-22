@@ -22,6 +22,27 @@ describe("image compatibility catalog", () => {
   });
 });
 
+describe("Kubernetes cluster add-on states", () => {
+  it("derives managed GPU and ingress controller readiness without inventing routes", () => {
+    const cluster = structuredClone(seedResources().find((item) => item.kind === "vgpu")!);
+    if (cluster.kind !== "vgpu") throw new Error("Expected a Kubernetes cluster");
+    cluster.status = "running";
+    cluster.spec.ingressEnabled = true;
+    cluster.spec.ingressClass = "nginx";
+    const ready = clusterView(cluster);
+    expect(ready.plugins.gpuOperatorReady).toBe(true);
+    expect(ready.plugins.devicePluginHealthy).toBe(true);
+    expect(ready.plugins.nfdReady).toBe(true);
+    expect(ready.plugins.driverDesired).toBe(ready.summary.totalNodes);
+    expect(ready.plugins.ingressControllerReady).toBe(true);
+    expect(ready.network.ingressQps).toBe(0);
+    cluster.status = "provisioning";
+    expect(clusterView(cluster).plugins.ingressControllerReady).toBe(false);
+    cluster.spec.ingressEnabled = false;
+    expect(clusterView(cluster).network.ingressQps).toBeNull();
+  });
+});
+
 describe("Kubernetes cluster runtime consistency", () => {
   it("derives ingress, PVC, autoscaler and scheduling views from cluster configuration", () => {
     const resource = structuredClone(seedResources().find((item) => item.kind === "vgpu")!);

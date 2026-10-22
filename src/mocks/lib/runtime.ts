@@ -271,6 +271,7 @@ export function clusterView(
   const reasons = new Map<string, number>();
   for (const pod of pending) reasons.set(pod.waitingReason, (reasons.get(pod.waitingReason) || 0) + 1);
   const policy = db.policies.find((item) => item.resourceUuid === r.resourceUuid);
+  const gpuNodes = nodes.filter((node) => r.spec.nodePools[node.poolIndex].role !== "general");
   const pvs: ClusterView["storage"]["pvs"] = [];
   const pvcs: ClusterView["storage"]["pvcs"] = [];
   if (defaultVolume) {
@@ -309,7 +310,7 @@ export function clusterView(
     scheduling: [...reasons].map(([reason, count]) => ({ reason, count })),
     network: {
       cniErrors: 0, serviceP99Ms: active && workloads.some((item) => item.pods.some((pod) => pod.phase === "Running")) ? 12.4 : null,
-      ingressQps: r.spec.ingressEnabled ? (active && workloads.some((item) => item.pods.some((pod) => pod.phase === "Running")) ? 180 : 0) : null,
+      ingressQps: r.spec.ingressEnabled ? 0 : null,
       vpcPeering: active ? "ready" : "pending",
     },
     storage: {
@@ -321,9 +322,11 @@ export function clusterView(
       csiErrors: 0, pvs, pvcs,
     },
     plugins: {
-      gpuOperator: "24.9.1", devicePluginHealthy: active,
-      nfdVersion: "0.16.6", driverReady: active ? summary.totalNodes : 0,
-      driverDesired: summary.totalNodes,
+      gpuOperator: "24.9.1", gpuOperatorReady: active && gpuNodes.length > 0, devicePluginHealthy: active && gpuNodes.length > 0,
+      nfdVersion: "0.16.6", nfdReady: active && gpuNodes.length > 0,
+      ingressControllerReady: active && r.spec.ingressEnabled && r.spec.ingressClass === "nginx" && summary.readyNodes > 0,
+      driverReady: active ? gpuNodes.length : 0,
+      driverDesired: gpuNodes.length,
     },
     poolStatus: !r.spec.scaling ? "idle" : policy?.status === "paused" ? "paused" : "idle",
   };

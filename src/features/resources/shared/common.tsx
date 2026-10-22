@@ -741,7 +741,7 @@ export function Kubeconfig({ resource: r }: { resource: Resource }) {
         )
       }
     >
-      {t("resource.kubeconfig")}
+      {t("eks.kubeconfigDemo")}
     </Button>
   );
 }

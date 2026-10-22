@@ -133,8 +133,11 @@ export interface ClusterView {
   };
   plugins: {
     gpuOperator: string;
+    gpuOperatorReady: boolean;
     devicePluginHealthy: boolean;
     nfdVersion: string;
+    nfdReady: boolean;
+    ingressControllerReady: boolean;
     driverReady: number;
     driverDesired: number;
   };

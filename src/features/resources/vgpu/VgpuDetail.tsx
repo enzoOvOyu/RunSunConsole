@@ -50,7 +50,7 @@ export function VgpuDetail({ resource: r }: { resource: ResourceOf<"vgpu"> }) {
         onChange={setTab}
       />
       {tab === "overview" ? (
-        <Panel title={t("tab.overview")} action={<Kubeconfig resource={r} />}>
+        <Panel title={t("tab.overview")}>
           <KeyValues
             items={[
               [t("resource.k8s"), r.spec.k8sVersion],
@@ -76,7 +76,11 @@ export function VgpuDetail({ resource: r }: { resource: ResourceOf<"vgpu"> }) {
           />
         </Panel>
       ) : tab === "controlPlane" ? (
-        <ControlPlanePanel resource={r} />
+        <div className="stack">
+          <ControlPlanePanel resource={r} />
+          <Panel title={t("eks.clusterPermissionsTitle")}><KeyValues items={[[t("eks.initialAuthorization"), t(r.spec.rbacDefaultAdmin ? "eks.projectAdminGranted" : "eks.projectReadOnly")]]} /></Panel>
+          <Panel title={t("eks.connectionTitle")} action={<Kubeconfig resource={r} />}><KeyValues items={[["API Server", `https://${r.displayId}.${r.region}.runsun.cloud`], [t("eks.kubeconfigAccess"), t("eks.kubeconfigAfterCreate")]]} /><small>{t("eks.connectionMockHint")}</small></Panel>
+        </div>
       ) : tab === "nodePools" ? (
         <NodePoolsPanel resource={r} />
       ) : tab === "workloads" ? (
