@@ -1266,9 +1266,14 @@ button.catalog-card:disabled {
   align-items: stretch;
 }
 
+.wizard.inference-wizard {
+  grid-template-columns: minmax(0, 2.35fr) minmax(215px, 0.72fr);
+  gap: 16px;
+}
+
 .inference-model-groups {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
   grid-auto-rows: 1fr;
   align-items: stretch;
   gap: 12px;
@@ -1276,12 +1281,12 @@ button.catalog-card:disabled {
 
 .inference-model-group {
   box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(145px, 0.85fr);
+  align-items: center;
   gap: 12px;
   width: 100%;
-  height: 148px;
+  height: 102px;
   min-width: 0;
   padding: 14px;
   overflow: visible;
@@ -1355,12 +1360,13 @@ button.catalog-card:disabled {
   border: 1px solid var(--rs-border);
   background: var(--rs-bg);
   color: var(--rs-text);
-  flex: 0 0 40px;
+  flex: 0 0 38px;
   justify-content: space-between;
   width: 100%;
   min-width: 0;
-  height: 40px;
-  padding-inline: 10px;
+  height: 38px;
+  padding-inline: 9px;
+  font-size: var(--rs-fs-xs);
   text-align: left;
 }
 
@@ -1394,9 +1400,10 @@ button.catalog-card:disabled {
 
 .inference-model-popover [cmdk-input] {
   width: 100%;
-  height: 38px;
-  padding: 0 10px;
+  height: 32px;
+  padding: 0 9px;
   border: 1px solid var(--rs-border);
+  font-size: var(--rs-fs-xs);
   border-radius: var(--rs-r-sm);
   background: var(--rs-bg);
   color: var(--rs-text);
@@ -1409,7 +1416,7 @@ button.catalog-card:disabled {
 }
 
 .inference-model-popover [cmdk-list] {
-  max-height: min(320px, 55vh);
+  max-height: min(220px, 42vh);
   overflow-y: auto;
   padding: 4px 0;
 }
@@ -1418,9 +1425,10 @@ button.catalog-card:disabled {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 10px;
-  min-height: 38px;
-  padding: 8px 9px;
+  gap: 8px;
+  min-height: 32px;
+  padding: 6px 8px;
+  font-size: var(--rs-fs-xs);
   border-radius: var(--rs-r-sm);
   color: var(--rs-text);
   cursor: pointer;
@@ -1889,7 +1897,8 @@ button.catalog-card:disabled {
     grid-template-columns: 1fr 1fr;
   }
 
-  .wizard {
+  .wizard,
+  .wizard.inference-wizard {
     grid-template-columns: 1fr;
   }
 
@@ -1915,17 +1924,7 @@ button.catalog-card:disabled {
   }
 }
 
-@media (width <= 1080px) {
-  .inference-model-groups {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 @media (width <= 720px) {
-  .inference-model-groups {
-    grid-template-columns: 1fr;
-  }
-
   .wizard-main .grid.grid-2 {
     grid-template-columns: 1fr;
   }

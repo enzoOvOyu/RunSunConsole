@@ -474,7 +474,9 @@ function WizardForm({
           else if (valid) setStep(step + 1);
         }}
       >
-        <div className={`wizard ${clusterLayout ? "cluster-wizard" : ""}`}>
+        <div
+          className={`wizard ${clusterLayout ? "cluster-wizard" : ""} ${kind === "inference" ? "inference-wizard" : ""}`}
+        >
           <nav className="wizard-steps">
             {steps.map((id, i) => (
               <button
