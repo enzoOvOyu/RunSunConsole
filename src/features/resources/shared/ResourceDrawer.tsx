@@ -51,7 +51,7 @@ export function ResourceDrawer() {
   };
   const allowed = canWrite(role) && !r?.deletedAt;
   const act = async (action: string, body: unknown = {}) => {
-    if (!r) return;
+    if (!r) return undefined;
     const result = await run(() =>
       post<Resource & { credential?: string }>(
         `${EP.resources}/${r.resourceUuid}/${action}`,
@@ -60,6 +60,12 @@ export function ResourceDrawer() {
     );
     if (result?.credential) setCredential(result.credential);
     setOperation("");
+    return result;
+  };
+  const actAndRefresh = async (action: string) => {
+    const result = await act(action);
+    await q.refetch();
+    return result;
   };
   const performDelete = async () => {
     if (!r) return;
@@ -224,7 +230,13 @@ export function ResourceDrawer() {
             )}
             <Provisioning resource={r} />
             {r.kind === "gpu_vm" ? (
-              <ServerDetail resource={r} />
+              <ServerDetail
+                resource={r as Extract<Resource, { kind: "gpu_vm" }>}
+                canManage={allowed}
+                onStart={() => actAndRefresh("start")}
+                onStop={() => actAndRefresh("stop")}
+                onRestart={() => actAndRefresh("restart")}
+              />
             ) : r.kind === "gpu_baremetal" ? (
               <BaremetalDetail resource={r} />
             ) : r.kind === "vgpu" ? (

@@ -1,6 +1,7 @@
 import { gpuModelDisplayName, poolDisplayName } from "../../../lib/gpu-labels";
 import { ResourceNetwork } from "../../network/ResourceNetwork";
 import { useState } from "react";
+import { VncConsole } from "./vnc/VncConsole";
 import type { Image, ResourceOf } from "../../../types/domain";
 import { EP } from "../../../lib/api-client";
 import { useData } from "../../shared/hooks";
@@ -19,13 +20,23 @@ import {
 } from "../shared/common";
 export function ServerDetail({
   resource: r,
+  canManage,
+  onStart,
+  onStop,
+  onRestart,
 }: {
   resource: ResourceOf<"gpu_vm">;
+  canManage: boolean;
+  onStart: () => Promise<unknown>;
+  onStop: () => Promise<unknown>;
+  onRestart: () => Promise<unknown>;
 }) {
   const [tab, setTab] = useState("overview");
   const images = useData<Image[]>(["images"], EP.images);
   const baseImage = images.data?.find((image) => image.id === r.spec.imageRef);
-  const runtimeImage = images.data?.find((image) => image.id === r.spec.runtimeImageRef);
+  const runtimeImage = images.data?.find(
+    (image) => image.id === r.spec.runtimeImageRef,
+  );
   const tabs = [
     "overview",
     "monitoring",
@@ -60,9 +71,16 @@ export function ServerDetail({
                   t("resource.cpu"),
                   `${r.spec.vcpu} vCPU / ${r.spec.memoryGb} GB`,
                 ],
-                [t("images.baseOperatingSystem"), baseImage?.name || r.spec.imageRef],
+                [
+                  t("images.baseOperatingSystem"),
+                  baseImage?.name || r.spec.imageRef,
+                ],
                 [t("images.gpuDriver"), baseImage?.driverVersion || "—"],
-                [t("images.frameworksIncluded"), runtimeImage?.frameworks.join(", ") || t("images.noneIncluded")],
+                [
+                  t("images.frameworksIncluded"),
+                  runtimeImage?.frameworks.join(", ") ||
+                    t("images.noneIncluded"),
+                ],
                 ["CUDA", runtimeImage?.cudaVersion || t("images.noneIncluded")],
                 [t("common.region"), t("common." + r.region)],
                 [t("resource.pool"), poolDisplayName(r.nodePool)],
@@ -75,7 +93,16 @@ export function ServerDetail({
       ) : tab === "monitoring" ? (
         <MonitorPanel resource={r} />
       ) : tab === "console" ? (
-        <AccessPanel resource={r} />
+        <div className="stack">
+          <VncConsole
+            resource={r}
+            canManage={canManage}
+            onStart={onStart}
+            onStop={onStop}
+            onRestart={onRestart}
+          />
+          <AccessPanel resource={r} />
+        </div>
       ) : tab === "network" ? (
         <ResourceNetwork resource={r} />
       ) : tab === "configuration" ? (
