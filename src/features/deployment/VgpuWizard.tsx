@@ -189,7 +189,7 @@ function ClusterStorage({ pools }: { pools: Pool[] }) {
   const chooseMode = (next: ClusterStorageMode) => update({ storageMode: next,
     defaultPvcGb: next === "local_nvme" ? 0 : 100,
     localPvGb: next === "local_nvme" ? Math.min(100, maxLocal) : 0,
-    volumeBindings: [], storageClass: next === "shared_file" ? "shared-fs" : spec.storageClass === "nvme" ? "nvme" : "ssd" });
+    volumeBindings: [], storageClass: next === "shared_file" ? "shared-fs" : "ssd" });
   const relationship = mode === "local_nvme" ? ["Pod", "PVC", "Local PV", "NVMe", t("eks.gpuNode")] :
     ["Pod", "PVC", "PV", mode === "shared_file" ? t("eks.platformFileVolume") : t("eks.platformBlockVolume")];
   return <div className="stack cluster-storage-step">
@@ -208,7 +208,6 @@ function ClusterStorage({ pools }: { pools: Pool[] }) {
     {cloud && <Panel title={t("eks.requestedCapacity")}>
       <div className="form-grid">
         <SpecNumber name="defaultPvcGb" label={isBlock ? t("eks.capacityPerNode") : t("eks.sharedCapacity")} min={1} max={32768} />
-        {isBlock && <Field label={t("eks.volumeType")}><select value={spec.storageClass === "nvme" ? "nvme" : "ssd"} onChange={(event) => update({ storageClass: event.target.value })}><option value="ssd">SSD</option><option value="nvme">NVMe</option></select></Field>}
         <Field label={t("eks.accessMode")}><strong>{t(mode === "shared_file" ? "eks.rwx" : "eks.rwo")}</strong></Field>
       </div>
       <KeyValues items={[[t("eks.nodeCount"), nodes], [t("eks.generatedVolumeCount"), volumeCount], [t("eks.totalProvisionedCapacity"), `${totalCapacity} GB`]]} />
