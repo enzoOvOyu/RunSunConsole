@@ -684,10 +684,12 @@ export function NetworkFields({
         </Link>
       </div>
       <div className="form-grid">
-        {dedicatedBaremetal && (
-          <div className="notice">{t("network.baremetalVpcNotice")}</div>
-        )}
-        <Field label="VPC">
+        <Field
+          label="VPC"
+          hint={
+            dedicatedBaremetal ? t("network.baremetalVpcNotice") : undefined
+          }
+        >
           <select
             aria-label="VPC"
             value={vpcId}
