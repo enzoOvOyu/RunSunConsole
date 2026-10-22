@@ -54,7 +54,7 @@ export function Topbar({
         </Button>
         <img
           className={styles.mobileBrand}
-          src="https://runsuncloud.com/images/favicon.ico"
+          src="/favicon.ico"
           width={25}
           height={25}
           alt="RunSun"
@@ -69,7 +69,7 @@ export function Topbar({
       <div className={styles.topRight}>
         <img
           className={styles.topbarBrand}
-          src="https://runsuncloud.com/images/logo.png"
+          src="/logo.png"
           alt="RunSun Cloud"
         />
         <Button
