@@ -174,7 +174,6 @@ export function RemoteTerminal({
         resource,
         osName,
         osFamily,
-        username,
         driverVersion,
         cudaVersion,
       });
