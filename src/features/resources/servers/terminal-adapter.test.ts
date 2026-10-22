@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { ResourceOf } from "../../../../types/domain";
-import { runMockCommand } from "./adapter";
+import type { ResourceOf } from "../../../types/domain";
+import { runSafeCommand } from "./terminal-adapter";
 
 const resource = {
   resourceUuid: "vm-test",
@@ -43,26 +43,34 @@ const resource = {
   },
 } as unknown as ResourceOf<"gpu_vm">;
 
-describe("Mock VNC safe command map", () => {
+const context = {
+  resource,
+  osName: "Ubuntu 22.04 LTS",
+  osFamily: "Ubuntu",
+  username: "ubuntu",
+  driverVersion: "615.71.10",
+  cudaVersion: "13.0",
+};
+
+describe("Server terminal safe command map", () => {
   it("derives hardware, memory, storage and network output from the selected resource", () => {
-    expect(runMockCommand("nvidia-smi", { resource })).toContain(
-      "GPU count: 4",
+    expect(runSafeCommand("nvidia-smi", context)).toContain("GPU count: 4");
+    expect(runSafeCommand("free -h", context)).toContain("256Gi");
+    expect(runSafeCommand("df -h", context)).toContain("280G");
+    expect(runSafeCommand("ip addr", context)).toContain("region jp");
+    expect(runSafeCommand("hostname", context)).toBe(resource.displayId);
+    expect(runSafeCommand("cat /etc/os-release", context)).toContain(
+      "Ubuntu 22.04 LTS",
     );
-    expect(runMockCommand("free -h", { resource })).toContain("256Gi");
-    expect(runMockCommand("df -h", { resource })).toContain("280G");
-    expect(runMockCommand("ip addr", { resource })).toContain("region jp");
-    expect(runMockCommand("hostname", { resource })).toBe(resource.displayId);
   });
 
   it("does not execute unknown command input", () => {
-    expect(runMockCommand("rm -rf /", { resource })).toContain(
-      "command not found",
-    );
+    expect(runSafeCommand("rm -rf /", context)).toContain("command not found");
   });
 
   it("only clears for the exact clear command", () => {
-    expect(runMockCommand("clear", { resource })).toBe("__CLEAR__");
-    expect(runMockCommand("clear /tmp", { resource })).toContain(
+    expect(runSafeCommand("clear", context)).toBe("__CLEAR__");
+    expect(runSafeCommand("clear /tmp", context)).toContain(
       "command not found",
     );
   });

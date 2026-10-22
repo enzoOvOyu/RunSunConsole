@@ -1,7 +1,7 @@
 import { gpuModelDisplayName, poolDisplayName } from "../../../lib/gpu-labels";
 import { ResourceNetwork } from "../../network/ResourceNetwork";
 import { useState } from "react";
-import { VncConsole } from "./vnc/VncConsole";
+import { RemoteTerminal } from "./RemoteTerminal";
 import type { Image, ResourceOf } from "../../../types/domain";
 import { EP } from "../../../lib/api-client";
 import { useData } from "../../shared/hooks";
@@ -11,7 +11,6 @@ import { date } from "../../../lib/date";
 import {
   MetricsOverview,
   MonitorPanel,
-  AccessPanel,
   SpecPanel,
   EventsPanel,
   BillingPanel,
@@ -93,16 +92,17 @@ export function ServerDetail({
       ) : tab === "monitoring" ? (
         <MonitorPanel resource={r} />
       ) : tab === "console" ? (
-        <div className="stack">
-          <VncConsole
-            resource={r}
-            canManage={canManage}
-            onStart={onStart}
-            onStop={onStop}
-            onRestart={onRestart}
-          />
-          <AccessPanel resource={r} />
-        </div>
+        <RemoteTerminal
+          resource={r}
+          osName={baseImage?.name || r.spec.imageRef}
+          osFamily={baseImage?.osFamily || r.spec.imageRef}
+          driverVersion={baseImage?.driverVersion || undefined}
+          cudaVersion={runtimeImage?.cudaVersion}
+          canManage={canManage}
+          onStart={onStart}
+          onStop={onStop}
+          onRestart={onRestart}
+        />
       ) : tab === "network" ? (
         <ResourceNetwork resource={r} />
       ) : tab === "configuration" ? (
