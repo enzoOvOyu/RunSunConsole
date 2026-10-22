@@ -468,7 +468,6 @@ export default {
   "wizard.inferenceConfigGroup": "模型与算力配置",
   "wizard.textModelsOnly": "支持文本及可生成文本的多模态模型；当前服务使用聊天接口。",
   "wizard.selectModel": "选择模型",
-  "wizard.publisherModelCount": "{count} 个模型",
   "wizard.textModelRequired":
     "请选择可生成文本的模型；纯图像模型不能用于此聊天推理服务。",
   "wizard.poolAutoChanged": "GPU 机型已自动切换为兼容选项，请在下一步确认。",

@@ -88,7 +88,6 @@ function InferenceForm({ step, pools, models }: FormContext) {
   );
   const [autoNotice, setAutoNotice] = useState("");
   const [openPublisher, setOpenPublisher] = useState<string | null>(null);
-  const [modelSearch, setModelSearch] = useState("");
   const memory = useQuery({
     queryKey: [
       "model-memory",
@@ -299,10 +298,16 @@ function InferenceForm({ step, pools, models }: FormContext) {
               >
                 <div className="inference-publisher-header">
                   <ModelPublisherLogo publisher={publisher} size={30} />
-                  <strong title={label}>{label}</strong>
-                  <span className="inference-publisher-count">
-                    {t("wizard.publisherModelCount", { count: items.length })}
-                  </span>
+                  <strong
+                    className={
+                      label.toLowerCase() === "inclusionai"
+                        ? "inference-publisher-single-line"
+                        : undefined
+                    }
+                    title={label}
+                  >
+                    {label}
+                  </strong>
                   <Check
                     className="inference-publisher-check"
                     size={16}
@@ -313,7 +318,6 @@ function InferenceForm({ step, pools, models }: FormContext) {
                   open={openPublisher === label}
                   onOpenChange={(open) => {
                     setOpenPublisher(open ? label : null);
-                    setModelSearch("");
                   }}
                 >
                   <PopoverTrigger asChild>
@@ -333,18 +337,14 @@ function InferenceForm({ step, pools, models }: FormContext) {
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent
-                    align="start"
+                    align="end"
                     sideOffset={6}
                     className="inference-model-popover"
-                    style={{ width: "var(--radix-popover-trigger-width)" }}
+                    style={{
+                      width: "calc(var(--radix-popover-trigger-width) + 160px)",
+                    }}
                   >
                     <Command shouldFilter>
-                      <Command.Input
-                        value={modelSearch}
-                        onValueChange={setModelSearch}
-                        placeholder={t("common.search")}
-                        aria-label={t("common.search")}
-                      />
                       <Command.List>
                         <Command.Empty>{t("images.noMatches")}</Command.Empty>
                         {items.map((item) => (
@@ -364,7 +364,6 @@ function InferenceForm({ step, pools, models }: FormContext) {
                                 compatiblePool(item),
                               );
                               setOpenPublisher(null);
-                              setModelSearch("");
                             }}
                           >
                             <span className="inference-model-option-name">
