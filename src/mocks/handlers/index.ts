@@ -1325,21 +1325,39 @@ async function dispatchNetwork(
     if (e.releasedAt) fail(410, "GONE");
     if (action === "bind" && method === "POST") {
       if (e.interfaceId || e.tunnelId) fail(409, "EIP_IN_USE");
-      const nic =
-        interfaces.find((i) => i.id === body.interfaceId) ||
-        fail(404, "NOT_FOUND");
-      const r = resource(nic.resourceUuid);
+      const targetId = body.resourceUuid
+        ? z.string().parse(body.resourceUuid)
+        : interfaces.find((i) => i.id === body.interfaceId)?.resourceUuid || fail(404, "NOT_FOUND");
+      const r = resource(targetId);
       if (
-        r.kind !== "gpu_vm" ||
+        r.kind !== "gpu_vm" || r.deletedAt ||
         !["running", "stopped"].includes(r.status) ||
-        r.region !== e.region ||
-        r.projectId !== e.projectId ||
-        nic.region !== e.region ||
-        nic.projectId !== e.projectId ||
+        r.region !== e.region || r.projectId !== e.projectId
+      ) fail(409, "NETWORK_SCOPE_MISMATCH");
+      const activeNics = () => n.interfaces
+        .filter((i) => i.resourceUuid === r.resourceUuid && !i.releasedAt)
+        .sort((a, b) => a.index - b.index);
+      if (!activeNics().length && body.resourceUuid) {
+        const networkBefore = structuredClone(n);
+        const specBefore = structuredClone(r.spec);
+        try {
+          checkResourceNetwork(n, r);
+          syncResourceNetwork(n, r, false);
+        } catch (error) {
+          Object.assign(n, networkBefore);
+          r.spec = specBefore;
+          throw error;
+        }
+      }
+      const nic = body.interfaceId
+        ? activeNics().find((i) => i.id === body.interfaceId)
+        : activeNics().find((i) => !n.eips.some((ip) => !ip.releasedAt && ip.interfaceId === i.id));
+      if (!nic) fail(409, "EIP_IN_USE");
+      if (
+        nic.region !== e.region || nic.projectId !== e.projectId ||
         !n.vpcs.some((v) => v.id === nic.vpcId && !v.deletedAt && v.region === e.region && v.projectId === e.projectId) ||
         !n.subnets.some((subnet) => subnet.id === nic.subnetId && !subnet.deletedAt && subnet.vpcId === nic.vpcId)
-      )
-        fail(409, "NETWORK_SCOPE_MISMATCH");
+      ) fail(409, "NETWORK_SCOPE_MISMATCH");
       if (n.eips.some((x) => !x.releasedAt && x.interfaceId === nic.id))
         fail(409, "EIP_IN_USE");
       e.interfaceId = nic.id;

@@ -1514,6 +1514,11 @@ export default {
     "Stateful rules allow response traffic for established connections. Priority 1 is highest; deny wins ties. Unmatched inbound is denied, outbound is allowed. Same-group traffic follows the group policy.",
   "network.associateHint":
     "Association applies to every device in the selected VM resource group. Each group retains 1–5 security groups in the same VPC.",
+  "network.bindScope": "Only VMs in {project} · {region} can be bound.",
+  "network.bindVm": "Select GPU virtual machine",
+  "network.vmEipOccupied": "All interfaces have EIPs",
+  "network.vmNotReady": "Instance is not ready",
+  "network.noEligibleEipVm": "No eligible GPU VM in this project and region. VMs with EIPs on every interface or those not ready cannot be selected. Check the EIP project and region.",
   "network.noEligible":
     "No VM devices meet the project, region and binding requirements.",
   "network.allocate": "Allocate Elastic IP",

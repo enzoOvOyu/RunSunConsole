@@ -1,10 +1,12 @@
 import { useState } from "react";
-import type { Region, Project } from "../../types/domain";
+import type { Region, Project, Resource } from "../../types/domain";
 import type {
   DeploymentNetworkOptions,
   SecurityRule,
 } from "../../types/network";
 import { EP, post, patch, query } from "../../lib/api-client";
+import { formatResourceId } from "../../lib/ids";
+import { useAuth } from "../../stores/auth";
 import { useData, useAction } from "../shared/hooks";
 import { t, dt } from "../../i18n";
 import { Modal, Field, Button, Loading, ErrorState } from "../../components/ui";
@@ -35,8 +37,12 @@ export function NetworkEditor({
 }) {
   const item = state.item;
   const action = state.action;
+  const activeProject = useAuth((store) => store.project);
   const [project, setProject] = useState(
-    item?.projectId || projectId || projects[0]?.id || "",
+    item?.projectId || projectId ||
+    projects.find((candidate) => candidate.id === activeProject)?.id ||
+    projects.find((candidate) => candidate.isDefault)?.id ||
+    projects[0]?.id || "",
   );
   const [name, setName] = useState(action === "subnet" ? "" : item?.name || "");
   const [networkType, setNetworkType] = useState<"standard" | "baremetal">(
@@ -88,6 +94,11 @@ export function NetworkEditor({
     `${EP.network}/interfaces` +
       query({ region: scopeRegion, project_id: project }),
     { enabled: action === "bind" || action === "associate" },
+  );
+  const vms = useData<{ items: Resource[] }>(
+    ["network-editor-vms", scopeRegion, project],
+    EP.resources + query({ kind: "gpu_vm", region: scopeRegion, project_id: project, size: 1000 }),
+    { enabled: action === "bind" },
   );
   const { run, busy } = useAction();
   const optionsData = options.data;
@@ -168,7 +179,7 @@ export function NetworkEditor({
       body = { ...rule };
     } else if (action === "bind") {
       path += "/bind";
-      body = { interfaceId: binding };
+      body = { resourceUuid: binding };
     } else if (action === "associate") {
       path += "/associate";
       body = { resourceUuid: binding };
@@ -206,11 +217,19 @@ export function NetworkEditor({
       i.kind === "gpu_vm" &&
       i.resource &&
       ["running", "stopped"].includes(i.resource.status) &&
-      (action === "associate"
-        ? i.vpcId === (item && "vpcId" in item ? item.vpcId : "") &&
-          !i.securityGroupIds.includes(item!.id)
-        : !i.eip),
+      i.vpcId === (item && "vpcId" in item ? item.vpcId : "") &&
+      !i.securityGroupIds.includes(item!.id),
   );
+  const vmRows = vms.data?.items || [];
+  const vmInterfaces = new Map<string, boolean>();
+  for (const nic of nics.data || [])
+    vmInterfaces.set(
+      nic.resourceUuid,
+      (vmInterfaces.get(nic.resourceUuid) || false) || !nic.eip,
+    );
+  const vmAvailable = (resource: Resource) =>
+    ["running", "stopped"].includes(resource.status) &&
+    (vmInterfaces.get(resource.resourceUuid) ?? true);
   const uniqueResources = [
     ...new Map(bindingNics.map((i) => [i.resourceUuid, i])).values(),
   ];
@@ -219,7 +238,14 @@ export function NetworkEditor({
       open
       onClose={onClose}
       title={kind === "eips" && action === "create" ? t("network.allocate") : t(`network.action.${action}`)}
-      description={kind === "eips" && action === "create" ? t("network.eipIndependent") : action === "psk" ? t("network.pskHint") : undefined}
+      description={kind === "eips" && action === "create"
+        ? t("network.eipIndependent")
+        : kind === "eips" && action === "bind"
+          ? t("network.bindScope", {
+              project: dt(projects.find((candidate) => candidate.id === project)?.name || project),
+              region: t(`common.${scopeRegion}`),
+            })
+          : action === "psk" ? t("network.pskHint") : undefined}
     >
       <form
         className="stack network-form"
@@ -240,7 +266,7 @@ export function NetworkEditor({
                   t("common.project"),
                   project,
                   setProject,
-                  projects.map((p) => [p.id, dt(p.name)]),
+                  projects.map((p) => [p.id, `${dt(p.name)} · ${formatResourceId("prj", p.id)}`]),
                 )}
                 <Field label={t("common.region")}>
                   <input
@@ -488,28 +514,36 @@ export function NetworkEditor({
               </>
             )}
             {["bind", "associate"].includes(action) &&
-              (nics.isPending ? (
+              (nics.isPending || (action === "bind" && vms.isPending) ? (
                 <Loading />
-              ) : nics.error ? (
-                <ErrorState error={nics.error} />
+              ) : nics.error || (action === "bind" && vms.error) ? (
+                <ErrorState error={nics.error || vms.error} />
+              ) : action === "bind" ? (
+                <>
+                  <Field label={t("network.bindVm")}>
+                    <select value={binding} onChange={(event) => setBinding(event.target.value)} required>
+                      <option value="">{t("network.select")}</option>
+                      {vmRows.map((resource) => (
+                        <option
+                          key={resource.resourceUuid}
+                          value={resource.resourceUuid}
+                          disabled={!vmAvailable(resource)}
+                        >
+                          {dt(resource.name)} · {resource.displayId}
+                          {!vmAvailable(resource) ? ` · ${t(["running", "stopped"].includes(resource.status) ? "network.vmEipOccupied" : "network.vmNotReady")}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  {!vmRows.some(vmAvailable) && <p className="notice">{t("network.noEligibleEipVm")}</p>}
+                </>
               ) : (
                 <>
                   {select(
-                    t(
-                      action === "bind" ? "network.interface" : "nav.resources",
-                    ),
-                    binding,
-                    setBinding,
-                    (action === "bind" ? bindingNics : uniqueResources).map(
-                      (i) => [
-                        action === "bind" ? i.id : i.resourceUuid,
-                        `${dt(i.resource!.name)} · ${i.name} · ${i.privateIp}`,
-                      ],
-                    ),
+                    t("nav.resources"), binding, setBinding,
+                    uniqueResources.map((nic) => [nic.resourceUuid, `${dt(nic.resource!.name)} · ${nic.name} · ${nic.privateIp}`]),
                   )}
-                  {action === "associate" && (
-                    <p className="notice">{t("network.associateHint")}</p>
-                  )}
+                  <p className="notice">{t("network.associateHint")}</p>
                   {!bindingNics.length && <p>{t("network.noEligible")}</p>}
                 </>
               ))}

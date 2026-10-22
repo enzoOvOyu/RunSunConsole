@@ -291,6 +291,19 @@ it("finds EIPs by name, address or display ID and links the bound VM", async () 
   expect(bound.data.boundHref).toContain(nic!.resourceUuid);
   expect(bound.data.boundName).toBe(db.resources.find((item) => item.resourceUuid === nic!.resourceUuid)?.name);
 });
+it("binds an EIP by VM and repairs a missing legacy interface", async () => {
+  const vm = db.resources.find((item) =>
+    item.kind === "gpu_vm" && item.projectId === scope().projectId &&
+    item.region === "jp" && item.status === "running")!;
+  const address = await eip();
+  db.network.interfaces = db.network.interfaces.filter((nic) => nic.resourceUuid !== vm.resourceUuid);
+  const bound = await request(`/eips/${address.id}/bind`, "POST", { resourceUuid: vm.resourceUuid });
+  expect(bound.status).toBe(200);
+  const nic = db.network.interfaces.find((item) => item.id === bound.data.interfaceId);
+  expect(nic?.resourceUuid).toBe(vm.resourceUuid);
+  expect(bound.data.boundHref).toContain(vm.resourceUuid);
+  expect((await request(`/eips/${address.id}/bind`, "POST", { resourceUuid: vm.resourceUuid })).status).toBe(409);
+});
 it("bills idle EIPs independently and never duplicates new compute IP meters", async () => {
   const e = await eip();
   const now = Date.now();

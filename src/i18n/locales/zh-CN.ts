@@ -1439,6 +1439,11 @@ export default {
     "有状态规则：已建立连接的响应流量允许返回。优先级 1 最高，同优先级拒绝优先；未匹配的入站默认拒绝、出站默认允许。同组互通按安全组策略处理。",
   "network.associateHint":
     "关联操作作用于所选虚机资源组内的全部设备。每个资源组保留 1–5 个同 VPC 安全组。",
+  "network.bindScope": "仅可绑定 {project} · {region} 内的虚机。",
+  "network.bindVm": "选择 GPU 云服务器",
+  "network.vmEipOccupied": "所有网卡已绑定公网 IP",
+  "network.vmNotReady": "实例尚未就绪",
+  "network.noEligibleEipVm": "当前项目和区域没有可绑定的 GPU 云服务器。已绑定公网 IP 或尚未就绪的实例不可选；请核对 EIP 的项目和区域。",
   "network.noEligible": "没有符合项目、区域及绑定条件的虚机设备。",
   "network.allocate": "分配弹性公网 IP",
   "network.includeReleased": "包含已释放地址",
