@@ -4,6 +4,13 @@ import { Link } from "react-router-dom";
 import { EP, query } from "../../../lib/api-client";
 import { useData } from "../../shared/hooks";
 import { confirmAction } from "../../../components/ui/ConfirmAction";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "../../../components/ui/dropdown-menu";
+import { ChevronDown } from "lucide-react";
 import { useFormContext } from "react-hook-form";
 import type {
   Resource,
@@ -548,7 +555,7 @@ export function ImageCards({
           >
             <strong>{image.name}</strong>
             <small>
-              {t("images.cpuArchitecture")}: {" "}
+              {t("images.cpuArchitecture")}:{" "}
               {imageArchitectures(image).join(" / ")}
               {runtime ? ` · ${image.sizeGb} GB` : ""}
             </small>
@@ -599,8 +606,10 @@ export function NetworkFields({
   );
   const availableVpcs = useMemo(
     () =>
-      (options.data?.vpcs || []).filter(
-        (vpc) => !dedicatedBaremetal || vpcNetworkType(vpc) === "baremetal",
+      (options.data?.vpcs || []).filter((vpc) =>
+        dedicatedBaremetal
+          ? vpcNetworkType(vpc) === "baremetal"
+          : vpcNetworkType(vpc) !== "baremetal",
       ),
     [options.data?.vpcs, dedicatedBaremetal],
   );
@@ -671,7 +680,7 @@ export function NetworkFields({
       <div className="notice">
         {t("network.deploymentScope")} ·{" "}
         <Link to={`/network/vpcs?region=${region}&project_id=${projectId}`}>
-          {t("network.manage")}
+          {t("network.createVpc")}
         </Link>
       </div>
       <div className="form-grid">
@@ -730,25 +739,65 @@ export function NetworkFields({
           )}
         </Field>
         <Field label={t("field.securityGroups")}>
-          <select
-            multiple
-            aria-label={t("field.securityGroups")}
-            value={spec.securityGroups || []}
-            onChange={(e) =>
-              update({
-                securityGroups: Array.from(
-                  e.target.selectedOptions,
-                  (o) => o.value,
-                ),
-              })
-            }
-          >
-            {groups.map((g) => (
-              <option key={g.id} value={g.id}>
-                {dt(g.name)}
-              </option>
-            ))}
-          </select>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="input row"
+                aria-label={t("field.securityGroups")}
+                aria-haspopup="menu"
+                disabled={!groups.length}
+              >
+                <span>
+                  {groups.length
+                    ? (spec.securityGroups || [])
+                        .map(
+                          (id) => groups.find((group) => group.id === id)?.name,
+                        )
+                        .filter(Boolean)
+                        .map((name) => dt(name!))
+                        .join(", ") || t("network.selectSecurityGroups")
+                    : t("network.noSecurityGroups")}
+                </span>
+                <ChevronDown size={16} aria-hidden="true" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-64">
+              {groups.map((group) => {
+                const checked = (spec.securityGroups || []).includes(group.id);
+                return (
+                  <DropdownMenuCheckboxItem
+                    key={group.id}
+                    checked={checked}
+                    disabled={
+                      !checked && (spec.securityGroups || []).length >= 5
+                    }
+                    onSelect={(event) => event.preventDefault()}
+                    onCheckedChange={(nextChecked) =>
+                      update({
+                        securityGroups: nextChecked
+                          ? [...(spec.securityGroups || []), group.id].slice(
+                              0,
+                              5,
+                            )
+                          : (spec.securityGroups || []).filter(
+                              (id) => id !== group.id,
+                            ),
+                      })
+                    }
+                  >
+                    <span className="stack" style={{ gap: 2 }}>
+                      <span>{dt(group.name)}</span>
+                      {group.description && <small>{group.description}</small>}
+                    </span>
+                  </DropdownMenuCheckboxItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {!groups.length && (
+            <small className="muted">{t("network.noSecurityGroups")}</small>
+          )}
           {!spec.securityGroups?.length && (
             <small className="field-error">
               {t("wizard.securityGroupRequired")}

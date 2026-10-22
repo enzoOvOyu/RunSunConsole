@@ -9,7 +9,6 @@ import { t } from "../../../i18n";
 import { Panel, Tabs, KeyValues } from "../../../components/ui";
 import { date } from "../../../lib/date";
 import {
-  MetricsOverview,
   MonitorPanel,
   SpecPanel,
   EventsPanel,
@@ -87,13 +86,13 @@ export function ServerDetail({
               ]}
             />
           </Panel>
-          <MetricsOverview resource={r} />
         </div>
       ) : tab === "monitoring" ? (
         <MonitorPanel resource={r} />
       ) : tab === "console" ? (
         <RemoteTerminal
           resource={r}
+          authMethod={r.spec.authMethod || "ssh_key"}
           osName={baseImage?.name || r.spec.imageRef}
           osFamily={baseImage?.osFamily || r.spec.imageRef}
           driverVersion={baseImage?.driverVersion || undefined}

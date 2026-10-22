@@ -79,6 +79,7 @@ export interface ServerSpec extends CommonSpec {
   entrypoint: string;
 }
 export interface BaremetalSpec extends CommonSpec {
+  authMethod?: "ssh_key" | "password";
   machineType: string;
   machineCount: number;
   gpuModel: string;
@@ -516,7 +517,7 @@ export interface Order {
 }
 export interface OperationLog {
   id: string;
-  operation: "create" | "delete";
+  operation: "create" | "delete" | "start" | "stop";
   status: "processing" | "succeeded" | "failed" | "canceled";
   startedAt: string;
   completedAt: string | null;

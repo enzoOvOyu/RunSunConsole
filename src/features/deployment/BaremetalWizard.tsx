@@ -9,18 +9,18 @@ import { z } from "zod";
 import type { BaremetalSpec } from "../../types/domain";
 import { t } from "../../i18n";
 import { Field } from "../../components/ui";
-import { baremetalSchema } from "../../lib/schema";
+import { baremetalSchema, storageSelectionsSchema } from "../../lib/schema";
 import { WizardLayout, PoolCards } from "./shared/WizardLayout";
 import {
   useSpec,
   SpecNumber,
-  SpecText,
   SpecCheck,
   SpecSelect,
   ImageCards,
   NetworkFields,
   Review,
   ScalingToggle,
+  SshKeySelect,
   type FormContext,
   type WizardValues,
 } from "./shared/fields";
@@ -35,11 +35,27 @@ function validate(v: WizardValues, step: number) {
       })
       .safeParse(s).success;
   if (step === 3)
-    return !!s.vpc && !!s.subnet && (s.securityGroups?.length || 0) > 0;
-  return baremetalSchema.safeParse(s).success;
+    return (
+      !!s.imageRef &&
+      /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(s.hostnamePrefix.trim()) &&
+      s.hostnamePrefix.trim().length <= 45 &&
+      (s.authMethod === "password"
+        ? v.password.length >= 8 && v.password.length <= 128
+        : /^ssh-(ed25519|rsa)\s+[A-Za-z0-9+/=]+/.test(s.sshPubkey)) &&
+      ["recommended", "latest"].includes(s.firmwareBaseline)
+    );
+  return (
+    !!s.vpc &&
+    !!s.subnet &&
+    (s.securityGroups?.length || 0) > 0 &&
+    z.number().int().min(0).max(32768).safeParse(s.baseStorageGb).success &&
+    storageSelectionsSchema.safeParse(s.storageSelections || []).success &&
+    baremetalSchema.safeParse(s).success
+  );
 }
 function BaremetalForm({ step, pools, images }: FormContext) {
   const { spec, update, form } = useSpec<BaremetalSpec>();
+  const password = form.watch("password");
   const selected = form.watch("nodePool");
   const pool = pools.find((p) => p.code === selected)!;
   useEffect(() => {
@@ -118,10 +134,6 @@ function BaremetalForm({ step, pools, images }: FormContext) {
     </div>
   ) : step === 3 ? (
     <div className="stack">
-      <NetworkFields dedicatedBaremetal />
-    </div>
-  ) : (
-    <div className="stack">
       <ImageCards
         images={images}
         os
@@ -146,12 +158,53 @@ function BaremetalForm({ step, pools, images }: FormContext) {
           <small className="field-error">{t("wizard.hostnameInvalid")}</small>
         )}
       </Field>
-      <SpecText name="sshPubkey" label={t("wizard.sshKey")} area />
+      <div className="stack">
+        <SpecSelect
+          name="authMethod"
+          label={t("field.authMethod")}
+          options={[
+            { value: "ssh_key", label: t("wizard.sshKey") },
+            { value: "password", label: t("wizard.password") },
+          ]}
+        />
+        {spec.authMethod === "password" ? (
+          <Field label={t("wizard.password")} hint={t("wizard.passwordRule")}>
+            <input
+              className="input"
+              type="password"
+              autoComplete="new-password"
+              aria-invalid={password.length < 8 || password.length > 128}
+              {...form.register("password")}
+            />
+            {(password.length < 8 || password.length > 128) && (
+              <small className="field-error">
+                {t("wizard.passwordRequired")}
+              </small>
+            )}
+          </Field>
+        ) : (
+          <>
+            <SshKeySelect
+              value={spec.sshPubkey}
+              onChange={(sshPubkey) => update({ sshPubkey })}
+            />
+            {!/^ssh-(ed25519|rsa)\s+[A-Za-z0-9+/=]+/.test(spec.sshPubkey) && (
+              <small className="field-error">
+                {t("wizard.sshKeyRequired")}
+              </small>
+            )}
+          </>
+        )}
+      </div>
       <SpecSelect
         name="firmwareBaseline"
         label={t("wizard.firmware")}
         options={["recommended", "latest"]}
       />
+    </div>
+  ) : (
+    <div className="stack">
+      <NetworkFields dedicatedBaremetal />
       <SpecNumber
         name="baseStorageGb"
         label={t("quota.storage")}
@@ -159,7 +212,6 @@ function BaremetalForm({ step, pools, images }: FormContext) {
         max={32768}
       />
       <StorageRows />
-      <ScalingToggle kind="gpu_baremetal" />
       <Review />
     </div>
   );
@@ -172,10 +224,11 @@ export default function BaremetalWizard() {
         "projectRegion",
         "machineSpec",
         "machinePolicy",
-        "networkOob",
-        "osConfirm",
+        "osSettings",
+        "networkStorage",
       ]}
       validateStep={validate}
+      firstStepContent={<ScalingToggle kind="gpu_baremetal" />}
       render={(ctx) => <BaremetalForm {...ctx} />}
     />
   );

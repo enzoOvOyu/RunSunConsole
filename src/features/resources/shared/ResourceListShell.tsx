@@ -1,6 +1,6 @@
 import { useUrlState } from "../../shared/useUrlState";
 import { useResourceTransition } from "../../../stores/resourceTransition";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -76,6 +76,8 @@ export function ResourceListShell<K extends Kind>({
   }, [urlProject, setProject]);
   const [released, setReleased] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
+  const [pageSize, setPageSize] = useState(10);
+  const [page, setPage] = useState(0);
   const [deleteMany, setDeleteMany] = useState(false);
   const [confirm, setConfirm] = useState("");
   const [showColumns, setShowColumns] = useState(false);
@@ -105,8 +107,12 @@ export function ResourceListShell<K extends Kind>({
   useEffect(() => {
     setSelected([]);
     setFacetValues({});
+    setPage(0);
   }, [kind, region, project]);
-  useEffect(() => setSelected([]), [status, q]);
+  useEffect(() => {
+    setSelected([]);
+    setPage(0);
+  }, [status, q]);
   const transition = useResourceTransition((s) => s.items);
   const items = [
     ...(resources.data?.items || []),
@@ -125,6 +131,17 @@ export function ResourceListShell<K extends Kind>({
     ),
   );
   const hasFacetFilter = Object.values(facetValues).some(Boolean);
+  const pageCount =
+    pageSize === 0 ? 1 : Math.max(1, Math.ceil(shown.length / pageSize));
+  const activePage = Math.min(page, pageCount - 1);
+  const pageResources = useMemo(
+    () =>
+      pageSize === 0
+        ? shown
+        : shown.slice(activePage * pageSize, (activePage + 1) * pageSize),
+    [activePage, pageSize, shown],
+  );
+  const pageIds = pageResources.map((resource) => resource.resourceUuid);
   const chosen = shown.filter((r) => selected.includes(r.resourceUuid));
   const toggle = (id: string) =>
     setSelected((s) =>
@@ -135,21 +152,22 @@ export function ResourceListShell<K extends Kind>({
     enableSorting: false,
     header: () => (
       <Checkbox
-        aria-label={t("common.all")}
+        aria-label={t("resource.selectPage")}
         checked={
-          shown.length > 0 &&
-          shown.every((resource) => selected.includes(resource.resourceUuid))
+          pageIds.length > 0 && pageIds.every((id) => selected.includes(id))
             ? true
-            : shown.some((resource) => selected.includes(resource.resourceUuid))
+            : pageIds.some((id) => selected.includes(id))
               ? "indeterminate"
               : false
         }
         onCheckedChange={(checked) =>
-          setSelected(
-            checked === true
-              ? shown.map((resource) => resource.resourceUuid)
-              : [],
-          )
+          setSelected((current) => {
+            const pageSet = new Set<string>(pageIds);
+            const withoutPage = current.filter((id) => !pageSet.has(id));
+            return checked === true
+              ? [...withoutPage, ...pageIds]
+              : withoutPage;
+          })
         }
       />
     ),
@@ -281,6 +299,7 @@ export function ResourceListShell<K extends Kind>({
             value={facetValues[facet.id] || ""}
             onChange={(event) => {
               setSelected([]);
+              setPage(0);
               setFacetValues((current) => ({
                 ...current,
                 [facet.id]: event.target.value,
@@ -361,11 +380,56 @@ export function ResourceListShell<K extends Kind>({
         ) : !shown.length ? (
           <Empty text={t("resource.noMatchingSpecs")} />
         ) : (
-          <DataTable
-            data={shown}
-            columns={[checkbox, ...visibleCols]}
-            onRow={(r) => navigate(resourceLink(r))}
-          />
+          <>
+            <DataTable
+              data={pageResources}
+              columns={[checkbox, ...visibleCols]}
+              onRow={(r) => navigate(resourceLink(r))}
+              paginate={false}
+            />
+            <div className="table-footer resource-pagination">
+              <div className="row">
+                <span>{t("common.rows", { count: shown.length })}</span>
+                <label className="row resource-page-size">
+                  <span>{t("resource.pageSize")}</span>
+                  <select
+                    aria-label={t("resource.pageSize")}
+                    value={pageSize}
+                    onChange={(event) => {
+                      setPageSize(Number(event.target.value));
+                      setPage(0);
+                    }}
+                  >
+                    {[10, 25, 50].map((size) => (
+                      <option key={size} value={size}>
+                        {size}
+                      </option>
+                    ))}
+                    <option value={0}>{t("common.all")}</option>
+                  </select>
+                </label>
+              </div>
+              <div className="row">
+                <Button
+                  aria-label={t("resource.previousPage")}
+                  disabled={activePage === 0}
+                  onClick={() => setPage(activePage - 1)}
+                >
+                  {t("resource.previousPage")}
+                </Button>
+                <span>
+                  {t("common.page", { page: activePage + 1 })} / {pageCount}
+                </span>
+                <Button
+                  aria-label={t("resource.nextPage")}
+                  disabled={activePage + 1 >= pageCount}
+                  onClick={() => setPage(activePage + 1)}
+                >
+                  {t("resource.nextPage")}
+                </Button>
+              </div>
+            </div>
+          </>
         )}
       </div>
       <ResourceDrawer />

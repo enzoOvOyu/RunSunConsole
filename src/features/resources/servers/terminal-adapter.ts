@@ -45,7 +45,11 @@ export function runSafeCommand(
   const { resource, osName, osFamily, username } = context;
   const isWindows = /windows/i.test(osFamily);
   const hostname = resource.displayId;
-  const home = isWindows ? "C:\\Users\\" + username : "/home/" + username;
+  const home = isWindows
+    ? "C:\\Users\\" + username
+    : username === "root"
+      ? "/root"
+      : "/home/" + username;
   const systemRelease = isWindows
     ? "Microsoft Windows NT " + osName + " x64"
     : "Linux " + hostname + " 6.8.0-52-generic #53 SMP x86_64 GNU/Linux";
@@ -76,6 +80,7 @@ export function runSafeCommand(
         "  pwd                  Print the current directory",
         "  ls [ -la ]           List files",
         "  whoami               Show the current user",
+        "  id                   Show user and group IDs",
         "  hostname             Show this server name",
         "  nvidia-smi           Show GPU information",
         "  ip addr              Show network information",
@@ -90,6 +95,7 @@ export function runSafeCommand(
     pwd: home,
     "Get-Location": home,
     whoami: username,
+    id: "uid=0(root) gid=0(root) groups=0(root)",
     hostname,
     date: (context.now ?? new Date()).toString(),
     "Get-Date": (context.now ?? new Date()).toString(),

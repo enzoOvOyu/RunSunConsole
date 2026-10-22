@@ -3,32 +3,38 @@ import { expect, test } from "@playwright/test";
 test("GPU VM server command line, safe commands, fullscreen and lifecycle", async ({
   page,
 }) => {
-  await page.goto("/resources/servers");
-  const response = await page.request.get("/api/resources?kind=gpu_vm");
-  const payload = (await response.json()) as {
-    items: Array<{ displayId: string; status: string }>;
-  };
-  const vm =
-    payload.items.find((item) => item.status === "running") ??
-    payload.items.find((item) => item.status === "stopped");
-  test.skip(!vm, "No available GPU VM");
-  const row = page.locator("tbody tr").filter({ hasText: vm!.displayId });
-  await expect(row).toBeVisible();
+  await page.addInitScript(() =>
+    localStorage.removeItem("rs.mock.database.v2"),
+  );
+  await page.goto("/resources/servers?region=jp");
+  await expect(page.locator("tbody tr").first()).toBeVisible();
+  const row = page
+    .locator("tbody tr")
+    .filter({ hasText: /运行中|Running/ })
+    .first();
+  test.skip(!(await row.count()), "No running GPU VM in the current region");
+  const displayId = (await row.locator(".resource-id").textContent())?.trim();
+  if (!displayId) throw new Error("GPU VM row has no resource ID");
   await row.click();
   await expect(page.getByRole("dialog")).toBeVisible();
-
-  const startButton = page
-    .getByRole("button", { name: /启动|Start/, exact: true })
-    .first();
-  if (await startButton.isEnabled()) {
-    await startButton.click();
-    await expect(
-      page.getByRole("button", { name: /连接|Connect/, exact: true }),
-    ).toBeEnabled({ timeout: 10000 });
-  }
+  const resourceUuid = new URL(page.url()).searchParams.get("drawer");
+  if (!resourceUuid) throw new Error("Resource drawer has no resource ID");
+  await page.getByRole("button", { name: /重置密码|Reset password/ }).click();
+  const passwordDialog = page.getByRole("dialog").last();
+  const password = (await passwordDialog.locator("pre").textContent())?.trim();
+  if (!password) throw new Error("Password reset did not return a credential");
+  await page.keyboard.press("Escape");
+  await page.evaluate(async (uuid) => {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const resource = await (await fetch(`/api/resources/${uuid}`)).json();
+      if (resource.spec.authMethod === "password") return;
+      await new Promise((resolve) => window.setTimeout(resolve, 500));
+    }
+  }, resourceUuid);
   await page.getByRole("tab", { name: /控制台|Console/, exact: true }).click();
+
   await expect(page.locator(".terminal-screen-header")).toContainText(
-    vm!.displayId,
+    displayId,
   );
   await expect(page.getByText(/模拟|Mock/i)).toHaveCount(0);
   await expect(
@@ -39,12 +45,16 @@ test("GPU VM server command line, safe commands, fullscreen and lifecycle", asyn
   ).toHaveCount(0);
 
   await page.getByRole("button", { name: /连接|Connect/, exact: true }).click();
+  await expect(page.locator(".terminal-login")).toBeVisible();
+  await page.getByRole("textbox", { name: "密码" }).fill(password);
+  await page.getByRole("button", { name: "登录", exact: true }).click();
   await expect(
     page.getByText(/已连接|Connected/, { exact: true }),
   ).toBeVisible();
   const terminal = page.getByRole("textbox", {
     name: /服务器命令输入|Server command input/,
   });
+  await expect(page.locator(".terminal-input-row span")).toContainText("root@");
   await terminal.fill("help");
   await terminal.press("Enter");
   await expect(page.locator(".terminal-output")).toContainText(

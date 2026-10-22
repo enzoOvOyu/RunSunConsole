@@ -137,32 +137,45 @@ export const serverSchema = z
         message: "INVALID_SSH_KEY",
       });
   });
-export const baremetalSchema = z.object({
-  ...common,
-  machineType: z.string(),
-  machineCount: z.number().int().min(1).max(32),
-  gpuModel: z.string(),
-  passthrough: z.boolean(),
-  migPartition: z.string(),
-  cpuModel: z.string(),
-  memoryGb: z.number().positive(),
-  localNvmeGb: z.number().positive(),
-  raidLevel: z.enum(["none", "raid0", "raid1", "raid10"]),
-  ibEnabled: z.boolean(),
-  ipmiEnabled: z.boolean(),
-  bmcNetwork: z.enum(["shared", "dedicated"]),
-  imageRef: z.string().min(1),
-  hostnamePrefix: z
-    .string()
-    .trim()
-    .min(1)
-    .max(45)
-    .regex(/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/, "INVALID_HOSTNAME_PREFIX"),
-  sshPubkey: z.string().regex(/^ssh-(ed25519|rsa)\s+[A-Za-z0-9+/=]+/),
-  firmwareBaseline: z.string(),
-  vpc: z.string(),
-  subnet: z.string(),
-});
+export const baremetalSchema = z
+  .object({
+    ...common,
+    authMethod: z.enum(["ssh_key", "password"]).optional(),
+    machineType: z.string(),
+    machineCount: z.number().int().min(1).max(32),
+    gpuModel: z.string(),
+    passthrough: z.boolean(),
+    migPartition: z.string(),
+    cpuModel: z.string(),
+    memoryGb: z.number().positive(),
+    localNvmeGb: z.number().positive(),
+    raidLevel: z.enum(["none", "raid0", "raid1", "raid10"]),
+    ibEnabled: z.boolean(),
+    ipmiEnabled: z.boolean(),
+    bmcNetwork: z.enum(["shared", "dedicated"]),
+    imageRef: z.string().min(1),
+    hostnamePrefix: z
+      .string()
+      .trim()
+      .min(1)
+      .max(45)
+      .regex(/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/, "INVALID_HOSTNAME_PREFIX"),
+    sshPubkey: z.string(),
+    firmwareBaseline: z.string(),
+    vpc: z.string(),
+    subnet: z.string(),
+  })
+  .superRefine((value, ctx) => {
+    if (
+      value.authMethod !== "password" &&
+      !/^ssh-(ed25519|rsa)\s+[A-Za-z0-9+/=]+/.test(value.sshPubkey)
+    )
+      ctx.addIssue({
+        code: "custom",
+        path: ["sshPubkey"],
+        message: "INVALID_SSH_KEY",
+      });
+  });
 export const nodePoolSchema = z.object({
   poolCode: z.enum(POOLS),
   nodeCount: z.number().int().min(1).max(64),

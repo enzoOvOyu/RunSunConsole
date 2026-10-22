@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { ClipboardList, Plus, Trash2 } from "lucide-react";
+import { ClipboardList, Pause, Play, Plus, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { OperationLog } from "../../types/domain";
 import { EP } from "../../lib/api-client";
@@ -46,14 +46,23 @@ export default function OperationLogsPage() {
       accessorKey: "id",
       header: "ID",
       cell: ({ row }) => (
-        <span className="resource-id">{formatResourceId("log", row.original.id)}</span>
+        <span className="resource-id">
+          {formatResourceId("log", row.original.id)}
+        </span>
       ),
     },
     {
       accessorKey: "operation",
       header: t("operation.action"),
       cell: ({ row }) => {
-        const Icon = row.original.operation === "create" ? Plus : Trash2;
+        const Icon =
+          row.original.operation === "create"
+            ? Plus
+            : row.original.operation === "delete"
+              ? Trash2
+              : row.original.operation === "start"
+                ? Play
+                : Pause;
         return (
           <span className="row">
             <Icon size={15} aria-hidden="true" />
@@ -138,6 +147,8 @@ export default function OperationLogsPage() {
           <option value="">{t("common.all")}</option>
           <option value="create">{t("operation.create")}</option>
           <option value="delete">{t("operation.delete")}</option>
+          <option value="start">{t("operation.start")}</option>
+          <option value="stop">{t("operation.stop")}</option>
         </select>
         <select
           aria-label={t("common.status")}

@@ -222,3 +222,41 @@
     justify-content: flex-start;
   }
 }
+
+.terminal-login {
+  display: grid;
+  width: min(100% - 32px, 420px);
+  align-content: center;
+  gap: 16px;
+  margin: auto;
+  padding: 28px;
+  border: 1px solid #303948;
+  border-radius: 10px;
+  background: #171b22;
+}
+
+.terminal-login-title {
+  margin-bottom: 4px;
+  color: #f3f4f6;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.terminal-login .field {
+  color: #cbd5e1;
+}
+
+.terminal-login .input {
+  border-color: #3a4657;
+  background: #101318;
+  color: #f3f4f6;
+}
+
+.resource-pagination {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.resource-page-size select {
+  min-width: 84px;
+}

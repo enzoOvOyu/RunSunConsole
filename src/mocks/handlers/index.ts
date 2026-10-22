@@ -54,6 +54,7 @@ import {
   type TicketCategory,
 } from "../../types/domain";
 import { db, persist, addEvent } from "../lib/database";
+import { consolePasswordFingerprint } from "../lib/console-auth";
 import { RATES } from "../fixtures/pricing";
 import { IMAGES, PIPELINES } from "../fixtures/content";
 import { poolsFor, GPU_SPECS } from "../fixtures/gpu-specs";
@@ -1481,7 +1482,9 @@ function normalizeTicket(ticket: Ticket): Ticket {
   ticket.context ||= {};
   ticket.updatedAt ||= ticket.messages.at(-1)?.at || ticket.createdAt;
   ticket.region ||= ticket.resourceUuid
-    ? db.resources.find((resource) => resource.resourceUuid === ticket.resourceUuid)?.region || null
+    ? db.resources.find(
+        (resource) => resource.resourceUuid === ticket.resourceUuid,
+      )?.region || null
     : null;
   ticket.resolvedAt ||= null;
   ticket.resolution ||= "";
@@ -1489,24 +1492,34 @@ function normalizeTicket(ticket: Ticket): Ticket {
     ...message,
     attachments: message.attachments || [],
   }));
-  ticket.events ||= [{
-    id: `legacy-created-${ticket.id}`,
-    type: "created",
-    actor: ticket.messages[0]?.actor || "enzoOvOyu",
-    at: ticket.createdAt,
-    status: ticket.status === "closed" ? "closed" : "open",
-    summary: "tickets.eventCreated",
-  }];
+  ticket.events ||= [
+    {
+      id: `legacy-created-${ticket.id}`,
+      type: "created",
+      actor: ticket.messages[0]?.actor || "enzoOvOyu",
+      at: ticket.createdAt,
+      status: ticket.status === "closed" ? "closed" : "open",
+      summary: "tickets.eventCreated",
+    },
+  ];
   return ticket;
 }
 
-async function storeTicketAttachments(ticketId: string, input: unknown): Promise<TicketAttachment[]> {
-  const files = z.array(z.object({
-    name: z.string().trim().min(1).max(180),
-    size: z.number().int().min(1).max(5_000_000),
-    contentType: z.string().min(1).max(120),
-    content: z.string().max(6_800_000),
-  })).max(5).parse(input || []);
+async function storeTicketAttachments(
+  ticketId: string,
+  input: unknown,
+): Promise<TicketAttachment[]> {
+  const files = z
+    .array(
+      z.object({
+        name: z.string().trim().min(1).max(180),
+        size: z.number().int().min(1).max(5_000_000),
+        contentType: z.string().min(1).max(120),
+        content: z.string().max(6_800_000),
+      }),
+    )
+    .max(5)
+    .parse(input || []);
   const now = new Date().toISOString();
   const attachments: TicketAttachment[] = [];
   for (const file of files) {
@@ -1516,8 +1529,13 @@ async function storeTicketAttachments(ticketId: string, input: unknown): Promise
     const key = `ticket/${ticketId}/${id}`;
     await putObject(key, file.content);
     attachments.push({
-      id, name: file.name, size: file.size, contentType: file.contentType,
-      key, uploadedAt: now, uploadedBy: "enzoOvOyu",
+      id,
+      name: file.name,
+      size: file.size,
+      contentType: file.contentType,
+      key,
+      uploadedAt: now,
+      uploadedBy: "enzoOvOyu",
     });
   }
   return attachments;
@@ -1530,7 +1548,9 @@ async function dispatch(request: Request, settleBilling = true) {
   const qs = url.searchParams;
   const role = (request.headers.get("X-Role") || "owner") as Role;
   if (!ROLES.includes(role)) fail(403, "FORBIDDEN");
-  if (method !== "GET" && !canWrite(role)) fail(403, "FORBIDDEN");
+  const isConsoleLogin = /^\/api\/resources\/[^/]+\/console-login$/.test(path);
+  if (method !== "GET" && !isConsoleLogin && !canWrite(role))
+    fail(403, "FORBIDDEN");
   const body: Record<string, unknown> =
     method === "GET" || method === "DELETE"
       ? {}
@@ -1545,6 +1565,25 @@ async function dispatch(request: Request, settleBilling = true) {
   if (region && !REGIONS.includes(region as Region))
     fail(422, "VALIDATION_ERROR");
   tick(settleBilling);
+  const consoleLoginMatch = path.match(
+    /^\/api\/resources\/([^/]+)\/console-login$/,
+  );
+  if (consoleLoginMatch && method === "POST") {
+    const target = resource(consoleLoginMatch[1]);
+    if (target.kind !== "gpu_vm") fail(404, "NOT_FOUND");
+    if (target.status !== "running") fail(409, "INVALID_STATE");
+    if (target.spec.authMethod !== "password")
+      fail(409, "PASSWORD_AUTH_NOT_CONFIGURED");
+    const username = z.literal("root").parse(body.username);
+    const password = z.string().min(1).max(128).parse(body.password);
+    const expected = db.consolePasswordFingerprints[target.resourceUuid];
+    if (
+      !expected ||
+      consolePasswordFingerprint(target.resourceUuid, password) !== expected
+    )
+      fail(401, "INVALID_CREDENTIALS");
+    return json({ username });
+  }
   if (path.startsWith("/api/network/"))
     return dispatchNetwork(path, method, qs, body, role);
   if (path === "/api/deployment-options") {
@@ -1892,6 +1931,16 @@ async function dispatch(request: Request, settleBilling = true) {
           completedAt: at,
         });
       }
+      const lifecycleOperations = history
+        .filter((event) => event.action === "start" || event.action === "stop")
+        .map((event) => ({
+          id: event.action + "-" + event.id,
+          operation: event.action as "start" | "stop",
+          status: "succeeded" as const,
+          startedAt: event.at,
+          completedAt: event.at,
+        }));
+      rows.push(...lifecycleOperations);
       return rows.map((operation) => {
         const start = Date.parse(operation.startedAt);
         const end = operation.completedAt
@@ -2160,6 +2209,7 @@ async function dispatch(request: Request, settleBilling = true) {
       const before = r.status;
       settle(r);
       releaseResourceNetwork(db.network, r.resourceUuid);
+      delete db.consolePasswordFingerprints[r.resourceUuid];
       r.deletedAt = new Date().toISOString();
       for (const volume of db.volumes)
         if (volume.resourceUuid === r.resourceUuid)
@@ -2208,7 +2258,13 @@ async function dispatch(request: Request, settleBilling = true) {
         const order = db.orders.find((o) => o.resourceUuid === r.resourceUuid);
         if (order) order.status = "provisioning";
       } else if (action === "reset-password") {
-        return json({ credential: crypto.randomUUID() });
+        if (r.kind !== "gpu_vm") fail(404, "NOT_FOUND");
+        const credential = `RunSun-${crypto.randomUUID()}`;
+        r.spec.authMethod = "password";
+        db.consolePasswordFingerprints[r.resourceUuid] =
+          consolePasswordFingerprint(r.resourceUuid, credential);
+        persist();
+        return json({ credential });
       } else if (action === "rescue" || action === "reset-os") {
         if (r.kind !== "gpu_baremetal" || r.status !== "stopped")
           fail(409, "INVALID_STATE");
@@ -2317,7 +2373,13 @@ async function dispatch(request: Request, settleBilling = true) {
         } else fail(422, "VALIDATION_ERROR");
       } else fail(404, "NOT_FOUND");
       if (action === "resize") syncResourceNetwork(db.network, r);
-      addEvent(r, action === "stop" ? "stopped" : action, before, r.status);
+      addEvent(
+        r,
+        action === "stop" ? "stopped" : action === "start" ? "ready" : action,
+        before,
+        r.status,
+      );
+      if (action === "start" || action === "stop") db.events[0].action = action;
       if (r.kind === "vgpu" && (action === "cordon" || action === "uncordon")) {
         Object.assign(db.events[0], {
           type: action === "cordon" ? "NODE_CORDONED" : "NODE_UNCORDONED",
@@ -2383,7 +2445,7 @@ async function dispatch(request: Request, settleBilling = true) {
     const spec = normalizeSpec(parsed.spec);
     const pool = GPU_SPECS[parsed.nodePool];
     if (
-      parsed.kind === "gpu_vm" &&
+      (parsed.kind === "gpu_vm" || parsed.kind === "gpu_baremetal") &&
       "authMethod" in spec &&
       spec.authMethod === "password"
     )
@@ -2437,6 +2499,14 @@ async function dispatch(request: Request, settleBilling = true) {
     precheck(r);
     syncResourceNetwork(db.network, r);
     db.resources.push(r);
+    if (
+      (r.kind === "gpu_vm" || r.kind === "gpu_baremetal") &&
+      r.spec.authMethod === "password"
+    ) {
+      const password = z.string().min(8).max(128).parse(body.authPassword);
+      db.consolePasswordFingerprints[r.resourceUuid] =
+        consolePasswordFingerprint(r.resourceUuid, password);
+    }
     db.volumes.push(...volumesForResource(r));
     for (const row of spec.storageSelections || []) {
       if (row.kind !== "object") continue;
@@ -2976,7 +3046,9 @@ async function dispatch(request: Request, settleBilling = true) {
         .map(normalizeTicket)
         .filter((ticket) => {
           const linked = ticket.resourceUuid
-            ? db.resources.find((item) => item.resourceUuid === ticket.resourceUuid)
+            ? db.resources.find(
+                (item) => item.resourceUuid === ticket.resourceUuid,
+              )
             : undefined;
           const ticketRegion = ticket.region || linked?.region || null;
           return (
@@ -2985,34 +3057,58 @@ async function dispatch(request: Request, settleBilling = true) {
             (!qs.get("priority") || ticket.priority === qs.get("priority")) &&
             (!qs.get("category") || ticket.category === qs.get("category")) &&
             (!q ||
-              [ticket.caseNumber, ticket.title, ticket.id, linked?.name, linked?.displayId]
+              [
+                ticket.caseNumber,
+                ticket.title,
+                ticket.id,
+                linked?.name,
+                linked?.displayId,
+              ]
                 .filter(Boolean)
                 .some((value) => String(value).toLowerCase().includes(q)))
           );
         })
         .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-      return json(rows.map((ticket) => ({
-        ...ticket,
-        category: ticket.category || "technical",
-        caseNumber: ticket.caseNumber || ticket.id,
-        region: ticket.region || (ticket.resourceUuid
-          ? db.resources.find((item) => item.resourceUuid === ticket.resourceUuid)?.region || null
-          : null),
-        updatedAt: ticket.updatedAt || ticket.createdAt,
-        resolvedAt: ticket.resolvedAt || null,
-        resolution: ticket.resolution || "",
-        context: ticket.context || {},
-        events: ticket.events || [],
-        messages: ticket.messages.map((message) => ({ ...message, attachments: message.attachments || [] })),
-      })));
+      return json(
+        rows.map((ticket) => ({
+          ...ticket,
+          category: ticket.category || "technical",
+          caseNumber: ticket.caseNumber || ticket.id,
+          region:
+            ticket.region ||
+            (ticket.resourceUuid
+              ? db.resources.find(
+                  (item) => item.resourceUuid === ticket.resourceUuid,
+                )?.region || null
+              : null),
+          updatedAt: ticket.updatedAt || ticket.createdAt,
+          resolvedAt: ticket.resolvedAt || null,
+          resolution: ticket.resolution || "",
+          context: ticket.context || {},
+          events: ticket.events || [],
+          messages: ticket.messages.map((message) => ({
+            ...message,
+            attachments: message.attachments || [],
+          })),
+        })),
+      );
     }
     if (method === "POST") {
-      const category = z.enum([
-        "gpu_vm", "gpu_baremetal", "kubernetes", "inference", "image_driver",
-        "network_storage", "billing", "quota_access", "technical",
-      ]).parse(body.category) as TicketCategory;
+      const category = z
+        .enum([
+          "gpu_vm",
+          "gpu_baremetal",
+          "kubernetes",
+          "inference",
+          "image_driver",
+          "network_storage",
+          "billing",
+          "quota_access",
+          "technical",
+        ])
+        .parse(body.category) as TicketCategory;
       const resourceUuid = body.resourceUuid
-        ? z.string().min(1).parse(body.resourceUuid) as ResourceUuid
+        ? (z.string().min(1).parse(body.resourceUuid) as ResourceUuid)
         : null;
       const linked = resourceUuid ? resource(resourceUuid) : null;
       const requiredKind: Partial<Record<TicketCategory, Resource["kind"]>> = {
@@ -3021,15 +3117,27 @@ async function dispatch(request: Request, settleBilling = true) {
         kubernetes: "vgpu",
         inference: "inference",
       };
-      if (requiredKind[category] && !linked) fail(422, "TICKET_RESOURCE_REQUIRED");
-      if (linked && requiredKind[category] && linked.kind !== requiredKind[category])
+      if (requiredKind[category] && !linked)
+        fail(422, "TICKET_RESOURCE_REQUIRED");
+      if (
+        linked &&
+        requiredKind[category] &&
+        linked.kind !== requiredKind[category]
+      )
         fail(422, "TICKET_RESOURCE_MISMATCH");
       const requestedRegion = body.region
-        ? z.enum(REGIONS).parse(body.region) as Region
+        ? (z.enum(REGIONS).parse(body.region) as Region)
         : null;
       const title = z.string().trim().min(3).max(120).parse(body.title);
-      const description = z.string().trim().min(3).max(10000).parse(body.message);
-      const priority = z.enum(["low", "normal", "high", "urgent"]).parse(body.priority);
+      const description = z
+        .string()
+        .trim()
+        .min(3)
+        .max(10000)
+        .parse(body.message);
+      const priority = z
+        .enum(["low", "normal", "high", "urgent"])
+        .parse(body.priority);
       const context = z.record(z.string()).parse(body.context || {});
       const now = new Date().toISOString();
       const id = crypto.randomUUID();
@@ -3048,30 +3156,49 @@ async function dispatch(request: Request, settleBilling = true) {
         updatedAt: now,
         resolvedAt: null,
         resolution: "",
-        messages: [{
-          actor: "enzoOvOyu",
-          body: description,
-          at: now,
-          attachments,
-        }],
-        events: [{
-          id: crypto.randomUUID(), type: "created", actor: "enzoOvOyu", at: now,
-          status: "open", summary: "tickets.eventCreated",
-        }],
+        messages: [
+          {
+            actor: "enzoOvOyu",
+            body: description,
+            at: now,
+            attachments,
+          },
+        ],
+        events: [
+          {
+            id: crypto.randomUUID(),
+            type: "created",
+            actor: "enzoOvOyu",
+            at: now,
+            status: "open",
+            summary: "tickets.eventCreated",
+          },
+        ],
       };
       db.tickets.push(ticket);
       persist();
       return json(ticket, 201);
     }
   }
-  const attachmentMatch = path.match(/^\/api\/tickets\/([^/]+)\/attachments\/([^/]+)$/);
+  const attachmentMatch = path.match(
+    /^\/api\/tickets\/([^/]+)\/attachments\/([^/]+)$/,
+  );
   if (attachmentMatch && method === "GET") {
-    const ticket = db.tickets.find((item) => item.id === attachmentMatch[1]) || fail(404, "NOT_FOUND");
-    const attachment = ticket.messages.flatMap((message) => message.attachments || [])
-      .find((item) => item.id === attachmentMatch[2]) || fail(404, "NOT_FOUND");
+    const ticket =
+      db.tickets.find((item) => item.id === attachmentMatch[1]) ||
+      fail(404, "NOT_FOUND");
+    const attachment =
+      ticket.messages
+        .flatMap((message) => message.attachments || [])
+        .find((item) => item.id === attachmentMatch[2]) ||
+      fail(404, "NOT_FOUND");
     const content = await getObject(attachment.key);
     if (!content) fail(404, "NOT_FOUND");
-    return json({ content, name: attachment.name, contentType: attachment.contentType });
+    return json({
+      content,
+      name: attachment.name,
+      contentType: attachment.contentType,
+    });
   }
   const tm = path.match(/^\/api\/tickets\/([^/]+)$/);
   if (tm) {
@@ -3083,12 +3210,24 @@ async function dispatch(request: Request, settleBilling = true) {
       if (body.message !== undefined) {
         if (ticket.status === "closed") fail(409, "TICKET_CLOSED");
         const text = z.string().trim().min(3).max(10000).parse(body.message);
-        const attachments = await storeTicketAttachments(ticket.id, body.attachments);
-        ticket.messages.push({ actor: "enzoOvOyu", body: text, at: now, attachments });
+        const attachments = await storeTicketAttachments(
+          ticket.id,
+          body.attachments,
+        );
+        ticket.messages.push({
+          actor: "enzoOvOyu",
+          body: text,
+          at: now,
+          attachments,
+        });
         const previousStatus = ticket.status;
-        const shouldReopen = previousStatus === "resolved" || previousStatus === "pending";
+        const shouldReopen =
+          previousStatus === "resolved" || previousStatus === "pending";
         ticket.events.push({
-          id: crypto.randomUUID(), type: "reply", actor: "enzoOvOyu", at: now,
+          id: crypto.randomUUID(),
+          type: "reply",
+          actor: "enzoOvOyu",
+          at: now,
           status: shouldReopen ? "open" : previousStatus,
           summary: "tickets.eventReply",
         });
@@ -3097,25 +3236,39 @@ async function dispatch(request: Request, settleBilling = true) {
           ticket.resolvedAt = null;
           ticket.resolution = "";
           ticket.events.push({
-            id: crypto.randomUUID(), type: "status_changed", actor: "enzoOvOyu", at: now,
-            status: "open", summary: "tickets.eventReopened",
+            id: crypto.randomUUID(),
+            type: "status_changed",
+            actor: "enzoOvOyu",
+            at: now,
+            status: "open",
+            summary: "tickets.eventReopened",
           });
         }
       } else if (body.attachments !== undefined) {
         fail(422, "TICKET_MESSAGE_REQUIRED");
       }
       if (body.status !== undefined) {
-        const status = z.enum(["open", "pending", "resolved", "closed"]).parse(body.status);
+        const status = z
+          .enum(["open", "pending", "resolved", "closed"])
+          .parse(body.status);
         const transitions: Record<string, string[]> = {
           open: ["pending", "resolved", "closed"],
           pending: ["open", "resolved", "closed"],
           resolved: ["open", "closed"],
           closed: ["open"],
         };
-        if (status !== ticket.status && !transitions[ticket.status]?.includes(status))
+        if (
+          status !== ticket.status &&
+          !transitions[ticket.status]?.includes(status)
+        )
           fail(409, "TICKET_INVALID_TRANSITION");
         if (status === "resolved") {
-          ticket.resolution = z.string().trim().min(3).max(2000).parse(body.resolution);
+          ticket.resolution = z
+            .string()
+            .trim()
+            .min(3)
+            .max(2000)
+            .parse(body.resolution);
           ticket.resolvedAt = now;
         } else if (status === "open") {
           ticket.resolvedAt = null;
@@ -3124,8 +3277,12 @@ async function dispatch(request: Request, settleBilling = true) {
         if (status !== ticket.status) {
           ticket.status = status;
           ticket.events.push({
-            id: crypto.randomUUID(), type: "status_changed", actor: "enzoOvOyu", at: now,
-            status, summary: `tickets.eventStatus.${status}`,
+            id: crypto.randomUUID(),
+            type: "status_changed",
+            actor: "enzoOvOyu",
+            at: now,
+            status,
+            summary: `tickets.eventStatus.${status}`,
           });
         }
       }

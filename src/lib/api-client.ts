@@ -7,6 +7,7 @@ export const EP = {
   options: "/api/deployment-options",
   overview: "/api/overview",
   resources: "/api/resources",
+  consoleLogin: (uuid: string) => `/api/resources/${uuid}/console-login`,
   projects: "/api/projects",
   pools: "/api/node-pools",
   rates: "/api/billing/rates",

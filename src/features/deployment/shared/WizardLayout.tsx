@@ -48,6 +48,7 @@ interface Props {
   steps: string[];
   render: (context: FormContext) => React.ReactNode;
   validateStep: (values: WizardValues, step: number) => boolean;
+  firstStepContent?: React.ReactNode;
 }
 export function PoolCards({
   pools,
@@ -122,7 +123,13 @@ export function PoolCards({
     </div>
   );
 }
-export function WizardLayout({ kind, steps, render, validateStep }: Props) {
+export function WizardLayout({
+  kind,
+  steps,
+  render,
+  validateStep,
+  firstStepContent,
+}: Props) {
   const [params] = useSearchParams();
   const { region, setRegion } = useRegion();
   const { role, project, setProject } = useAuth();
@@ -159,6 +166,7 @@ export function WizardLayout({ kind, steps, render, validateStep }: Props) {
       steps={steps}
       render={render}
       validateStep={validateStep}
+      firstStepContent={firstStepContent}
       context={{
         kind,
         step: 0,
@@ -182,6 +190,7 @@ function WizardForm({
   steps,
   render,
   validateStep,
+  firstStepContent,
   context,
   region,
   setRegion,
@@ -195,6 +204,7 @@ function WizardForm({
   steps: string[];
   render: Props["render"];
   validateStep: Props["validateStep"];
+  firstStepContent?: React.ReactNode;
   context: FormContext;
   region: WizardValues["region"];
   setRegion: (region: WizardValues["region"]) => void;
@@ -483,6 +493,7 @@ function WizardForm({
                       />
                     </Field>
                   </div>
+                  {firstStepContent}
                 </div>
               ) : (
                 render({ ...context, step })

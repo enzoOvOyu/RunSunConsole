@@ -49,6 +49,7 @@ export interface Database {
   replicaRestarts: Record<string, Record<string, number>>;
   billingCursors: Record<string, number>;
   resources: Resource[];
+  consolePasswordFingerprints: Record<string, string>;
   volumes: StorageVolume[];
   projects: Project[];
   events: ResourceEvent[];
@@ -317,6 +318,7 @@ export function makeDatabase(): Database {
     replicaRestarts: {},
     billingCursors: {},
     resources,
+    consolePasswordFingerprints: {},
     volumes: seedStorageVolumes(resources),
     projects: structuredClone(PROJECTS),
     events,
@@ -412,11 +414,12 @@ export function restoreDatabase() {
         r.region = "jp";
       }
       data.resources = data.resources.map(
-        (r) => ({
-          ...r,
-          displayId: displayId(r.kind, r.resourceUuid),
-          spec: migrateLegacyImageSpec(normalizeSpec(r.spec)),
-        }) as Resource,
+        (r) =>
+          ({
+            ...r,
+            displayId: displayId(r.kind, r.resourceUuid),
+            spec: migrateLegacyImageSpec(normalizeSpec(r.spec)),
+          }) as Resource,
       );
       if (data.network?.eips)
         data.network.eips = data.network.eips.map((eip) => ({
@@ -424,9 +427,12 @@ export function restoreDatabase() {
           displayId: formatResourceId("eip", eip.id),
         }));
       for (const order of data.orders)
-        order.requested_spec = migrateLegacyImageSpec(normalizeSpec(order.requested_spec));
+        order.requested_spec = migrateLegacyImageSpec(
+          normalizeSpec(order.requested_spec),
+        );
       for (const notebook of data.notebooks) {
-        if (notebook.imageRef === "jupyter") notebook.imageRef = "jupyter-cu130";
+        if (notebook.imageRef === "jupyter")
+          notebook.imageRef = "jupyter-cu130";
         if (notebook.imageRef === "vscode") notebook.imageRef = "vscode-cu130";
       }
       if (!data.resourceStatusMigrationVersion) {
@@ -520,6 +526,7 @@ export function restoreDatabase() {
         favorite: savedFavorites.get(model.id) ?? model.favorite,
       }));
       data.invoices ??= [];
+      data.consolePasswordFingerprints ??= {};
       data.usageMeters ??= {};
       data.replicaRestarts ??= {};
       data.voucherPending ??= {};

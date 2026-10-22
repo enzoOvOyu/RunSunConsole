@@ -9,7 +9,8 @@ import {
 } from "react";
 import { Activity, Expand, Minimize, Power, RefreshCw } from "lucide-react";
 import type { ResourceOf, Status } from "../../../types/domain";
-import { Button, Panel } from "../../../components/ui";
+import { Button, Field, Panel } from "../../../components/ui";
+import { EP, post } from "../../../lib/api-client";
 import { t } from "../../../i18n";
 import {
   LocalConsoleAdapter,
@@ -20,6 +21,7 @@ import "./terminal.css";
 
 type Props = {
   resource: ResourceOf<"gpu_vm">;
+  authMethod: "password" | "ssh_key";
   osName: string;
   osFamily: string;
   driverVersion?: string;
@@ -32,6 +34,7 @@ type Props = {
 
 export function RemoteTerminal({
   resource,
+  authMethod,
   osName,
   osFamily,
   driverVersion,
@@ -47,13 +50,7 @@ export function RemoteTerminal({
   const inputRef = useRef<HTMLInputElement>(null);
   const historyIndex = useRef(0);
   const isWindows = /windows/i.test(osFamily);
-  const username = isWindows
-    ? "Administrator"
-    : /rocky/i.test(osFamily)
-      ? "rocky"
-      : /debian/i.test(osFamily)
-        ? "debian"
-        : "ubuntu";
+  const username = "root";
   const prompt = isWindows
     ? "PS C:\\Users\\" + username + ">"
     : username + "@" + resource.displayId + ":~$";
@@ -64,22 +61,41 @@ export function RemoteTerminal({
     t("console.helpHint"),
   ]);
   const [input, setInput] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [loginBusy, setLoginBusy] = useState(false);
+  const [authenticated, setAuthenticated] = useState(authMethod !== "password");
   const [history, setHistory] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [zoom, setZoom] = useState(100);
   const [fullscreen, setFullscreen] = useState(false);
   const [message, setMessage] = useState("");
+  const resourceIdRef = useRef(resource.resourceUuid);
 
   useEffect(() => {
+    const resourceChanged = resourceIdRef.current !== resource.resourceUuid;
+    resourceIdRef.current = resource.resourceUuid;
+    if (resourceChanged) {
+      void adapter.disconnect();
+      setAuthenticated(authMethod !== "password");
+      setLoginPassword("");
+      setState("disconnected");
+    }
     setVmStatus(resource.status);
     if (resource.status === "stopped") {
       void adapter.disconnect();
+      setAuthenticated(authMethod !== "password");
+      setLoginPassword("");
       setState("instance-stopped");
     } else if (resource.status === "error") {
       void adapter.disconnect();
+      setAuthenticated(authMethod !== "password");
+      setLoginPassword("");
       setState("failed");
     } else if (resource.status !== "running") {
       void adapter.disconnect();
+      setAuthenticated(authMethod !== "password");
+      setLoginPassword("");
       setState("disconnected");
     } else {
       setState((current) =>
@@ -88,7 +104,7 @@ export function RemoteTerminal({
           : current,
       );
     }
-  }, [adapter, resource.status]);
+  }, [adapter, authMethod, resource.status]);
 
   useEffect(
     () => () => {
@@ -122,8 +138,16 @@ export function RemoteTerminal({
     try {
       await adapter.connect({ ...resource, status: vmStatus });
       setState("connected");
-      setOutput([t("console.welcome", { os: osName }), t("console.helpHint")]);
-      window.setTimeout(() => inputRef.current?.focus(), 0);
+      setAuthenticated(authMethod !== "password");
+      setLoginPassword("");
+      setLoginError("");
+      setOutput(
+        authMethod === "password"
+          ? []
+          : [t("console.welcome", { os: osName }), t("console.helpHint")],
+      );
+      if (authMethod !== "password")
+        window.setTimeout(() => inputRef.current?.focus(), 0);
     } catch {
       setState("failed");
       setMessage(t("console.connectionFailed"));
@@ -135,6 +159,8 @@ export function RemoteTerminal({
   const disconnect = async () => {
     await adapter.disconnect();
     setState(vmStatus === "stopped" ? "instance-stopped" : "disconnected");
+    setAuthenticated(authMethod !== "password");
+    setLoginPassword("");
     setMessage("");
   };
 
@@ -173,6 +199,26 @@ export function RemoteTerminal({
     execute(input);
   };
 
+  const submitLogin = async (event: FormEvent) => {
+    event.preventDefault();
+    setLoginBusy(true);
+    setLoginError("");
+    try {
+      await post<{ username: string }>(EP.consoleLogin(resource.resourceUuid), {
+        username: "root",
+        password: loginPassword,
+      });
+      setAuthenticated(true);
+      setLoginPassword("");
+      setOutput([t("console.welcome", { os: osName }), t("console.helpHint")]);
+      window.setTimeout(() => inputRef.current?.focus(), 0);
+    } catch {
+      setLoginError(t("console.loginFailed"));
+    } finally {
+      setLoginBusy(false);
+    }
+  };
+
   const keyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "ArrowUp" || event.key === "ArrowDown") {
       event.preventDefault();
@@ -193,6 +239,8 @@ export function RemoteTerminal({
 
   const requestRestart = async () => {
     setBusy(true);
+    setAuthenticated(authMethod !== "password");
+    setLoginPassword("");
     setState("restarting");
     setMessage(t("console.restartPending"));
     await adapter.disconnect();
@@ -355,7 +403,44 @@ export function RemoteTerminal({
             </button>
           )}
         </div>
-        {state === "connected" ? (
+        {state === "connected" && !authenticated ? (
+          <form className="terminal-login" onSubmit={submitLogin}>
+            <div className="terminal-login-title">
+              {t("console.loginTitle", { os: osName })}
+            </div>
+            <Field label={t("console.username")}>
+              <input
+                className="input"
+                value="root"
+                readOnly
+                aria-label={t("console.username")}
+              />
+            </Field>
+            <Field label={t("console.password")}>
+              <input
+                className="input"
+                type="password"
+                value={loginPassword}
+                onChange={(event) => setLoginPassword(event.target.value)}
+                autoComplete="current-password"
+                aria-label={t("console.password")}
+                autoFocus
+              />
+            </Field>
+            {loginError && (
+              <small className="field-error" role="alert">
+                {loginError}
+              </small>
+            )}
+            <Button
+              variant="primary"
+              type="submit"
+              disabled={!loginPassword || loginBusy}
+            >
+              {loginBusy ? t("console.authenticating") : t("console.login")}
+            </Button>
+          </form>
+        ) : state === "connected" ? (
           <div
             className="terminal-session"
             onClick={() => inputRef.current?.focus()}

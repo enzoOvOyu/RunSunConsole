@@ -76,6 +76,7 @@ export function defaultSpec(kind: Kind, pool: Pool): Resource["spec"] {
       bmcNetwork: "dedicated",
       imageRef: "ubuntu-24.04",
       hostnamePrefix: "runsun",
+      authMethod: "ssh_key",
       sshPubkey: "",
       firmwareBaseline: "recommended",
       vpc: "default-vpc",

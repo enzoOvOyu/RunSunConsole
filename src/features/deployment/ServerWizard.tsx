@@ -274,7 +274,6 @@ function ServerForm({ step, pools, images }: FormContext) {
           max={120}
         />
       </div>
-      <ScalingToggle kind="gpu_vm" />
       <Review />
     </div>
   );
@@ -291,6 +290,7 @@ export default function ServerWizard() {
         "advancedConfirm",
       ]}
       validateStep={validate}
+      firstStepContent={<ScalingToggle kind="gpu_vm" />}
       render={(ctx) => <ServerForm {...ctx} />}
     />
   );

@@ -59,6 +59,9 @@ describe("Server terminal safe command map", () => {
     expect(runSafeCommand("df -h", context)).toContain("280G");
     expect(runSafeCommand("ip addr", context)).toContain("region jp");
     expect(runSafeCommand("hostname", context)).toBe(resource.displayId);
+    expect(runSafeCommand("whoami", context)).toBe("root");
+    expect(runSafeCommand("pwd", context)).toBe("/root");
+    expect(runSafeCommand("id", context)).toContain("uid=0(root)");
     expect(runSafeCommand("cat /etc/os-release", context)).toContain(
       "Ubuntu 22.04 LTS",
     );

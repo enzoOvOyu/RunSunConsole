@@ -249,7 +249,9 @@ it("creates projects, updates names and blocks deletion while referenced", async
   expect(
     singaporeProjects.map((project: { id: string }) => project.id),
   ).toContain(id);
-  expect(japanProjects.map((project: { id: string }) => project.id)).not.toContain(id);
+  expect(
+    japanProjects.map((project: { id: string }) => project.id),
+  ).not.toContain(id);
   expect(
     (await request("/projects/" + id, "PATCH", { name: "Evaluation Updated" }))
       .data.name,
@@ -484,6 +486,30 @@ it("replays password orders without storing credentials or allocating twice", as
   );
   expect(db.resources).toHaveLength(count + 1);
   expect(JSON.stringify(db)).not.toContain(secret);
+  const created = db.resources.find(
+    (resource) => resource.resourceUuid === first.data.resource.resourceUuid,
+  )!;
+  expect(db.consolePasswordFingerprints[created.resourceUuid]).toBeTruthy();
+  created.status = "running";
+  expect(
+    (
+      await request(
+        `/resources/${created.resourceUuid}/console-login`,
+        "POST",
+        { username: "root", password: secret },
+        "viewer",
+      )
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await request(
+        `/resources/${created.resourceUuid}/console-login`,
+        "POST",
+        { username: "root", password: "wrong-password" },
+      )
+    ).status,
+  ).toBe(401);
 });
 it("returns kind-specific hardware, cluster and replica diagnostics", async () => {
   const bm = db.resources.find(
@@ -565,25 +591,80 @@ it("applies the overdue grace period and preserves metering uniqueness", async (
   }
 });
 it("targets Kubernetes node scheduling operations and records recoverable events", async () => {
-  const cluster = db.resources.find((item) => item.kind === "vgpu" && !item.deletedAt)!;
+  const cluster = db.resources.find(
+    (item) => item.kind === "vgpu" && !item.deletedAt,
+  )!;
   cluster.status = "running";
   if (cluster.kind !== "vgpu") throw new Error("Expected Kubernetes cluster");
-  const initial = (await request(`/metrics/vgpu/${cluster.resourceUuid}/cluster`)).data;
+  const initial = (
+    await request(`/metrics/vgpu/${cluster.resourceUuid}/cluster`)
+  ).data;
   const nodeUuid = initial.nodes[0].nodeUuid;
 
-  expect((await request(`/resources/${cluster.resourceUuid}/cordon`, "POST", { nodeUuid })).status).toBe(200);
-  const cordoned = (await request(`/metrics/vgpu/${cluster.resourceUuid}/cluster`)).data;
-  expect(cordoned.nodes.find((node: { nodeUuid: string }) => node.nodeUuid === nodeUuid).state).toBe("unschedulable");
-  expect(cordoned.workloads.flatMap((workload: { pods: { nodeUuid: string | null; phase: string }[] }) => workload.pods).some((pod: { nodeUuid: string | null; phase: string }) => pod.phase === "Pending" || pod.nodeUuid !== nodeUuid)).toBe(true);
-  expect(db.events[0]).toMatchObject({ type: "NODE_CORDONED", reason: nodeUuid, action: "NODE_CORDONED" });
+  expect(
+    (
+      await request(`/resources/${cluster.resourceUuid}/cordon`, "POST", {
+        nodeUuid,
+      })
+    ).status,
+  ).toBe(200);
+  const cordoned = (
+    await request(`/metrics/vgpu/${cluster.resourceUuid}/cluster`)
+  ).data;
+  expect(
+    cordoned.nodes.find(
+      (node: { nodeUuid: string }) => node.nodeUuid === nodeUuid,
+    ).state,
+  ).toBe("unschedulable");
+  expect(
+    cordoned.workloads
+      .flatMap(
+        (workload: { pods: { nodeUuid: string | null; phase: string }[] }) =>
+          workload.pods,
+      )
+      .some(
+        (pod: { nodeUuid: string | null; phase: string }) =>
+          pod.phase === "Pending" || pod.nodeUuid !== nodeUuid,
+      ),
+  ).toBe(true);
+  expect(db.events[0]).toMatchObject({
+    type: "NODE_CORDONED",
+    reason: nodeUuid,
+    action: "NODE_CORDONED",
+  });
 
-  expect((await request(`/resources/${cluster.resourceUuid}/uncordon`, "POST", { nodeUuid })).status).toBe(200);
-  const resumed = (await request(`/metrics/vgpu/${cluster.resourceUuid}/cluster`)).data;
-  expect(resumed.nodes.find((node: { nodeUuid: string }) => node.nodeUuid === nodeUuid).state).toBe("ready");
-  expect(db.events[0]).toMatchObject({ type: "NODE_UNCORDONED", reason: nodeUuid, action: "NODE_UNCORDONED" });
+  expect(
+    (
+      await request(`/resources/${cluster.resourceUuid}/uncordon`, "POST", {
+        nodeUuid,
+      })
+    ).status,
+  ).toBe(200);
+  const resumed = (
+    await request(`/metrics/vgpu/${cluster.resourceUuid}/cluster`)
+  ).data;
+  expect(
+    resumed.nodes.find(
+      (node: { nodeUuid: string }) => node.nodeUuid === nodeUuid,
+    ).state,
+  ).toBe("ready");
+  expect(db.events[0]).toMatchObject({
+    type: "NODE_UNCORDONED",
+    reason: nodeUuid,
+    action: "NODE_UNCORDONED",
+  });
 
-  expect((await request(`/resources/${cluster.resourceUuid}/cordon`, "POST", {})).status).toBe(422);
-  expect((await request(`/resources/${cluster.resourceUuid}/upgrade`, "POST", { version: "1.31" })).status).toBe(404);
+  expect(
+    (await request(`/resources/${cluster.resourceUuid}/cordon`, "POST", {}))
+      .status,
+  ).toBe(422);
+  expect(
+    (
+      await request(`/resources/${cluster.resourceUuid}/upgrade`, "POST", {
+        version: "1.31",
+      })
+    ).status,
+  ).toBe(404);
 });
 
 it("advances each resource kind from provisioning at its configured deadline", async () => {
@@ -631,11 +712,15 @@ it("advances each resource kind from provisioning at its configured deadline", a
 });
 
 it("accepts all four resource types as orders with matching initial state", async () => {
-  for (const kind of ["gpu_vm", "gpu_baremetal", "vgpu", "inference"] as const) {
+  for (const kind of [
+    "gpu_vm",
+    "gpu_baremetal",
+    "vgpu",
+    "inference",
+  ] as const) {
     Object.assign(db, makeDatabase());
     const template = db.resources.find(
-      (item) =>
-        item.kind === kind && item.status === "running",
+      (item) => item.kind === kind && item.status === "running",
     );
     expect(template).toBeDefined();
     if (!template) continue;
@@ -652,6 +737,8 @@ it("accepts all four resource types as orders with matching initial state", asyn
     expect(result.status).toBe(201);
     expect(result.data.resource.status).toBe("provisioning");
     expect(result.data.order.status).toBe("provisioning");
-    expect(result.data.order.resourceUuid).toBe(result.data.resource.resourceUuid);
+    expect(result.data.order.resourceUuid).toBe(
+      result.data.resource.resourceUuid,
+    );
   }
 });
