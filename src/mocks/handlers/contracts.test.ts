@@ -181,6 +181,39 @@ it("rejects inference precision variants unsupported by the selected GPU", async
   expect(result.data.code).toBe("UNSUPPORTED_PRECISION");
 });
 
+it("creates chat inference for a multimodal model and rejects an image-only model", async () => {
+  const multimodal = db.models.find(
+    (model) => model.modality === "multimodal" && model.paramsB < 130,
+  );
+  if (!multimodal) throw Error("multimodal fixture missing");
+  const spec = defaultSpec("inference", poolsFor("jp")[0]);
+  if (!("modelRef" in spec)) throw Error("inference fixture missing");
+  spec.modelRef = multimodal.id;
+  spec.quantization = "fp8";
+  spec.gpuPerReplica = 4;
+  spec.gpuCount = 4;
+  const order = {
+    kind: "inference",
+    name: "multimodal-chat",
+    projectId: "default",
+    region: "jp",
+    nodePool: "H100_SXM",
+    mode: "on_demand",
+    labels: [],
+    spec,
+  };
+  db.models.push({ ...multimodal, id: "image-only-test", modality: "image" });
+  const rejected = await request("/deployment-orders", "POST", {
+    ...order,
+    spec: { ...spec, modelRef: "image-only-test" },
+  });
+  expect(rejected.status).toBe(422);
+  expect(rejected.data.code).toBe("MODEL_MODALITY_UNSUPPORTED");
+  const created = await request("/deployment-orders", "POST", order);
+  expect(created.status).toBe(201);
+  expect(created.data.resource.spec.modelRef).toBe(multimodal.id);
+});
+
 it("creates an order and materializes one matching policy", async () => {
   const spec = defaultSpec("gpu_vm", poolsFor("sg")[0]);
   if ("subnet" in spec) spec.subnet = "sg-default";

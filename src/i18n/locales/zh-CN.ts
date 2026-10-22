@@ -343,8 +343,8 @@ export default {
   "resource.slicing": "切片策略",
   "resource.model": "模型",
   "inference.textModalityOnly":
-    "当前推理服务仅提供文本聊天接口；该模型模态不支持文本 Token 监控、聊天请求示例或治理设置。",
-  "images.textOnlyServing": "当前推理服务仅支持文本模态模型。",
+    "当前推理服务使用文本聊天接口；纯图像模型不支持文本 Token 监控、聊天请求示例或治理设置。",
+  "images.textOnlyServing": "当前推理服务仅支持可生成文本的模型。",
   "resource.engine": "推理引擎",
   "resource.replicas": "副本数",
   "resource.released": "显示已释放",
@@ -466,10 +466,11 @@ export default {
   "wizard.removePool": "移除此节点池",
   "wizard.license": "NVIDIA License 余量：{count}",
   "wizard.inferenceConfigGroup": "模型与算力配置",
-  "wizard.textModelsOnly": "此推理服务使用文本生成接口，仅支持文本模态模型。",
+  "wizard.textModelsOnly": "支持文本及可生成文本的多模态模型；当前服务使用聊天接口。",
   "wizard.selectModel": "选择模型",
   "wizard.textModelRequired":
-    "请选择文本模态模型；图像等其他模态不能用于此聊天推理服务。",
+    "请选择可生成文本的模型；纯图像模型不能用于此聊天推理服务。",
+  "wizard.poolAutoChanged": "GPU 机型已自动切换为兼容选项，请在下一步确认。",
   "wizard.gpuPool": "GPU 机型",
   "wizard.gpuPerReplicaSummary":
     "每副本 {count} 张 GPU · 总 GPU 数随副本数计算",

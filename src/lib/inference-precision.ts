@@ -1,5 +1,11 @@
 import type { Model, PoolCode } from "../types/domain";
 
+// Multimodal models in this catalog generate text and can use the chat endpoint.
+// Pure image generators require a different serving contract.
+export function supportsChatInference(model: Pick<Model, "modality">): boolean {
+  return model.modality === "text" || model.modality === "multimodal";
+}
+
 export const BLACKWELL_POOLS: readonly PoolCode[] = [
   "B200_NVL72",
   "B300",

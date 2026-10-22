@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { compatiblePrecisions, precisionLabel } from "./inference-precision";
+import { compatiblePrecisions, precisionLabel, supportsChatInference } from "./inference-precision";
 
 const textModel = {
   modality: "text",
@@ -26,4 +26,10 @@ it("matches precision variants to model, GPU generation and serving engine", () 
   ).not.toContain("awq");
   expect(precisionLabel("fp4")).toBe("NVFP4");
   expect(precisionLabel("awq")).toBe("INT4 AWQ");
+});
+
+it("routes text-generating models to chat inference and excludes image-only models", () => {
+  expect(supportsChatInference({ modality: "text" })).toBe(true);
+  expect(supportsChatInference({ modality: "multimodal" })).toBe(true);
+  expect(supportsChatInference({ modality: "image" })).toBe(false);
 });

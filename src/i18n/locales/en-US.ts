@@ -350,9 +350,9 @@ export default {
   "resource.slicing": "Slicing policy",
   "resource.model": "Model",
   "inference.textModalityOnly":
-    "This inference service exposes a text chat API. Chat examples, text-token monitoring, and governance settings are unavailable for this model modality.",
+    "This inference service uses a text chat API. Image-only models do not have chat examples, text-token monitoring, or governance settings.",
   "images.textOnlyServing":
-    "The current inference service supports text modality models only.",
+    "The current inference service supports models that generate text.",
   "resource.engine": "Inference engine",
   "resource.replicas": "Replicas",
   "resource.released": "Show released resources",
@@ -480,10 +480,11 @@ export default {
   "wizard.license": "Available NVIDIA licenses: {count}",
   "wizard.inferenceConfigGroup": "Model and compute configuration",
   "wizard.textModelsOnly":
-    "This inference service uses a text generation API and supports text modality models only.",
+    "Supports text and text-generating multimodal models through the chat API.",
   "wizard.selectModel": "Select a model",
   "wizard.textModelRequired":
-    "Select a text modality model. Image and other modalities cannot use this chat inference service.",
+    "Select a model that generates text. Image-only models cannot use this chat inference service.",
+  "wizard.poolAutoChanged": "GPU model changed to a compatible option. Confirm it in the next step.",
   "wizard.gpuPool": "GPU model",
   "wizard.gpuPerReplicaSummary":
     "{count} GPUs per replica · total GPUs scale with replica count",

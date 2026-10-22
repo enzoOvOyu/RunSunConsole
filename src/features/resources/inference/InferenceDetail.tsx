@@ -5,6 +5,7 @@ import { useState } from "react";
 import type { Model, ResourceOf } from "../../../types/domain";
 import { t } from "../../../i18n";
 import { EP } from "../../../lib/api-client";
+import { supportsChatInference } from "../../../lib/inference-precision";
 import { useData } from "../../shared/hooks";
 import { Panel, Tabs, Empty } from "../../../components/ui";
 import {
@@ -23,7 +24,7 @@ export function InferenceDetail({
   const [level, setLevel] = useState("");
   const models = useData<Model[]>(["models"], EP.models);
   const model = models.data?.find((item) => item.id === r.spec.modelRef);
-  const textModel = model?.modality === "text";
+  const chatModel = model ? supportsChatInference(model) : false;
   const logs = useData<
     {
       ts: string;
@@ -38,15 +39,15 @@ export function InferenceDetail({
       trace?: string;
     }[]
   >(["logs", r.resourceUuid], `${EP.resources}/${r.resourceUuid}/logs`, {
-    enabled: tab === "logs" && textModel,
-    poll: tab === "logs" && textModel,
+    enabled: tab === "logs" && chatModel,
+    poll: tab === "logs" && chatModel,
   });
   return (
     <>
       <Tabs
         items={[
           "instances",
-          ...(textModel ? ["monitoring", "governance", "logs"] : []),
+          ...(chatModel ? ["monitoring", "governance", "logs"] : []),
           "configuration",
           "network",
           "events",
@@ -59,7 +60,7 @@ export function InferenceDetail({
         value={tab}
         onChange={setTab}
       />
-      {!textModel &&
+      {!chatModel &&
       (tab === "monitoring" || tab === "governance" || tab === "logs") ? (
         <Panel title={t("resource.model")}>
           {t("inference.textModalityOnly")}

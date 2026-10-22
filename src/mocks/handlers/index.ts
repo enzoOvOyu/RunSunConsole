@@ -76,7 +76,7 @@ import { canWrite, canManageOrg } from "../../lib/rbac";
 import { displayId, formatResourceId, resourceLink } from "../../lib/ids";
 import { round } from "../../lib/money";
 import { invoicePeriodForSelection } from "../../lib/billing-period";
-import { compatiblePrecisions } from "../../lib/inference-precision";
+import { compatiblePrecisions, supportsChatInference } from "../../lib/inference-precision";
 import { STORAGE_PRODUCTS } from "../../lib/storage";
 import { volumesForResource } from "../fixtures/storage";
 import { metricsFor } from "../metrics";
@@ -381,7 +381,7 @@ function precheck(r: Resource, exclude?: string) {
     const model =
       db.models.find((m) => m.id === r.spec.modelRef) ||
       fail(422, "VALIDATION_ERROR");
-    if (model.modality !== "text") fail(422, "MODEL_MODALITY_UNSUPPORTED");
+    if (!supportsChatInference(model)) fail(422, "MODEL_MODALITY_UNSUPPORTED");
     if (r.spec.maxModelLen > model.context) fail(422, "VALIDATION_ERROR");
     if (
       !compatiblePrecisions(model, r.nodePool, r.spec.engine).includes(

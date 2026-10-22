@@ -1,6 +1,9 @@
 import { StorageRows } from "./shared/StorageRows";
 import { useEffect, useMemo, useState } from "react";
-import { ModelPublisherLogo, publisherLabel } from "../../components/ModelPublisherLogo";
+import {
+  ModelPublisherLogo,
+  publisherLabel,
+} from "../../components/ModelPublisherLogo";
 import { useQuery } from "@tanstack/react-query";
 import type { InferenceSpec } from "../../types/domain";
 import { t } from "../../i18n";
@@ -10,6 +13,7 @@ import { inferenceSchema, storageSelectionsSchema } from "../../lib/schema";
 import {
   compatiblePrecisions,
   precisionLabel,
+  supportsChatInference,
 } from "../../lib/inference-precision";
 import { WizardLayout, PoolCards } from "./shared/WizardLayout";
 import {
@@ -45,11 +49,11 @@ function validate(v: WizardValues, step: number) {
 }
 function InferenceForm({ step, pools, models }: FormContext) {
   const { spec, update, form } = useSpec<InferenceSpec>();
-  const textModels = useMemo(
-    () => models.filter((item) => item.modality === "text"),
+  const chatModels = useMemo(
+    () => models.filter(supportsChatInference),
     [models],
   );
-  const selectedModel = textModels.find((item) => item.id === spec.modelRef);
+  const selectedModel = chatModels.find((item) => item.id === spec.modelRef);
   const model = selectedModel;
   const selectedPool = form.watch("nodePool");
   const pool = pools.find((item) => item.code === selectedPool) || pools[0];
@@ -76,6 +80,9 @@ function InferenceForm({ step, pools, models }: FormContext) {
     [model, pool, spec.engine],
   );
   const [autoNotice, setAutoNotice] = useState("");
+  const [openPublisher, setOpenPublisher] = useState<
+    string | null | undefined
+  >();
   const memory = useQuery({
     queryKey: [
       "model-memory",
@@ -103,7 +110,7 @@ function InferenceForm({ step, pools, models }: FormContext) {
   const required = memory.data?.requiredGb;
   const capacity = (pool?.memoryGb || 0) * spec.gpuPerReplica;
   const precisionOptions = (
-    nextModel: (typeof textModels)[number],
+    nextModel: (typeof chatModels)[number],
     nextEngine = spec.engine,
     nextPool?: string,
   ) =>
@@ -122,6 +129,21 @@ function InferenceForm({ step, pools, models }: FormContext) {
               ),
           ),
         );
+  const compatiblePool = (
+    nextModel: (typeof chatModels)[number],
+    nextEngine = spec.engine,
+  ) =>
+    pools.find(
+      (item) =>
+        item.code === selectedPool &&
+        item.available &&
+        compatiblePrecisions(nextModel, item.code, nextEngine).length > 0,
+    )?.code ||
+    pools.find(
+      (item) =>
+        item.available &&
+        compatiblePrecisions(nextModel, item.code, nextEngine).length > 0,
+    )?.code;
   const setDependencies = (
     patch: Partial<InferenceSpec>,
     nextModel = model,
@@ -142,6 +164,10 @@ function InferenceForm({ step, pools, models }: FormContext) {
       ...patch,
       ...(nextPrecision ? { quantization: nextPrecision } : {}),
     });
+    if (nextPool && nextPool !== selectedPool)
+      form.setValue("nodePool", nextPool as typeof selectedPool, {
+        shouldDirty: true,
+      });
     setAutoNotice(
       [
         changedPrecision
@@ -155,6 +181,9 @@ function InferenceForm({ step, pools, models }: FormContext) {
               previous: spec.maxModelLen,
               next: nextContext,
             })
+          : "",
+        nextPool && nextPool !== selectedPool
+          ? t("wizard.poolAutoChanged")
           : "",
       ]
         .filter(Boolean)
@@ -189,7 +218,12 @@ function InferenceForm({ step, pools, models }: FormContext) {
   ]);
   const { setError, clearErrors } = form;
   useEffect(() => {
-    if (
+    if (step === 1 && !selectedModel) {
+      setError("spec", {
+        type: "model",
+        message: "MODEL_MODALITY_UNSUPPORTED",
+      });
+    } else if (
       (step === 1 && selectedModel && !precisions.length) ||
       (step === 2 && selectedModel && !selectedPoolPrecisions.length)
     ) {
@@ -229,13 +263,24 @@ function InferenceForm({ step, pools, models }: FormContext) {
     clearErrors,
   ]);
   const modelGroups = useMemo(() => {
-    const groups = new Map<string, typeof textModels>();
-    for (const item of textModels) {
+    const groups = new Map<
+      string,
+      { publisher: string; items: typeof chatModels }
+    >();
+    for (const item of chatModels) {
       const publisher = item.publisher || t("images.unknownPublisher");
-      groups.set(publisher, [...(groups.get(publisher) || []), item]);
+      const label = publisherLabel(publisher);
+      const group = groups.get(label) || { publisher, items: [] };
+      group.items.push(item);
+      groups.set(label, group);
     }
     return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [textModels]);
+  }, [chatModels]);
+  const selectedPublisher = model
+    ? publisherLabel(model.publisher || t("images.unknownPublisher"))
+    : undefined;
+  const expandedPublisher =
+    openPublisher === undefined ? selectedPublisher : openPublisher;
 
   return step === 1 ? (
     <div className="stack">
@@ -243,24 +288,26 @@ function InferenceForm({ step, pools, models }: FormContext) {
         <strong>{t("wizard.inferenceConfigGroup")}</strong>
         <p className="muted">{t("wizard.textModelsOnly")}</p>
         <div className="inference-model-groups">
-          {modelGroups.map(([publisher, items]) => (
+          {modelGroups.map(([label, { publisher, items }]) => (
             <details
-              key={publisher}
-              name="inference-model-publishers"
-              open={items.some((item) => item.id === spec.modelRef)}
+              key={label}
+              open={expandedPublisher === label}
               className="panel inference-model-group"
             >
-              <summary className="between">
+              <summary
+                className="between"
+                onClick={(event) => {
+                  event.preventDefault();
+                  setOpenPublisher(expandedPublisher === label ? null : label);
+                }}
+              >
                 <span className="inference-publisher-label">
                   <ModelPublisherLogo publisher={publisher} size={26} />
-                  <strong>{publisherLabel(publisher)}</strong>
+                  <strong>{label}</strong>
                 </span>
-                <span className="muted">
-                  {items.length} ·{" "}
-                  {items.some((item) => item.id === spec.modelRef)
-                    ? model?.name
-                    : ""}
-                </span>
+                {items.some((item) => item.id === spec.modelRef) && (
+                  <span className="muted">{model?.name}</span>
+                )}
               </summary>
               <Field label={t("wizard.selectModel")}>
                 <select
@@ -273,7 +320,8 @@ function InferenceForm({ step, pools, models }: FormContext) {
                     const nextModel = items.find(
                       (item) => item.id === event.target.value,
                     );
-                    if (nextModel)
+                    if (nextModel) {
+                      setOpenPublisher(label);
                       setDependencies(
                         {
                           modelRef: nextModel.id,
@@ -283,8 +331,9 @@ function InferenceForm({ step, pools, models }: FormContext) {
                           ),
                         },
                         nextModel,
-                        undefined,
+                        compatiblePool(nextModel),
                       );
+                    }
                   }}
                 >
                   <option value="">{t("wizard.selectModel")}</option>
@@ -307,7 +356,12 @@ function InferenceForm({ step, pools, models }: FormContext) {
               <select
                 value={spec.engine}
                 onChange={(event) =>
-                  setDependencies({}, model, undefined, event.target.value)
+                  setDependencies(
+                    { engine: event.target.value },
+                    model,
+                    compatiblePool(model, event.target.value),
+                    event.target.value,
+                  )
                 }
               >
                 {["vllm", "sglang", "trt-llm"].map((engine) => (

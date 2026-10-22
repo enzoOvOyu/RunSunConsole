@@ -2,8 +2,12 @@ import { useUrlState } from "../shared/useUrlState";
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Star, Box } from "lucide-react";
-import { ModelPublisherLogo, publisherLabel } from "../../components/ModelPublisherLogo";
+import {
+  ModelPublisherLogo,
+  publisherLabel,
+} from "../../components/ModelPublisherLogo";
 import { poolDisplayName } from "../../lib/gpu-labels";
+import { supportsChatInference } from "../../lib/inference-precision";
 import type { Image, Model } from "../../types/domain";
 import { useAuth } from "../../stores/auth";
 import { canWrite } from "../../lib/rbac";
@@ -96,7 +100,7 @@ export default function ImagesPage() {
         return publisherName(left).localeCompare(publisherName(right));
       return (left.featuredRank || 999) - (right.featuredRank || 999);
     });
-  const readyCount = allModels.length;
+  const readyCount = allModels.filter(supportsChatInference).length;
   return (
     <>
       <PageHeader
@@ -231,8 +235,14 @@ export default function ImagesPage() {
                     </span>
                   </div>
                   <div className="row">
-                    <span className="model-catalog-status ready">
-                      {t("images.deployable")}
+                    <span
+                      className={`model-catalog-status ${supportsChatInference(item) ? "ready" : ""}`}
+                    >
+                      {t(
+                        supportsChatInference(item)
+                          ? "images.deployable"
+                          : "images.notConfigured",
+                      )}
                     </span>
                     <Button
                       variant="ghost"
@@ -312,18 +322,17 @@ export default function ImagesPage() {
                   </Button>
                   <Button
                     variant="primary"
-                    disabled={!canWrite(role)}
+                    disabled={!canWrite(role) || !supportsChatInference(item)}
+                    title={
+                      supportsChatInference(item)
+                        ? undefined
+                        : t("images.textOnlyServing")
+                    }
                     onClick={() =>
-                      navigate(
-                        item.modality === "text"
-                          ? "/deployment/inference?model=" + item.id
-                          : "/deployment/server",
-                      )
+                      navigate("/deployment/inference?model=" + item.id)
                     }
                   >
-                    {item.modality === "text"
-                      ? t("common.inference")
-                      : t("common.gpu_vm")}
+                    {t("common.inference")}
                   </Button>
                 </div>
               </article>
@@ -452,7 +461,14 @@ export default function ImagesPage() {
                 items={[
                   [t("images.publisher"), publisherName(model)],
                   [t("images.modelRef"), model.modelRef || model.id],
-                  [t("images.availability"), t("images.deployable")],
+                  [
+                    t("images.availability"),
+                    t(
+                      supportsChatInference(model)
+                        ? "images.deployable"
+                        : "images.notConfigured",
+                    ),
+                  ],
                   [
                     t("images.country"),
                     model.countryCode
@@ -515,23 +531,19 @@ export default function ImagesPage() {
             )}
             <p className="model-catalog-note">{t("images.billingNote")}</p>
             <div className="row">
-              {model.modality === "text" && (
-                <Button
-                  variant="primary"
-                  disabled={!canWrite(role)}
-                  onClick={() =>
-                    navigate("/deployment/inference?model=" + model.id)
-                  }
-                >
-                  {t("common.inference")}
-                </Button>
-              )}
               <Button
-                variant={model.modality === "text" ? "ghost" : "primary"}
-                disabled={!canWrite(role)}
-                onClick={() => navigate("/deployment/server")}
+                variant="primary"
+                disabled={!canWrite(role) || !supportsChatInference(model)}
+                title={
+                  supportsChatInference(model)
+                    ? undefined
+                    : t("images.textOnlyServing")
+                }
+                onClick={() =>
+                  navigate("/deployment/inference?model=" + model.id)
+                }
               >
-                {t("common.gpu_vm")}
+                {t("common.inference")}
               </Button>
             </div>
           </div>
