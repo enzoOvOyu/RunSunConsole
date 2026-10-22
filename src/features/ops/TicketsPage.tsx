@@ -30,7 +30,7 @@ import { useRegion } from "../../stores/region";
 import { useAuth } from "../../stores/auth";
 import { canWrite } from "../../lib/rbac";
 import { api, EP, patch, post, query } from "../../lib/api-client";
-import { resourceLink } from "../../lib/ids";
+import { formatResourceId, resourceLink } from "../../lib/ids";
 import { useAction, useData } from "../shared/hooks";
 import { useUrlState } from "../shared/useUrlState";
 import { RegionFilter } from "../shared/RegionFilter";
@@ -277,7 +277,7 @@ export default function TicketsPage() {
         (!status || ticket.status === status) &&
         (!filterCategory || ticket.category === filterCategory) &&
         (!filterPriority || ticket.priority === filterPriority) &&
-        (!needle || [ticket.caseNumber, ticket.title, resource?.name, resource?.displayId]
+        (!needle || [formatResourceId("tkt", ticket.id), ticket.title, resource?.name, resource?.displayId]
           .filter(Boolean)
           .some((value) => String(value).toLowerCase().includes(needle)))
       );
@@ -332,7 +332,7 @@ export default function TicketsPage() {
     {
       accessorKey: "caseNumber",
       header: t("tickets.caseId"),
-      cell: ({ row }) => <span className="ticket-case-id">{row.original.caseNumber || row.original.id}</span>,
+      cell: ({ row }) => <span className="ticket-case-id">{formatResourceId("tkt", row.original.id)}</span>,
     },
     {
       accessorKey: "title",
@@ -529,7 +529,7 @@ export default function TicketsPage() {
         onClose={closePreview}
         drawer
         small
-        title={preview ? <span className="row"><span className="ticket-case-id">{preview.caseNumber || preview.id}</span> {statusBadge(preview.status)}</span> : t("tickets.caseDetails")}
+        title={preview ? <span className="row"><span className="ticket-case-id">{formatResourceId("tkt", preview.id)}</span> {statusBadge(preview.status)}</span> : t("tickets.caseDetails")}
         description={preview ? dt(preview.title) : undefined}
       >
         {preview && <div className="stack">
@@ -611,7 +611,7 @@ export function TicketDetail() {
     <div className="ticket-page">
       <PageHeader
         title={<span className="ticket-detail-title">{dt(ticket.title)}</span>}
-        subtitle={`${ticket.caseNumber || ticket.id} · ${t(`tickets.category.${ticket.category}`)}`}
+        subtitle={`${formatResourceId("tkt", ticket.id)} · ${t(`tickets.category.${ticket.category}`)}`}
         actions={<Link to="/ops/tickets">{t("tickets.backToList")}</Link>}
       />
       <div className="grid ticket-detail-layout">
@@ -667,7 +667,7 @@ export function TicketDetail() {
               {priorityBadge(ticket.priority)}
             </div>
             <dl className="ticket-detail-fields">
-              <div><dt>{t("tickets.caseId")}</dt><dd className="ticket-case-id">{ticket.caseNumber || ticket.id}</dd></div>
+              <div><dt>{t("tickets.caseId")}</dt><dd className="ticket-case-id">{formatResourceId("tkt", ticket.id)}</dd></div>
               <div><dt>{t("tickets.category")}</dt><dd>{t(`tickets.category.${ticket.category}`)}</dd></div>
               <div><dt>{t("tickets.createdAt")}</dt><dd>{date(ticket.createdAt)}</dd></div>
               <div><dt>{t("tickets.updatedAt")}</dt><dd>{date(ticket.updatedAt || ticket.createdAt)}</dd></div>
@@ -699,7 +699,7 @@ export function TicketDetail() {
                 </dl>
                 <div className="row"><Link to={resourceLink(resource)}>{t("tickets.viewResource")}</Link><Link to={`/ops/projects/${resource.projectId}`}>{t("tickets.viewProject")}</Link></div>
               </div>
-            ) : ticket.resourceUuid ? resourceQuery.isPending ? <Loading /> : <div className="ticket-resource"><span className="mono">{ticket.resourceUuid}</span><small className="muted">{t("tickets.resourceUnavailable")}</small></div> : <p className="muted">{t("tickets.noResource")}</p>}
+            ) : ticket.resourceUuid ? resourceQuery.isPending ? <Loading /> : <div className="ticket-resource"><span className="resource-id">{formatResourceId("res", ticket.resourceUuid)}</span><small className="muted">{t("tickets.resourceUnavailable")}</small></div> : <p className="muted">{t("tickets.noResource")}</p>}
           </Panel>
           {Object.keys(ticket.context || {}).length > 0 && (
             <Panel title={t("tickets.requestContext")}>

@@ -1,31 +1,38 @@
 import { Monitor, Server, Boxes, Zap } from "lucide-react";
 import type { Kind, ResourceUuid, DisplayId } from "../types/domain";
+export const resourceIdTypeByKind = {
+  gpu_vm: "gvm",
+  gpu_baremetal: "gbm",
+  vgpu: "kcl",
+  inference: "inf",
+} as const;
+
 export const KIND_META = {
   gpu_vm: {
     routeKey: "servers",
     deployKey: "server",
-    prefix: "gvm-",
+    prefix: `${resourceIdTypeByKind.gpu_vm}-`,
     icon: Monitor,
     color: "var(--rs-type-server)",
   },
   gpu_baremetal: {
     routeKey: "baremetal",
     deployKey: "baremetal",
-    prefix: "gbm-",
+    prefix: `${resourceIdTypeByKind.gpu_baremetal}-`,
     icon: Server,
     color: "var(--rs-type-baremetal)",
   },
   vgpu: {
     routeKey: "vgpu",
     deployKey: "vgpu",
-    prefix: "kcl-",
+    prefix: `${resourceIdTypeByKind.vgpu}-`,
     icon: Boxes,
     color: "var(--rs-type-vgpu)",
   },
   inference: {
     routeKey: "inference",
     deployKey: "inference",
-    prefix: "inf-",
+    prefix: `${resourceIdTypeByKind.inference}-`,
     icon: Zap,
     color: "var(--rs-type-inference)",
   },
@@ -49,7 +56,15 @@ export type ResourceIdType =
   | "tun"
   | "blk"
   | "fil"
-  | "obj";
+  | "obj"
+  | "prj"
+  | "tkt"
+  | "log"
+  | "inv"
+  | "res"
+  | "txn"
+  | "ref"
+  | "usg";
 
 function resourceIdBody(source: string): string {
   const compact = source.replaceAll("-", "").toLowerCase();
@@ -76,12 +91,12 @@ export function formatResourceId(
   return `${prefix}-${resourceIdBody(source)}` as DisplayId;
 }
 
+export function formatReferenceId(source: string): DisplayId {
+  if (source.startsWith("invoice-")) return formatResourceId("inv", source);
+  if (source.startsWith("usage-")) return formatResourceId("usg", source);
+  return formatResourceId("ref", source);
+}
+
 export function displayId(kind: Kind, uuid: string): DisplayId {
-  const typeByKind: Record<Kind, ResourceIdType> = {
-    gpu_vm: "gvm",
-    gpu_baremetal: "gbm",
-    vgpu: "kcl",
-    inference: "inf",
-  };
-  return formatResourceId(typeByKind[kind], uuid);
+  return formatResourceId(resourceIdTypeByKind[kind], uuid);
 }

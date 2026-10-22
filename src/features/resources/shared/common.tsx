@@ -1,3 +1,4 @@
+import { formatReferenceId, formatResourceId } from "../../../lib/ids";
 import { lazy, memo, Suspense, useState } from "react";
 import { Link } from "react-router-dom";
 import type {
@@ -471,6 +472,11 @@ export function TransactionTable({ rows }: { rows: Transaction[] }) {
       data={rows}
       columns={[
         {
+          accessorKey: "id",
+          header: "ID",
+          cell: ({ row }) => formatResourceId("txn", row.original.id),
+        },
+        {
           accessorKey: "at",
           header: t("common.time"),
           cell: ({ row }) => date(row.original.at),
@@ -490,7 +496,11 @@ export function TransactionTable({ rows }: { rows: Transaction[] }) {
           header: t("billing.balanceAfter"),
           cell: ({ row }) => money(row.original.balanceAfter),
         },
-        { accessorKey: "referenceId", header: t("billing.reference") },
+        {
+          accessorKey: "referenceId",
+          header: t("billing.reference"),
+          cell: ({ row }) => formatReferenceId(row.original.referenceId),
+        },
       ]}
     />
   );

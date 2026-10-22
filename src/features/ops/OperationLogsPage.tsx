@@ -4,7 +4,7 @@ import { ClipboardList, Plus, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { OperationLog } from "../../types/domain";
 import { EP } from "../../lib/api-client";
-import { resourceLink } from "../../lib/ids";
+import { formatResourceId, resourceLink } from "../../lib/ids";
 import { date } from "../../lib/date";
 import { t, dt } from "../../i18n";
 import { useRegion } from "../../stores/region";
@@ -28,10 +28,11 @@ export default function OperationLogsPage() {
   });
   const rows = (query.data || []).filter((item) => {
     const matchesSearch = [
+      formatResourceId("log", item.id),
       item.displayId,
       item.resourceName,
       item.projectName,
-      item.projectId,
+      formatResourceId("prj", item.projectId),
     ].some((value) => dt(value).toLowerCase().includes(search.toLowerCase()));
     return (
       item.region === region &&
@@ -41,6 +42,13 @@ export default function OperationLogsPage() {
     );
   });
   const columns: ColumnDef<OperationLog>[] = [
+    {
+      accessorKey: "id",
+      header: "ID",
+      cell: ({ row }) => (
+        <span className="resource-id">{formatResourceId("log", row.original.id)}</span>
+      ),
+    },
     {
       accessorKey: "operation",
       header: t("operation.action"),
@@ -83,7 +91,9 @@ export default function OperationLogsPage() {
         <span>
           {dt(row.original.projectName)}
           <br />
-          <small className="resource-id">{row.original.projectId}</small>
+          <small className="resource-id">
+            {formatResourceId("prj", row.original.projectId)}
+          </small>
         </span>
       ),
     },

@@ -33,7 +33,7 @@ it("creates categorized tickets with optional resource and dynamic context", asy
   expect(created.status).toBe(201);
   expect(created.data.category).toBe("billing");
   expect(created.data.resourceUuid).toBeNull();
-  expect(created.data.caseNumber).toMatch(/^RS-20261022-/);
+  expect(created.data.caseNumber).toMatch(/^tkt-[a-f0-9]{16}$/);
   expect(created.data.events[0].status).toBe("open");
   expect((await request("/tickets?region=jp&category=billing")).data).toHaveLength(1);
 });

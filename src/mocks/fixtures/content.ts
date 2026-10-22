@@ -11,6 +11,7 @@ import type {
   Notebook,
 } from "../../types/domain";
 import { CATALOG_MODELS } from "./model-catalog";
+import { formatResourceId } from "../../lib/ids";
 const iso = (days: number) =>
   new Date(Date.now() - days * 86400000).toISOString();
 export const MODELS: Model[] = [
@@ -285,7 +286,7 @@ export const seedNotebooks = (resources: Resource[]): Notebook[] =>
 export const seedTickets = (resources: Resource[]): Ticket[] => [
   {
     id: "ticket-001",
-    caseNumber: "RS-2026-000001",
+    caseNumber: formatResourceId("tkt", "ticket-001"),
     title: "申请 GPU 配额提升",
     category: "quota_access",
     resourceUuid: null,
@@ -306,7 +307,7 @@ export const seedTickets = (resources: Resource[]): Ticket[] => [
   },
   {
     id: "ticket-002",
-    caseNumber: "RS-2026-000002",
+    caseNumber: formatResourceId("tkt", "ticket-002"),
     title: "资源异常排查",
     category: "inference",
     resourceUuid: resources[15].resourceUuid,

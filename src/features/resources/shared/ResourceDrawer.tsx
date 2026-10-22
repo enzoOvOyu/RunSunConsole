@@ -4,7 +4,7 @@ import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import type { Resource } from "../../../types/domain";
 import { useAuth } from "../../../stores/auth";
 import { canWrite } from "../../../lib/rbac";
-import { KIND_META } from "../../../lib/ids";
+import { KIND_META, formatResourceId } from "../../../lib/ids";
 import { EP, post, remove, query } from "../../../lib/api-client";
 import { useAction } from "../../shared/hooks";
 import { t, dt } from "../../../i18n";
@@ -103,7 +103,7 @@ export function ResourceDrawer() {
           r ? (
             <>
               <span className="resource-id">{r.displayId}</span>
-              {` · ${t("common." + r.region)} · ${r.project ? dt(r.project.name) : r.projectId}`}
+              {` · ${t("common." + r.region)} · ${r.project ? dt(r.project.name) : formatResourceId("prj", r.projectId)}`}
             </>
           ) : undefined
         }

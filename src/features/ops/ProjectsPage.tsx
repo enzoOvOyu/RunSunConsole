@@ -22,7 +22,7 @@ import { useAuth } from "../../stores/auth";
 import { useRegion } from "../../stores/region";
 import { canWrite, canManageOrg } from "../../lib/rbac";
 import { EP, post, patch, remove, query } from "../../lib/api-client";
-import { KIND_META, resourceLink } from "../../lib/ids";
+import { KIND_META, formatResourceId, resourceLink } from "../../lib/ids";
 import { date } from "../../lib/date";
 import { useAction, useData } from "../shared/hooks";
 import { t, dt } from "../../i18n";
@@ -101,7 +101,9 @@ export default function ProjectsPage() {
         <div className="stack">
           {q.data
             .filter((p) =>
-              dt(p.name).toLowerCase().includes(search.toLowerCase()),
+              [dt(p.name), formatResourceId("prj", p.id)].some((value) =>
+                value.toLowerCase().includes(search.toLowerCase()),
+              ),
             )
             .map((p) => (
               <ProjectCard key={p.id} project={p} />
@@ -185,14 +187,11 @@ function ProjectCard({ project: p }: { project: Project }) {
           <strong>{dt(p.name)}</strong>
           <div>
             <small>{t("project.id")}: </small>
-            <small className="mono">{p.id}</small>
+            <small className="resource-id">{formatResourceId("prj", p.id)}</small>
           </div>
-          <div>
-            <small className="mono">{p.slug}</small>{" "}
-            {p.isDefault && (
-              <span className="chip">{t("project.default")}</span>
-            )}
-          </div>
+          {p.isDefault && (
+            <span className="chip">{t("project.default")}</span>
+          )}
         </div>
       </div>
       <div>
@@ -266,7 +265,6 @@ export function ProjectDetail() {
     <>
       <PageHeader
         title={dt(p.name)}
-        subtitle={p.slug}
         actions={
           <Button onClick={() => navigate("/ops/projects")}>
             {t("common.previous")}
@@ -364,8 +362,7 @@ export function ProjectDetail() {
             <Panel title={t("project.profile")}>
               <dl className="project-detail-profile">
                 {[
-                  [t("project.id"), p.id],
-                  [t("project.slug"), p.slug],
+                  [t("project.id"), formatResourceId("prj", p.id)],
                   [t("project.defaultRegion"), t("common." + p.defaultRegion)],
                   [t("common.createdAt"), date(p.createdAt)],
                   [t("project.myRole"), t("common." + p.myRole)],
@@ -601,7 +598,7 @@ export function ProjectDetail() {
                 if (
                   !(await confirmAction(
                     t("common.delete") + " " + dt(p.name),
-                    p.id,
+                    formatResourceId("prj", p.id),
                   ))
                 )
                   return;

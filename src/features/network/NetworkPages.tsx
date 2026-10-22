@@ -217,7 +217,7 @@ function NetworkPage({ kind }: { kind: NetworkKind }) {
                     dt(
                       projects.data?.find(
                         (p) => p.id === row.original.projectId,
-                      )?.name || row.original.projectId,
+                      )?.name || formatResourceId("prj", row.original.projectId),
                     ),
                 },
                 ...(kind === "vpcs"
@@ -473,6 +473,19 @@ function NetworkDrawer({
   const [confirm, setConfirm] = useState("");
   const { run, busy } = useAction();
   const d = q.data;
+  const linkedVpcId = d && "vpcId" in d ? d.vpcId : "";
+  const linkedVpc = useData<Vpc>(
+    ["network-vpc-display", linkedVpcId],
+    `${EP.network}/vpcs/${linkedVpcId}`,
+    { enabled: !!linkedVpcId },
+  );
+  const linkedVpcDisplayId = linkedVpcId
+    ? formatResourceId("vpc", linkedVpcId, {
+        baremetalVpc: linkedVpc.data
+          ? vpcNetworkType(linkedVpc.data) === "baremetal"
+          : /(^|[-_])bm([-_]|$)/i.test(linkedVpcId),
+      })
+    : "";
   const dead = d && (!!d.deletedAt || ("releasedAt" in d && !!d.releasedAt));
   const allowed = writable && !dead && !busy;
   const action = async (
@@ -513,7 +526,7 @@ function NetworkDrawer({
         }
         description={
           d
-            ? `${"displayId" in d ? d.displayId : d.id} · ${t(`common.${d.region}`)}`
+            ? `${networkDisplayId(kind, d)} · ${t(`common.${d.region}`)}`
             : undefined
         }
       >
@@ -661,9 +674,7 @@ function NetworkDrawer({
                               [
                                 t("network.vpc"),
                                 <Link to={`/network/vpcs?drawer=${d.vpcId}`}>
-                                  {formatResourceId("vpc", d.vpcId, {
-                                    baremetalVpc: /(^|[-_])bm([-_]|$)/i.test(d.vpcId),
-                                  })}
+                                  {linkedVpcDisplayId}
                                 </Link>,
                               ] as [string, React.ReactNode],
                             ]
@@ -696,7 +707,7 @@ function NetworkDrawer({
                                       <Link
                                         to={`/network/tunnels?drawer=${d.tunnelId}`}
                                       >
-                                        {d.tunnelId}
+                                        {formatResourceId("tun", d.tunnelId)}
                                       </Link>,
                                     ] as [string, React.ReactNode],
                                   ]
@@ -725,7 +736,7 @@ function NetworkDrawer({
                               [
                                 t("network.eip"),
                                 <Link to={`/network/eips?drawer=${d.eipId}`}>
-                                  {d.gatewayIp || d.eipId}
+                                  {d.gatewayIp || formatResourceId("eip", d.eipId)}
                                 </Link>,
                               ] as [string, React.ReactNode],
                               [
@@ -1082,7 +1093,7 @@ export function InterfaceTable({ data }: { data: InterfaceView[] }) {
             <div className="stack">
               {row.original.securityGroupIds.map((id) => (
                 <Link key={id} to={`${uiPath("security-groups")}?drawer=${id}`}>
-                  {row.original.groups?.find((g) => g.id === id)?.name || id}
+                  {row.original.groups?.find((g) => g.id === id)?.name || formatResourceId("sgr", id)}
                 </Link>
               ))}
             </div>

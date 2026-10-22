@@ -1,3 +1,4 @@
+import { formatReferenceId } from "../../lib/ids";
 import { useState } from "react";
 import type { Voucher } from "../../types/domain";
 import { EP } from "../../lib/api-client";
@@ -101,7 +102,11 @@ export default function VouchersPage() {
                   header: t("common.amount"),
                   cell: ({ row }) => money(row.original.amount),
                 },
-                { accessorKey: "referenceId", header: t("billing.reference") },
+                {
+                  accessorKey: "referenceId",
+                  header: t("billing.reference"),
+                  cell: ({ row }) => formatReferenceId(row.original.referenceId),
+                },
               ]}
             />
           </div>

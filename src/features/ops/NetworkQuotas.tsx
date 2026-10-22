@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import type { Project, Region } from "../../types/domain";
 import type { NetworkQuota, SubnetView, EipView } from "../../types/network";
 import { EP, query } from "../../lib/api-client";
+import { formatResourceId } from "../../lib/ids";
 import { useData } from "../shared/hooks";
 import { t, dt } from "../../i18n";
 import { number } from "../../lib/money";
@@ -140,7 +141,7 @@ export function NetworkQuotas({ region }: { region: Region }) {
                     to={`/network/vpcs?region=${region}&drawer=${row.original.vpcId}`}
                   >
                     {dt(row.original.name)}
-                    <small className="mono"> · {row.original.id}</small>
+                    <small className="resource-id"> · {formatResourceId("sub", row.original.id)}</small>
                   </Link>
                 ),
               },
@@ -150,7 +151,7 @@ export function NetworkQuotas({ region }: { region: Region }) {
                 cell: ({ row }) =>
                   dt(
                     projects.data?.find((p) => p.id === row.original.projectId)
-                      ?.name || row.original.projectId,
+                      ?.name || formatResourceId("prj", row.original.projectId),
                   ),
               },
               { accessorKey: "cidr", header: t("network.cidr") },

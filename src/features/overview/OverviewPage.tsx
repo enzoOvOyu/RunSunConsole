@@ -31,7 +31,7 @@ import {
   type ResourceEvent,
   type Account,
 } from "../../types/domain";
-import { KIND_META, resourceLink } from "../../lib/ids";
+import { formatResourceId, KIND_META, resourceLink } from "../../lib/ids";
 import { date } from "../../lib/date";
 import { useAuth } from "../../stores/auth";
 import { canWrite } from "../../lib/rbac";
@@ -1088,7 +1088,7 @@ export default function OverviewPage() {
                           {dt(
                             data.projects.find(
                               (project) => project.id === resource.projectId,
-                            )?.name || resource.projectId,
+                            )?.name || formatResourceId("prj", resource.projectId),
                           )}
                         </td>
                         <td>{t("common." + resource.region)}</td>

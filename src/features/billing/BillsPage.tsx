@@ -2,6 +2,7 @@ import { useUrlState } from "../shared/useUrlState";
 import type { Usage, Transaction, Invoice } from "../../types/domain";
 import { EP, query } from "../../lib/api-client";
 import { invoicePeriodForSelection } from "../../lib/billing-period";
+import { formatResourceId } from "../../lib/ids";
 import { useData } from "../shared/hooks";
 import { t } from "../../i18n";
 import { date } from "../../lib/date";
@@ -118,7 +119,11 @@ export default function BillsPage() {
                 <DataTable
                   data={report.data.invoices}
                   columns={[
-                    { accessorKey: "id", header: "ID" },
+                    {
+                      accessorKey: "id",
+                      header: "ID",
+                      cell: ({ row }) => formatResourceId("inv", row.original.id),
+                    },
                     { accessorKey: "period", header: t("billing.period") },
                     {
                       accessorKey: "issuedAt",
@@ -157,7 +162,7 @@ export default function BillsPage() {
                         <Button
                           onClick={() =>
                             download(
-                              `${row.original.id}.txt`,
+                              `${formatResourceId("inv", row.original.id)}.txt`,
                               [
                                 t("billing.invoices"),
                                 `${t("billing.period")}: ${row.original.period}`,

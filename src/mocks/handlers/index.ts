@@ -72,7 +72,7 @@ import {
   inferenceGovernanceSchema,
 } from "../../lib/schema";
 import { canWrite, canManageOrg } from "../../lib/rbac";
-import { displayId, resourceLink } from "../../lib/ids";
+import { displayId, formatResourceId, resourceLink } from "../../lib/ids";
 import { round } from "../../lib/money";
 import { invoicePeriodForSelection } from "../../lib/billing-period";
 import { compatiblePrecisions } from "../../lib/inference-precision";
@@ -1476,7 +1476,7 @@ async function dispatchNetwork(
 }
 
 function normalizeTicket(ticket: Ticket): Ticket {
-  ticket.caseNumber ||= ticket.id;
+  ticket.caseNumber = formatResourceId("tkt", ticket.id);
   ticket.category ||= "technical";
   ticket.context ||= {};
   ticket.updatedAt ||= ticket.messages.at(-1)?.at || ticket.createdAt;
@@ -3036,7 +3036,7 @@ async function dispatch(request: Request, settleBilling = true) {
       const attachments = await storeTicketAttachments(id, body.attachments);
       const ticket: Ticket = {
         id,
-        caseNumber: `RS-${now.slice(0, 10).replaceAll("-", "")}-${id.slice(0, 6).toUpperCase()}`,
+        caseNumber: formatResourceId("tkt", id),
         title,
         category,
         resourceUuid: linked?.resourceUuid || null,

@@ -27,6 +27,7 @@ import {
 } from "../../../components/ui";
 import { t, dt } from "../../../i18n";
 import { defaultScaling, normalizeSpec } from "../../../lib/config";
+import { formatResourceId } from "../../../lib/ids";
 import { SCALING_METRIC_LIMITS } from "../../../lib/schema";
 import { vpcNetworkType } from "../../../lib/network";
 import { readSshKeys } from "../../../lib/ssh-keys";
@@ -896,7 +897,7 @@ export function ProjectSelect({
         <option value="">{t("common.project")}</option>
         {projects.map((p) => (
           <option key={p.id} value={p.id}>
-            {dt(p.name)} · {p.id}
+            {dt(p.name)} · {formatResourceId("prj", p.id)}
           </option>
         ))}
       </select>
