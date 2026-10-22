@@ -285,28 +285,50 @@ export const seedNotebooks = (resources: Resource[]): Notebook[] =>
 export const seedTickets = (resources: Resource[]): Ticket[] => [
   {
     id: "ticket-001",
+    caseNumber: "RS-2026-000001",
     title: "申请 GPU 配额提升",
-    resourceUuid: resources[0].resourceUuid,
+    category: "quota_access",
+    resourceUuid: null,
+    region: "jp",
+    context: { quotaMetric: "gpu" },
     status: "open",
     priority: "normal",
     createdAt: iso(1),
+    updatedAt: iso(1),
+    resolvedAt: null,
+    resolution: "",
     messages: [
-      { actor: "enzoOvOyu", body: "GPU limit: 400 → 512", at: iso(1) },
+      { actor: "enzoOvOyu", body: "GPU limit: 400 → 512", at: iso(1), attachments: [] },
+    ],
+    events: [
+      { id: "ticket-event-001", type: "created", actor: "enzoOvOyu", at: iso(1), status: "open", summary: "工单已提交" },
     ],
   },
   {
     id: "ticket-002",
+    caseNumber: "RS-2026-000002",
     title: "资源异常排查",
+    category: "inference",
     resourceUuid: resources[15].resourceUuid,
-    status: "open",
+    region: resources[15].region,
+    context: {},
+    status: "pending",
     priority: "high",
     createdAt: iso(0.5),
+    updatedAt: iso(0.25),
+    resolvedAt: null,
+    resolution: "",
     messages: [
       {
         actor: "enzoOvOyu",
         body: "MODEL_OOM: inspect KV cache allocation",
         at: iso(0.5),
+        attachments: [],
       },
+    ],
+    events: [
+      { id: "ticket-event-002", type: "created", actor: "enzoOvOyu", at: iso(0.5), status: "open", summary: "工单已提交" },
+      { id: "ticket-event-003", type: "status_changed", actor: "RunSun Support", at: iso(0.25), status: "pending", summary: "支持团队正在处理，等待补充信息" },
     ],
   },
 ];

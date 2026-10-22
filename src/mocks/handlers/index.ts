@@ -49,6 +49,9 @@ import {
   type Pipeline,
   type Dataset,
   type Project,
+  type Ticket,
+  type TicketAttachment,
+  type TicketCategory,
 } from "../../types/domain";
 import { db, persist, addEvent } from "../lib/database";
 import { RATES } from "../fixtures/pricing";
@@ -1470,6 +1473,54 @@ async function dispatchNetwork(
     }
   }
   fail(404, "NOT_FOUND");
+}
+
+function normalizeTicket(ticket: Ticket): Ticket {
+  ticket.caseNumber ||= ticket.id;
+  ticket.category ||= "technical";
+  ticket.context ||= {};
+  ticket.updatedAt ||= ticket.messages.at(-1)?.at || ticket.createdAt;
+  ticket.region ||= ticket.resourceUuid
+    ? db.resources.find((resource) => resource.resourceUuid === ticket.resourceUuid)?.region || null
+    : null;
+  ticket.resolvedAt ||= null;
+  ticket.resolution ||= "";
+  ticket.messages = (ticket.messages || []).map((message) => ({
+    ...message,
+    attachments: message.attachments || [],
+  }));
+  ticket.events ||= [{
+    id: `legacy-created-${ticket.id}`,
+    type: "created",
+    actor: ticket.messages[0]?.actor || "enzoOvOyu",
+    at: ticket.createdAt,
+    status: ticket.status === "closed" ? "closed" : "open",
+    summary: "tickets.eventCreated",
+  }];
+  return ticket;
+}
+
+async function storeTicketAttachments(ticketId: string, input: unknown): Promise<TicketAttachment[]> {
+  const files = z.array(z.object({
+    name: z.string().trim().min(1).max(180),
+    size: z.number().int().min(1).max(5_000_000),
+    contentType: z.string().min(1).max(120),
+    content: z.string().max(6_800_000),
+  })).max(5).parse(input || []);
+  const now = new Date().toISOString();
+  const attachments: TicketAttachment[] = [];
+  for (const file of files) {
+    if (!file.content.startsWith(`data:${file.contentType};base64,`))
+      fail(422, "INVALID_ATTACHMENT");
+    const id = crypto.randomUUID();
+    const key = `ticket/${ticketId}/${id}`;
+    await putObject(key, file.content);
+    attachments.push({
+      id, name: file.name, size: file.size, contentType: file.contentType,
+      key, uploadedAt: now, uploadedBy: "enzoOvOyu",
+    });
+  }
+  return attachments;
 }
 
 async function dispatch(request: Request, settleBilling = true) {
@@ -2929,51 +2980,169 @@ async function dispatch(request: Request, settleBilling = true) {
         .sort((a, b) => a.expiresAt.localeCompare(b.expiresAt)),
     );
   if (path === "/api/tickets") {
-    if (method === "GET")
-      return json(
-        db.tickets.filter(
-          (t) =>
-            (!region || resource(t.resourceUuid).region === region) &&
-            (!qs.get("status") || t.status === qs.get("status")),
-        ),
-      );
-    if (method === "POST") {
-      const r = resource(String(body.resourceUuid));
-      const t = {
-        id: crypto.randomUUID(),
-        title: z.string().trim().min(3).max(120).parse(body.title),
-        resourceUuid: r.resourceUuid,
-        status: "open",
-        priority: z.enum(["normal", "high"]).parse(body.priority),
-        createdAt: new Date().toISOString(),
-        messages: [
-          {
-            actor: "enzoOvOyu",
-            body: z.string().trim().min(3).max(10000).parse(body.message),
-            at: new Date().toISOString(),
-          },
-        ],
-      };
-      db.tickets.push(t);
-      persist();
-      return json(t, 201);
+    if (method === "GET") {
+      const q = (qs.get("q") || "").trim().toLowerCase();
+      const rows = db.tickets
+        .map(normalizeTicket)
+        .filter((ticket) => {
+          const linked = ticket.resourceUuid
+            ? db.resources.find((item) => item.resourceUuid === ticket.resourceUuid)
+            : undefined;
+          const ticketRegion = ticket.region || linked?.region || null;
+          return (
+            (!region || ticketRegion === region) &&
+            (!qs.get("status") || ticket.status === qs.get("status")) &&
+            (!qs.get("priority") || ticket.priority === qs.get("priority")) &&
+            (!qs.get("category") || ticket.category === qs.get("category")) &&
+            (!q ||
+              [ticket.caseNumber, ticket.title, ticket.id, linked?.name, linked?.displayId]
+                .filter(Boolean)
+                .some((value) => String(value).toLowerCase().includes(q)))
+          );
+        })
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      return json(rows.map((ticket) => ({
+        ...ticket,
+        category: ticket.category || "technical",
+        caseNumber: ticket.caseNumber || ticket.id,
+        region: ticket.region || (ticket.resourceUuid
+          ? db.resources.find((item) => item.resourceUuid === ticket.resourceUuid)?.region || null
+          : null),
+        updatedAt: ticket.updatedAt || ticket.createdAt,
+        resolvedAt: ticket.resolvedAt || null,
+        resolution: ticket.resolution || "",
+        context: ticket.context || {},
+        events: ticket.events || [],
+        messages: ticket.messages.map((message) => ({ ...message, attachments: message.attachments || [] })),
+      })));
     }
+    if (method === "POST") {
+      const category = z.enum([
+        "gpu_vm", "gpu_baremetal", "kubernetes", "inference", "image_driver",
+        "network_storage", "billing", "quota_access", "technical",
+      ]).parse(body.category) as TicketCategory;
+      const resourceUuid = body.resourceUuid
+        ? z.string().min(1).parse(body.resourceUuid) as ResourceUuid
+        : null;
+      const linked = resourceUuid ? resource(resourceUuid) : null;
+      const requiredKind: Partial<Record<TicketCategory, Resource["kind"]>> = {
+        gpu_vm: "gpu_vm",
+        gpu_baremetal: "gpu_baremetal",
+        kubernetes: "vgpu",
+        inference: "inference",
+      };
+      if (requiredKind[category] && !linked) fail(422, "TICKET_RESOURCE_REQUIRED");
+      if (linked && requiredKind[category] && linked.kind !== requiredKind[category])
+        fail(422, "TICKET_RESOURCE_MISMATCH");
+      const requestedRegion = body.region
+        ? z.enum(REGIONS).parse(body.region) as Region
+        : null;
+      const title = z.string().trim().min(3).max(120).parse(body.title);
+      const description = z.string().trim().min(3).max(10000).parse(body.message);
+      const priority = z.enum(["low", "normal", "high", "urgent"]).parse(body.priority);
+      const context = z.record(z.string()).parse(body.context || {});
+      const now = new Date().toISOString();
+      const id = crypto.randomUUID();
+      const attachments = await storeTicketAttachments(id, body.attachments);
+      const ticket: Ticket = {
+        id,
+        caseNumber: `RS-${now.slice(0, 10).replaceAll("-", "")}-${id.slice(0, 6).toUpperCase()}`,
+        title,
+        category,
+        resourceUuid: linked?.resourceUuid || null,
+        region: linked?.region || requestedRegion,
+        context,
+        status: "open",
+        priority,
+        createdAt: now,
+        updatedAt: now,
+        resolvedAt: null,
+        resolution: "",
+        messages: [{
+          actor: "enzoOvOyu",
+          body: description,
+          at: now,
+          attachments,
+        }],
+        events: [{
+          id: crypto.randomUUID(), type: "created", actor: "enzoOvOyu", at: now,
+          status: "open", summary: "tickets.eventCreated",
+        }],
+      };
+      db.tickets.push(ticket);
+      persist();
+      return json(ticket, 201);
+    }
+  }
+  const attachmentMatch = path.match(/^\/api\/tickets\/([^/]+)\/attachments\/([^/]+)$/);
+  if (attachmentMatch && method === "GET") {
+    const ticket = db.tickets.find((item) => item.id === attachmentMatch[1]) || fail(404, "NOT_FOUND");
+    const attachment = ticket.messages.flatMap((message) => message.attachments || [])
+      .find((item) => item.id === attachmentMatch[2]) || fail(404, "NOT_FOUND");
+    const content = await getObject(attachment.key);
+    if (!content) fail(404, "NOT_FOUND");
+    return json({ content, name: attachment.name, contentType: attachment.contentType });
   }
   const tm = path.match(/^\/api\/tickets\/([^/]+)$/);
   if (tm) {
-    const ticket =
-      db.tickets.find((t) => t.id === tm[1]) || fail(404, "NOT_FOUND");
+    const ticket = normalizeTicket(
+      db.tickets.find((item) => item.id === tm[1]) || fail(404, "NOT_FOUND"),
+    );
     if (method === "PATCH") {
-      if (body.message)
-        ticket.messages.push({
-          actor: "enzoOvOyu",
-          body: z.string().min(1).parse(body.message),
-          at: new Date().toISOString(),
+      const now = new Date().toISOString();
+      if (body.message !== undefined) {
+        if (ticket.status === "closed") fail(409, "TICKET_CLOSED");
+        const text = z.string().trim().min(3).max(10000).parse(body.message);
+        const attachments = await storeTicketAttachments(ticket.id, body.attachments);
+        ticket.messages.push({ actor: "enzoOvOyu", body: text, at: now, attachments });
+        const previousStatus = ticket.status;
+        const shouldReopen = previousStatus === "resolved" || previousStatus === "pending";
+        ticket.events.push({
+          id: crypto.randomUUID(), type: "reply", actor: "enzoOvOyu", at: now,
+          status: shouldReopen ? "open" : previousStatus,
+          summary: "tickets.eventReply",
         });
-      if (body.status)
-        ticket.status = z.enum(["open", "closed"]).parse(body.status);
+        if (shouldReopen) {
+          ticket.status = "open";
+          ticket.resolvedAt = null;
+          ticket.resolution = "";
+          ticket.events.push({
+            id: crypto.randomUUID(), type: "status_changed", actor: "enzoOvOyu", at: now,
+            status: "open", summary: "tickets.eventReopened",
+          });
+        }
+      } else if (body.attachments !== undefined) {
+        fail(422, "TICKET_MESSAGE_REQUIRED");
+      }
+      if (body.status !== undefined) {
+        const status = z.enum(["open", "pending", "resolved", "closed"]).parse(body.status);
+        const transitions: Record<string, string[]> = {
+          open: ["pending", "resolved", "closed"],
+          pending: ["open", "resolved", "closed"],
+          resolved: ["open", "closed"],
+          closed: ["open"],
+        };
+        if (status !== ticket.status && !transitions[ticket.status]?.includes(status))
+          fail(409, "TICKET_INVALID_TRANSITION");
+        if (status === "resolved") {
+          ticket.resolution = z.string().trim().min(3).max(2000).parse(body.resolution);
+          ticket.resolvedAt = now;
+        } else if (status === "open") {
+          ticket.resolvedAt = null;
+          ticket.resolution = "";
+        }
+        if (status !== ticket.status) {
+          ticket.status = status;
+          ticket.events.push({
+            id: crypto.randomUUID(), type: "status_changed", actor: "enzoOvOyu", at: now,
+            status, summary: `tickets.eventStatus.${status}`,
+          });
+        }
+      }
+      ticket.updatedAt = now;
       persist();
     }
+    if (method !== "GET" && method !== "PATCH") fail(405, "METHOD_NOT_ALLOWED");
     return json(ticket);
   }
   if (path === "/api/datasets") {

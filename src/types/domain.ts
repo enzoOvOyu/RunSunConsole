@@ -440,14 +440,57 @@ export interface Pipeline {
   nodes: PipelineNode[];
   runs: PipelineRun[];
 }
+export type TicketCategory =
+  | "gpu_vm"
+  | "gpu_baremetal"
+  | "kubernetes"
+  | "inference"
+  | "image_driver"
+  | "network_storage"
+  | "billing"
+  | "quota_access"
+  | "technical";
+export type TicketStatus = "open" | "pending" | "resolved" | "closed";
+export type TicketPriority = "low" | "normal" | "high" | "urgent";
+export interface TicketAttachment {
+  id: string;
+  name: string;
+  size: number;
+  contentType: string;
+  key: string;
+  uploadedAt: string;
+  uploadedBy: string;
+}
+export interface TicketMessage {
+  actor: string;
+  body: string;
+  at: string;
+  attachments: TicketAttachment[];
+}
+export interface TicketEvent {
+  id: string;
+  type: "created" | "reply" | "status_changed";
+  actor: string;
+  at: string;
+  status: TicketStatus;
+  summary: string;
+}
 export interface Ticket {
   id: string;
+  caseNumber: string;
   title: string;
-  resourceUuid: ResourceUuid;
-  status: string;
-  priority: string;
+  category: TicketCategory;
+  resourceUuid: ResourceUuid | null;
+  region: Region | null;
+  context: Record<string, string>;
+  status: TicketStatus;
+  priority: TicketPriority;
   createdAt: string;
-  messages: { actor: string; body: string; at: string }[];
+  updatedAt: string;
+  resolvedAt: string | null;
+  resolution: string;
+  messages: TicketMessage[];
+  events: TicketEvent[];
 }
 export interface Voucher {
   id: string;

@@ -2028,3 +2028,226 @@ a:focus-visible {
 .inference-memory-card .field-error {
   margin: 0;
 }
+
+.ticket-toolbar {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.ticket-toolbar .search {
+  min-width: 220px;
+  flex: 1 1 250px;
+}
+
+.ticket-toolbar select {
+  min-width: 150px;
+  max-width: 220px;
+}
+
+.ticket-table-title {
+  display: flex;
+  min-width: 180px;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ticket-table-title small {
+  color: var(--rs-text-muted);
+}
+
+.ticket-form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.ticket-create-form .field textarea,
+.ticket-detail-layout textarea {
+  width: 100%;
+  min-height: 110px;
+  resize: vertical;
+}
+
+.ticket-form-actions {
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.ticket-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px dashed var(--rs-border-strong, var(--rs-border));
+  border-radius: var(--rs-r-sm);
+  background: var(--rs-surface-2);
+}
+
+.ticket-upload-control {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 8px;
+  color: var(--rs-text-primary);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ticket-upload-control input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+.ticket-upload-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ticket-upload-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.ticket-upload-list li > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.link-button,
+.ticket-attachment {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--rs-text-primary);
+  cursor: pointer;
+}
+
+.ticket-status-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.ticket-status-actions {
+  margin-top: 16px;
+}
+
+.ticket-timeline {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 4px 0 0 8px;
+  list-style: none;
+}
+
+.ticket-timeline li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 12px;
+  min-height: 54px;
+  padding-bottom: 16px;
+}
+
+.ticket-timeline li:not(:last-child)::before {
+  position: absolute;
+  top: 12px;
+  bottom: -2px;
+  left: 5px;
+  width: 1px;
+  background: var(--rs-border);
+  content: "";
+}
+
+.ticket-timeline-marker {
+  z-index: 1;
+  width: 11px;
+  height: 11px;
+  margin-top: 3px;
+  border: 2px solid var(--rs-bg);
+  border-radius: 50%;
+  background: var(--rs-brand);
+  box-shadow: 0 0 0 1px var(--rs-border-strong, var(--rs-border));
+}
+
+.ticket-timeline-marker.status_changed {
+  background: var(--rs-success, #16a34a);
+}
+
+.ticket-timeline li > div > small {
+  display: inline-block;
+  margin-top: 5px;
+  color: var(--rs-text-muted);
+}
+
+.ticket-resolution {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--rs-border);
+  border-radius: var(--rs-r-sm);
+  background: var(--rs-surface-2);
+}
+
+.ticket-resolution p,
+.ticket-preview-message {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ticket-attachments {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.ticket-attachment {
+  width: fit-content;
+  max-width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--rs-border);
+  border-radius: var(--rs-r-sm);
+  font-size: 12px;
+}
+
+.ticket-attachment span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ticket-attachment small {
+  color: var(--rs-text-muted);
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .ticket-form-grid,
+  .ticket-detail-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ticket-toolbar > select {
+    flex: 1 1 135px;
+    max-width: none;
+  }
+}
+
+.badge.urgent {
+  color: var(--rs-danger);
+  background: color-mix(in srgb, var(--rs-danger) 10%, transparent);
+  border-color: color-mix(in srgb, var(--rs-danger) 25%, var(--rs-border));
+}
