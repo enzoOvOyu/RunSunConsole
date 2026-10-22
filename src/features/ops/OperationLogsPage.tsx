@@ -5,7 +5,7 @@ import { Link } from "react-router-dom";
 import type { OperationLog } from "../../types/domain";
 import { EP } from "../../lib/api-client";
 import { resourceLink } from "../../lib/ids";
-import { date, duration } from "../../lib/date";
+import { date } from "../../lib/date";
 import { t, dt } from "../../i18n";
 import { useRegion } from "../../stores/region";
 import { useData } from "../shared/hooks";
@@ -109,11 +109,6 @@ export default function OperationLogsPage() {
       accessorKey: "startedAt",
       header: t("operation.startedAt"),
       cell: ({ row }) => date(row.original.startedAt),
-    },
-    {
-      accessorKey: "elapsedSeconds",
-      header: t("operation.elapsed"),
-      cell: ({ row }) => duration(row.original.elapsedSeconds),
     },
   ];
   return (
