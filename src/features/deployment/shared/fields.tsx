@@ -547,8 +547,9 @@ export function ImageCards({
           >
             <strong>{image.name}</strong>
             <small>
-              {t("images.cpuArchitecture")}:{" "}
-              {imageArchitectures(image).join(" / ")} · {image.sizeGb} GB
+              {t("images.cpuArchitecture")}: {" "}
+              {imageArchitectures(image).join(" / ")}
+              {runtime ? ` · ${image.sizeGb} GB` : ""}
             </small>
             <small>
               {t("images.gpuDriver")}:{" "}
