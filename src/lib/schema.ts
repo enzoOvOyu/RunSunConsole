@@ -202,6 +202,7 @@ export const vgpuSchema = z.object({
     namespace: z.string().regex(/^[a-z][a-z0-9-]{0,61}[a-z0-9]$/),
   })).max(8).optional(),
   localPvGb: z.number().int().min(0).max(32768).optional(),
+  storageMode: z.enum(["dynamic_block", "existing_block", "local_nvme", "shared_file"]).optional(),
   podCidr: z.string().optional(),
   serviceCidr: z.string().optional(),
   workloads: z.array(z.object({
@@ -230,7 +231,7 @@ export const vgpuSchema = z.object({
   ingressEnabled: z.boolean(),
   ingressClass: z.string(),
   storageClass: z.enum(["ssd", "nvme", "shared-fs"]),
-  defaultPvcGb: z.number().min(0),
+  defaultPvcGb: z.number().int().min(0).max(32768),
   kubeconfigAccess: z.string(),
   rbacDefaultAdmin: z.boolean(),
   vpc: z.string(),

@@ -2325,3 +2325,15 @@ a:focus-visible {
 .cluster-subnet-row small { display: block; color: var(--rs-text-secondary); overflow-wrap: anywhere; line-height: 1.4; }
 @media (max-width: 1400px) { .cluster-wizard { grid-template-columns: minmax(160px,190px) minmax(0,1fr); } .cluster-wizard .cost-summary { grid-column: 2; position: static; max-height: none; } }
 @media (max-width: 900px) { .cluster-wizard { grid-template-columns: 1fr; } .cluster-wizard .wizard-steps { grid-column: 1; flex-direction: row; overflow-x: auto; position: static; } .cluster-wizard .wizard-step { min-width: 150px; } .cluster-wizard .cost-summary { grid-column: 1; } .cluster-network-choice { grid-template-columns: 1fr; } .cluster-subnet-row { grid-template-columns: 20px minmax(0,1fr); } }
+
+.cluster-storage-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 12px 0; }
+.cluster-storage-option { display: grid; gap: 6px; width: 100%; min-height: 90px; padding: 14px; text-align: left; border: 1px solid var(--rs-border); border-radius: var(--rs-r-md); background: var(--rs-bg); color: var(--rs-text); cursor: pointer; transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease; }
+.cluster-storage-option:hover { background: var(--rs-brand-soft); border-color: var(--rs-brand); }
+.cluster-storage-option.selected { background: var(--rs-brand-soft); border-color: var(--rs-brand); box-shadow: inset 3px 0 var(--rs-brand); }
+.cluster-storage-option small { color: var(--rs-text-secondary); line-height: 1.45; }
+.cluster-storage-binding { display: grid; gap: 12px; padding: 16px; margin-top: 12px; border: 1px solid var(--rs-border); border-radius: var(--rs-r-md); }
+.cluster-storage-flow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; }
+.cluster-storage-flow span { display: inline-flex; gap: 8px; align-items: center; }
+.cluster-storage-flow strong { padding: 7px 10px; border: 1px solid var(--rs-border); border-radius: var(--rs-r-sm); background: var(--rs-bg); font-size: var(--rs-fs-sm); }
+.cluster-storage-flow b { color: var(--rs-text-secondary); font-weight: 400; }
+@media (max-width: 720px) { .cluster-storage-options { grid-template-columns: 1fr; } }

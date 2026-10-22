@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { StorageProduct, StorageVolume } from "../../types/storage";
 import type { Kind, Project, Quota, Resource } from "../../types/domain";
@@ -34,7 +34,9 @@ type VolumeRow = StorageVolume & {
   resourceKind: Kind | null;
 };
 export default function VolumePage() {
-  const kind = useLocation().pathname.endsWith("/file") ? "file" : "block";
+  const location = useLocation();
+  const kind = location.pathname.endsWith("/file") ? "file" : "block";
+  const requestedProjectId = new URLSearchParams(location.search).get("project_id") || "";
   const region = useRegion((s) => s.region);
   const role = useAuth((s) => s.role);
   const activeProject = useAuth((s) => s.project);
@@ -43,12 +45,13 @@ export default function VolumePage() {
   const [tierFilter, setTierFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [zoneFilter, setZoneFilter] = useState("");
-  const [newOpen, setNewOpen] = useState(false);
+  const [newOpen, setNewOpen] = useState(() => new URLSearchParams(location.search).get("create") === "1");
   const [name, setName] = useState("");
-  const [projectId, setProjectId] = useState(activeProject);
+  const [projectId, setProjectId] = useState(requestedProjectId || activeProject);
   const [tier, setTier] = useState("");
   const [sizeGb, setSizeGb] = useState(100);
   const [zone, setZone] = useState(`${region}-a`);
+  useEffect(() => setZone(`${region}-a`), [region]);
   const [targetResource, setTargetResource] = useState("");
   const [mountPath, setMountPath] = useState("/mnt/storage");
   const { id, setId } = useDrawer();
@@ -126,6 +129,7 @@ export default function VolumePage() {
         ? resource.kind === "gpu_vm"
         : ["gpu_vm", "inference", "vgpu"].includes(resource.kind)),
   );
+  const targetIsCluster = attachable.some((resource) => resource.resourceUuid === targetResource && resource.kind === "vgpu");
   const openCreate = () => {
     setProjectId(selectedProjectId);
     setTier(plans[0]?.tier || "");
@@ -348,7 +352,8 @@ export default function VolumePage() {
                       ))}
                     </select>
                   </Field>
-                  <Field
+                  {targetIsCluster && <small>{t("storage.clusterFileBindingHint")}</small>}
+                  {!targetIsCluster && <Field
                     label={t("storage.mountPath")}
                     hint={t("storage.mountPathHint")}
                   >
@@ -365,20 +370,20 @@ export default function VolumePage() {
                         {t("storage.mountPathInvalid")}
                       </small>
                     )}
-                  </Field>
+                  </Field>}
                   <Button
                     variant="primary"
                     disabled={
                       !canWrite(role) ||
                       busy ||
                       !targetResource ||
-                      !/^\/[A-Za-z0-9/._-]+$/.test(mountPath.trim())
+                      (!targetIsCluster && !/^\/[A-Za-z0-9/._-]+$/.test(mountPath.trim()))
                     }
                     onClick={async () => {
                       const result = await run(() =>
                         post(`${EP.storageVolumes}/${v.id}/attach`, {
                           resourceUuid: targetResource,
-                          mountPath: mountPath.trim(),
+                          mountPath: targetIsCluster ? "/pvc/default/data" : mountPath.trim(),
                         }),
                       );
                       if (result) setTargetResource("");
@@ -389,7 +394,7 @@ export default function VolumePage() {
                 </div>
               </Panel>
             )}
-            {v.resourceUuid && v.role === "custom" && (
+            {v.resourceUuid && (v.role === "custom" || (v.kind === "file" && v.role === "pvc" && v.resourceKind === "vgpu")) && (
               <Button
                 disabled={!canWrite(role) || busy}
                 onClick={async () => {

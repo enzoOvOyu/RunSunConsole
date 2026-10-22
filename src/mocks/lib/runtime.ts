@@ -217,7 +217,7 @@ export function clusterView(
         if (workload.pvcName && !sharedFile) pvcNodeLocks.set(claimKey, node.nodeUuid);
       }
       const waitingReason = !active ? "Cluster is not running" :
-        workload.pvcName && !volume ? "PVC is not bound to an available block volume" :
+        workload.pvcName && !volume ? "PVC is not bound to an available storage volume" :
         !candidates.length ? "No node matches the pool selector, taint tolerance and scheduling state" :
         !node && workload.localStorageGb ? "Insufficient local PV capacity on matching nodes" :
         !node ? "Insufficient GPU, CPU or memory on matching nodes" : "";
@@ -266,7 +266,7 @@ export function clusterView(
   }
   for (const { binding, volume } of boundVolumes) {
     const ready = !!volume && volume.resourceUuid === r.resourceUuid;
-    pvs.push({ name: binding.pvName, source: "block", sizeGb: volume?.sizeGb || 0, zone: volume?.zone || `${r.region}-a`, nodeUuid: null, status: ready ? "Bound" : "Pending", volumeId: binding.volumeId });
+    pvs.push({ name: binding.pvName, source: volume?.kind === "file" ? "file" : "block", sizeGb: volume?.sizeGb || 0, zone: volume?.kind === "file" ? "—" : volume?.zone || `${r.region}-a`, nodeUuid: null, status: ready ? "Bound" : "Pending", volumeId: binding.volumeId });
     pvcs.push({ namespace: binding.namespace, name: binding.pvcName, pvName: ready ? binding.pvName : null, sizeGb: volume?.sizeGb || 0, status: ready ? "Bound" : "Pending" });
   }
   for (const workload of workloads) for (const pod of workload.pods) if (pod.localStorageGb) {
@@ -291,7 +291,7 @@ export function clusterView(
       pending: pvcs.filter((item) => item.status === "Pending").length,
       pendingReason: pvcs.some((item) => item.status === "Pending") ? "PVC has no matching available PV or node" : "",
       pvCapacityGb: pvs.reduce((total, item) => total + item.sizeGb, 0),
-      provisioned: pvcs.length > 0 || (r.spec.localPvGb || 0) > 0,
+      provisioned: pvcs.length > 0,
       csiErrors: 0, pvs, pvcs,
     },
     plugins: {

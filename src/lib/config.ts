@@ -94,6 +94,7 @@ export function defaultSpec(kind: Kind, pool: Pool): Resource["spec"] {
       subnets: undefined,
       volumeBindings: [],
       localPvGb: 0,
+      storageMode: "dynamic_block",
       controlPlaneTier: "standard",
       nodePools: [
         {
@@ -119,7 +120,7 @@ export function defaultSpec(kind: Kind, pool: Pool): Resource["spec"] {
       ingressEnabled: false,
       ingressClass: "nginx",
       storageClass: "ssd",
-      defaultPvcGb: 100,
+      defaultPvcGb: 0,
       kubeconfigAccess: "download",
       rbacDefaultAdmin: true,
       vpc: "default-vpc",

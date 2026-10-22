@@ -385,7 +385,7 @@ function clusterReason(reason: string) {
   if (reason === "Cluster is not running") return t("eks.clusterNotRunning");
   if (reason === "No node matches the pool selector, taint tolerance and scheduling state") return t("eks.noMatchingNode");
   if (reason === "Insufficient GPU, CPU or memory on matching nodes") return t("eks.insufficientNodeCapacity");
-  if (reason === "PVC is not bound to an available block volume") return t("eks.pvcNotBound");
+  if (reason === "PVC is not bound to an available storage volume") return t("eks.pvcNotBound");
   if (reason === "Insufficient local PV capacity on matching nodes") return t("eks.localPvInsufficient");
   return reason;
 }
@@ -510,6 +510,10 @@ export function ClusterNetworkPanel({
         <KeyValues
           items={[
             [t("field.networkPlugin"), r.spec.networkPlugin],
+            [t("eks.csiState"), t("eks.managedCsi")],
+            [t("eks.defaultStorageClass"), r.spec.storageClass],
+            [t("eks.storageScheme"), t(`eks.storageMode.${r.spec.storageMode || "dynamic_block"}`)],
+            [t("eks.availableLocalCapacity"), `${q.data.nodes.filter((node) => node.state === "ready").reduce((total, node) => total + Math.max(0, (r.spec.localPvGb || 0) - node.allocatedLocalGb), 0)} GB`],
             ["CNI errors", q.data.network.cniErrors],
             ["Service P99", q.data.network.serviceP99Ms == null ? "—" : q.data.network.serviceP99Ms + " ms"],
             ["Ingress QPS", r.spec.ingressEnabled ? q.data.network.ingressQps : t("common.notEnabled")],
@@ -528,6 +532,7 @@ export function ClusterNetworkPanel({
         <DataTable data={q.data.storage.pvs} columns={[
           { accessorKey: "name", header: "PV" },
           { accessorKey: "source", header: t("common.type") },
+          { id: "accessMode", header: t("eks.accessMode"), cell: ({ row }) => t(row.original.source === "file" ? "eks.rwx" : "eks.rwo") },
           { accessorKey: "sizeGb", header: t("storage.sizeGb") },
           { accessorKey: "zone", header: t("eks.availableZones") },
           { accessorKey: "nodeUuid", header: t("cluster.nodes"), cell: ({ row }) => row.original.nodeUuid || "—" },

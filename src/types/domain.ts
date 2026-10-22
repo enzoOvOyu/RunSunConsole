@@ -142,6 +142,7 @@ export interface VgpuSpec extends CommonSpec {
   subnets?: string[];
   volumeBindings?: ClusterVolumeBinding[];
   localPvGb?: number;
+  storageMode?: "dynamic_block" | "existing_block" | "local_nvme" | "shared_file";
   description?: string;
   podCidr?: string;
   serviceCidr?: string;

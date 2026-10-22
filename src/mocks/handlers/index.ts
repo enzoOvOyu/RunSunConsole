@@ -1723,8 +1723,10 @@ async function dispatch(request: Request, settleBilling = true) {
       db.volumes.find(
         (item) => item.id === volumeActionMatch[1] && !item.deletedAt,
       ) || fail(404, "NOT_FOUND");
-    if (volume.role !== "custom") fail(409, "HAS_DEPENDENCIES");
     const action = volumeActionMatch[2];
+    const attachedCluster = db.resources.find((item) => item.resourceUuid === volume.resourceUuid && item.kind === "vgpu" && !item.deletedAt);
+    const clusterBinding = attachedCluster?.kind === "vgpu" ? attachedCluster.spec.volumeBindings?.find((item) => item.volumeId === volume.id) : undefined;
+    if (volume.role !== "custom" && !(action === "detach" && volume.role === "pvc" && clusterBinding)) fail(409, "HAS_DEPENDENCIES");
     if (action === "attach") {
       if (volume.resourceUuid) fail(409, "HAS_DEPENDENCIES");
       const resourceUuid = z.string().min(1).parse(body.resourceUuid);
@@ -1746,37 +1748,40 @@ async function dispatch(request: Request, settleBilling = true) {
           : !["gpu_vm", "inference", "vgpu"].includes(target.kind))
       )
         fail(422, "VALIDATION_ERROR");
-      const selections = target.spec.storageSelections || [];
-      if (selections.some((row) => row.mountPath === mountPath))
-        fail(409, "VALIDATION_ERROR");
-      target.spec.storageSelections = [
-        ...selections,
-        {
-          key: `attached_${volume.id}`,
-          kind: volume.kind,
-          tier: volume.tier,
-          name: volume.name,
-          sizeGb: volume.sizeGb,
-          count: 1,
-          mountPath,
-        },
-      ];
-      target.spec.storageGb += volume.sizeGb;
-      volume.resourceUuid = target.resourceUuid;
-      volume.mountPath = mountPath;
+      if (target.kind === "vgpu" && volume.kind === "file") {
+        const bindings = target.spec.volumeBindings || [];
+        const index = Array.from({ length: 8 }, (_, i) => i + 1).find((number) => !bindings.some((binding) => binding.pvName === `file-pv-${number}`));
+        if (!index) fail(409, "HAS_DEPENDENCIES");
+        const binding = { volumeId: volume.id, pvName: `file-pv-${index}`, pvcName: `file-pvc-${index}`, namespace: "default" };
+        target.spec.volumeBindings = [...bindings, binding];
+        volume.resourceUuid = target.resourceUuid;
+        volume.role = "pvc";
+        volume.mountPath = `/pvc/default/${binding.pvcName}`;
+      } else {
+        const selections = target.spec.storageSelections || [];
+        if (selections.some((row) => row.mountPath === mountPath)) fail(409, "VALIDATION_ERROR");
+        target.spec.storageSelections = [
+          ...selections,
+          { key: `attached_${volume.id}`, kind: volume.kind, tier: volume.tier, name: volume.name,
+            sizeGb: volume.sizeGb, count: 1, mountPath },
+        ];
+        target.spec.storageGb += volume.sizeGb;
+        volume.resourceUuid = target.resourceUuid;
+        volume.mountPath = mountPath;
+      }
     } else {
       if (!volume.resourceUuid) fail(409, "HAS_DEPENDENCIES");
       const target = db.resources.find(
         (item) => item.resourceUuid === volume.resourceUuid,
       );
-      if (target) {
-        target.spec.storageSelections = (
-          target.spec.storageSelections || []
-        ).filter((row) => row.key !== `attached_${volume.id}`);
-        target.spec.storageGb = Math.max(
-          0,
-          target.spec.storageGb - volume.sizeGb,
-        );
+      if (target?.kind === "vgpu" && clusterBinding) {
+        if ((target.spec.workloads || []).some((workload) => workload.namespace === clusterBinding.namespace && workload.pvcName === clusterBinding.pvcName))
+          fail(409, "HAS_DEPENDENCIES");
+        target.spec.volumeBindings = (target.spec.volumeBindings || []).filter((binding) => binding.volumeId !== volume.id);
+        volume.role = "custom";
+      } else if (target) {
+        target.spec.storageSelections = (target.spec.storageSelections || []).filter((row) => row.key !== `attached_${volume.id}`);
+        target.spec.storageGb = Math.max(0, target.spec.storageGb - volume.sizeGb);
       }
       volume.resourceUuid = null;
       volume.mountPath = "";
@@ -2580,14 +2585,23 @@ async function dispatch(request: Request, settleBilling = true) {
         new Set(bindings.map((binding) => binding.pvName)).size !== bindings.length ||
         new Set(bindings.map((binding) => `${binding.namespace}/${binding.pvcName}`)).size !== bindings.length)
         fail(422, "INVALID_CLUSTER_VOLUME_BINDING");
-      const selectedZones = new Set((spec.subnets || []).map((id) => db.network.subnets.find((subnet) => subnet.id === id)?.zone));
+      const selectedSubnets = (spec.subnets?.length ? spec.subnets : [spec.subnet]).map((id) => db.network.subnets.find((subnet) => subnet.id === id));
+      const controlPlaneNodes = spec.controlPlaneTier === "ha" ? 3 : 1;
+      const nodeCount = spec.nodePools.reduce((count, pool) => count + pool.nodeCount, 0);
+      const selectedZones = new Set(Array.from({ length: nodeCount }, (_, index) => selectedSubnets[(controlPlaneNodes + index) % selectedSubnets.length]?.zone));
       for (const binding of bindings) {
         const volume = db.volumes.find((item) => item.id === binding.volumeId && !item.deletedAt);
-        if (!volume || volume.kind !== "block" || volume.role !== "custom" || volume.resourceUuid ||
+        if (!volume || !["block", "file"].includes(volume.kind) || volume.role !== "custom" || volume.resourceUuid || volume.sizeGb <= 0 ||
           volume.projectId !== parsed.projectId || volume.region !== parsed.region ||
-          (selectedZones.size && !selectedZones.has(volume.zone || `${volume.region}-a`)))
+          (volume.kind === "block" && selectedZones.size && !selectedZones.has(volume.zone || `${volume.region}-a`)))
           fail(422, "INVALID_CLUSTER_VOLUME_BINDING");
       }
+      if (spec.storageMode && (
+        (spec.storageMode === "dynamic_block" && (bindings.length > 0 || !!spec.localPvGb || spec.storageClass === "shared-fs")) ||
+        (spec.storageMode === "existing_block" && (bindings.length === 0 || bindings.some((binding) => db.volumes.find((item) => item.id === binding.volumeId)?.kind !== "block") || spec.defaultPvcGb > 0 || !!spec.localPvGb)) ||
+        (spec.storageMode === "shared_file" && (bindings.length === 0 || bindings.some((binding) => db.volumes.find((item) => item.id === binding.volumeId)?.kind !== "file") || spec.defaultPvcGb > 0 || !!spec.localPvGb)) ||
+        (spec.storageMode === "local_nvme" && (bindings.length > 0 || spec.defaultPvcGb > 0 || !spec.localPvGb))
+      )) fail(422, "INVALID_CLUSTER_VOLUME_BINDING");
       if (spec.localPvGb && spec.nodePools.some((nodePool) => spec.localPvGb! > GPU_SPECS[nodePool.poolCode].localNvmeGb))
         fail(422, "INVALID_LOCAL_PV_SIZE");
     }
@@ -2629,7 +2643,11 @@ async function dispatch(request: Request, settleBilling = true) {
         consolePasswordFingerprint(r.resourceUuid, password);
     }
     db.volumes.push(...volumesForResource(r).map((volume) => r.kind === "vgpu" ? {
-      ...volume, zone: db.network.subnets.find((subnet) => subnet.id === r.spec.subnet)?.zone || `${r.region}-a`,
+      ...volume, zone: (() => {
+        const controlPlaneNodes = r.spec.controlPlaneTier === "ha" ? 3 : 1;
+        const firstNode = db.network.interfaces.find((item) => item.resourceUuid === r.resourceUuid && !item.releasedAt && item.index === controlPlaneNodes);
+        return db.network.subnets.find((subnet) => subnet.id === firstNode?.subnetId)?.zone || `${r.region}-a`;
+      })(),
     } : volume));
     for (const row of spec.storageSelections || []) {
       if (row.kind !== "object") continue;

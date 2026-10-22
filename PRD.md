@@ -368,7 +368,7 @@ RunSun 控制台
 | -- | -- | -- |
 | 1 | 项目 | 选择项目与区域，填写 DNS 格式集群名、描述、Kubernetes 版本、标准或 HA 控制面、API Server 访问方式。名称在项目和区域内唯一。 |
 | 2 | 网络 | 使用同项目同区域的现有标准 VPC；选择有余量的子网，HA 至少跨两个可用区；配置 Pod CIDR、Service CIDR、CNI 和该 VPC 的安全组。CIDR 采用规范网络地址，彼此及 VPC 不重叠；控制面和节点 IP 数量按子网分摊预检。 |
-| 3 | 存储 | CSI StorageClass 创建默认 PVC；可绑定同项目、区域、可用区的空闲块存储卷为静态 PV/PVC，块卷按 ReadWriteOnce 和可用区约束调度；可配置每节点本地 NVMe PV 容量，不超过所选 GPU 机型的本地容量。共享文件 PVC 按跨可用区 ReadWriteMany 处理。 |
+| 3 | 存储 | 先确认平台托管 CSI 与默认块存储 StorageClass，再选择一种初始存储方案：动态云块存储（可不预置 PVC）、已有云硬盘静态 PV/PVC、本地 NVMe 容量，或已有文件卷静态 PV/PVC。块卷按可用区和 ReadWriteOnce 调度，文件卷按 ReadWriteMany 共享；本地 PV 绑定节点，节点释放后数据不保留。初始 PVC 容量不代表集群总容量。 |
 | 4 | 节点和 GPU | 最多五个节点组；分别设置名称、用途、现有 GPU 池规格、期望/最小/最大节点数、兼容 OS 镜像、系统盘、标签、GPU 污点和伸缩策略。GPU 型号、每节点 GPU/CPU/内存、NVMe 容量与价格均来自已有池。 |
 | 5 | 附加 | 设置 Ingress、kubeconfig 访问和 RBAC；GPU 驱动相关托管能力按当前镜像和池规格只读说明。 |
 | 6 | 确认 | 汇总项目、网络、存储、节点容量、GPU 数量与费用，确认后创建。创建中的集群、节点及工作负载按已有生命周期展示，准备就绪后才能调度 Pod。 |
