@@ -231,15 +231,16 @@ export function makeDatabase(): Database {
         .reduce((n, u) => n + u.amount, 0),
       4,
     );
-    transactions.push({
-      id: `tx-${r.displayId}`,
-      resourceUuid: r.resourceUuid,
-      at: new Date(seedTime - 3600000).toISOString(),
-      type: "charge",
-      amount: -amount,
-      balanceAfter: 0,
-      referenceId: `invoice-${new Date().toISOString().slice(0, 7)}`,
-    });
+    if (amount > 0)
+      transactions.push({
+        id: `tx-${r.displayId}`,
+        resourceUuid: r.resourceUuid,
+        at: new Date(seedTime - 3600000).toISOString(),
+        type: "charge",
+        amount: -amount,
+        balanceAfter: 0,
+        referenceId: `invoice-${new Date().toISOString().slice(0, 7)}`,
+      });
   }
   for (const v of VOUCHERS)
     for (const redemption of v.redemptions)
@@ -504,7 +505,8 @@ export function restoreDatabase() {
         ];
       data.volumes ??= seedStorageVolumes(data.resources);
       for (const volume of data.volumes)
-        if (volume.id.includes("-allocated-")) volume.inventoryScope = "regional_pool";
+        if (volume.id.includes("-allocated-"))
+          volume.inventoryScope = "regional_pool";
       for (const bucket of data.buckets) {
         bucket.projectId ??= "default";
         bucket.storageClass ??= "STANDARD";
