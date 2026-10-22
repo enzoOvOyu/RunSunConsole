@@ -5,6 +5,7 @@ export function volumesForResource(resource: Resource): StorageVolume[] {
   const common = {
     projectId: resource.projectId,
     region: resource.region,
+    zone: `${resource.region}-a`,
     resourceUuid: resource.resourceUuid,
     createdAt: resource.createdAt,
     deletedAt: resource.deletedAt,
@@ -142,6 +143,7 @@ export function seedStandaloneVolumes(resources: Resource[]): StorageVolume[] {
           sizeGb,
           projectId: "default",
           region,
+          zone: `${region}-a`,
           resourceUuid: null,
           mountPath: "",
           createdAt: resources[0].createdAt,

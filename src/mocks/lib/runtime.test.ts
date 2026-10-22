@@ -37,6 +37,13 @@ describe("Kubernetes cluster runtime consistency", () => {
     resource.spec.defaultPvcGb = 0;
     resource.spec.scaling = null;
     resource.labels = [];
+    resource.spec.workloads = [{
+      id: "test-workload", name: "gpu-trainer", namespace: "training",
+      kind: "Deployment", replicas: 2, gpuPerPod: 1,
+      cpuPerPod: 4, memoryGbPerPod: 16,
+      nodePoolName: resource.spec.nodePools[0].name || "gpu-pool-1",
+      tolerateGpuTaint: true,
+    }];
 
     const normal = clusterView(resource);
     expect(normal.network.ingressQps).toBeNull();
@@ -44,6 +51,9 @@ describe("Kubernetes cluster runtime consistency", () => {
     expect(normal.poolStatus).toBe("idle");
     expect(normal.scheduling).toEqual([]);
     expect(normal.workloads[0].pods.every((pod) => pod.phase === "Running")).toBe(true);
+    expect(normal.summary.gpuAllocated).toBe(2);
+    expect(normal.summary.gpuTotal).toBe(resource.spec.gpuCount);
+    expect(normal.nodes[0].allocatedGpu).toBe(2);
 
     const nodeUuid = normal.nodes[0].nodeUuid;
     resource.labels.push(`cluster-node:${nodeUuid}:cordoned`);
@@ -56,5 +66,15 @@ describe("Kubernetes cluster runtime consistency", () => {
     const resumed = clusterView(resource);
     expect(resumed.nodes[0].state).toBe("ready");
     expect(resumed.workloads[0].pods.every((pod) => pod.phase === "Running")).toBe(true);
+    resource.spec.workloads[0].replicas = 20;
+    const constrained = clusterView(resource);
+    expect(constrained.summary.gpuAllocated).toBe(constrained.summary.gpuTotal);
+    expect(constrained.workloads[0].pods.filter((pod) => pod.phase === "Pending")).toHaveLength(12);
+    expect(constrained.scheduling[0].reason).toContain("Insufficient GPU");
+    resource.spec.workloads[0].gpuModel = "nonexistent-model";
+    const unmatched = clusterView(resource);
+    expect(unmatched.summary.gpuAllocated).toBe(0);
+    expect(unmatched.workloads[0].pods.every((pod) => pod.phase === "Pending")).toBe(true);
+    expect(unmatched.scheduling[0].reason).toContain("selector");
   });
 });

@@ -633,6 +633,13 @@ it("targets Kubernetes node scheduling operations and records recoverable events
     await request(`/metrics/vgpu/${cluster.resourceUuid}/cluster`)
   ).data;
   const nodeUuid = initial.nodes[0].nodeUuid;
+  const created = await request(`/resources/${cluster.resourceUuid}/workloads`, "POST", {
+    name: "gpu-trainer", namespace: "training", kind: "Deployment", replicas: 2,
+    gpuPerPod: 1, cpuPerPod: 4, memoryGbPerPod: 16,
+    nodePoolName: cluster.spec.nodePools[0].name || "gpu-pool-1", tolerateGpuTaint: true,
+  });
+  expect(created.status).toBe(201);
+  expect(created.data.cluster.summary.gpuAllocated).toBe(initial.summary.gpuAllocated + 2);
 
   expect(
     (
@@ -774,4 +781,117 @@ it("accepts all four resource types as orders with matching initial state", asyn
       result.data.resource.resourceUuid,
     );
   }
+});
+
+it("keeps a created GPU cluster, node pool, workload and resize in one resource model", async () => {
+  const template = db.resources.find((item) => item.kind === "vgpu" && item.status === "running");
+  if (!template || template.kind !== "vgpu") throw new Error("Missing Kubernetes fixture");
+  const spec = structuredClone(template.spec);
+  spec.nodePools = [{ ...spec.nodePools[0], name: "gpu-pool-1", nodeCount: 1, minNodes: 1, maxNodes: 2 }];
+  spec.gpuCount = spec.nodePools[0].gpuPerNode;
+  spec.workloads = [];
+  spec.scaling = null;
+  const invalidNetwork = await request("/deployment-orders", "POST", {
+    kind: "vgpu", name: "eks-invalid-network", projectId: template.projectId,
+    region: template.region, mode: "on_demand", labels: [], nodePool: template.nodePool,
+    spec: { ...spec, podCidr: "172.20.0.0/16", serviceCidr: "172.20.0.0/16" },
+  });
+  expect(invalidNetwork.status).toBe(422);
+  const created = await request("/deployment-orders", "POST", {
+    kind: "vgpu", name: "eks-flow-check", projectId: template.projectId,
+    region: template.region, mode: "on_demand", labels: [],
+    nodePool: template.nodePool, spec,
+  });
+  expect(created.status, JSON.stringify(created.data)).toBe(201);
+  expect((await request("/deployment-orders", "POST", {
+    kind: "vgpu", name: "eks-flow-check", projectId: template.projectId,
+    region: template.region, mode: "on_demand", labels: [], nodePool: template.nodePool, spec,
+  })).status).toBe(409);
+  const id = created.data.resource.resourceUuid;
+  const record = db.resources.find((item) => item.resourceUuid === id);
+  if (!record || record.kind !== "vgpu") throw new Error("Missing created cluster");
+  expect(record.status).toBe("provisioning");
+  expect((await request(`/metrics/vgpu/${id}/cluster`)).data.nodes[0].state).toBe("initializing");
+  record.status = "running";
+  const workload = await request(`/resources/${id}/workloads`, "POST", {
+    name: "trainer", namespace: "training", kind: "Deployment", replicas: 9,
+    gpuPerPod: 1, cpuPerPod: 4, memoryGbPerPod: 16,
+    nodePoolName: "gpu-pool-1", tolerateGpuTaint: true,
+  });
+  expect(workload.status).toBe(201);
+  expect(workload.data.cluster.summary.gpuAllocated).toBe(8);
+  expect(workload.data.cluster.scheduling).toEqual([{ reason: "Insufficient GPU, CPU or memory on matching nodes", count: 1 }]);
+  const resized = await request(`/resources/${id}/resize`, "POST", { poolIndex: 0, count: 2, minNodes: 1, maxNodes: 2 });
+  expect(resized.status).toBe(200);
+  const after = (await request(`/metrics/vgpu/${id}/cluster`)).data;
+  expect(after.summary).toMatchObject({ totalNodes: 2, gpuTotal: 16, gpuAllocated: 9 });
+  expect(after.scheduling).toEqual([]);
+  expect((await request(`/resources/${id}/resize`, "POST", { poolIndex: 0, count: 3, minNodes: 1, maxNodes: 2 })).status).toBe(422);
+  const unmatched = await request(`/resources/${id}/workloads`, "POST", {
+    name: "selector-check", namespace: "training", kind: "Job", replicas: 1,
+    gpuPerPod: 1, cpuPerPod: 4, memoryGbPerPod: 16,
+    nodePoolName: "gpu-pool-1", selectorKey: "workload.runsuncloud.com/type",
+    selectorValue: "nonexistent", tolerateGpuTaint: true,
+  });
+  expect(unmatched.status).toBe(201);
+  expect(unmatched.data.cluster.scheduling[0].reason).toContain("selector");
+  expect(after.nodes.reduce((sum: number, node: { allocatedGpu: number }) => sum + node.allocatedGpu, 0)).toBe(9);
+  expect((await request(`/resources/${id}/workloads/${workload.data.workload.id}/delete`, "POST", {})).status).toBe(200);
+  expect((await request(`/metrics/vgpu/${id}/cluster`)).data.summary.gpuAllocated).toBe(0);
+});
+
+it("binds existing block storage and multi-zone subnets to a GPU cluster and schedules PVC Pods by zone", async () => {
+  const template = db.resources.find((item) => item.kind === "vgpu" && item.status === "running");
+  if (!template || template.kind !== "vgpu") throw new Error("Missing Kubernetes fixture");
+  const vpc = db.network.vpcs.find((item) => item.projectId === template.projectId && item.region === template.region && item.networkType === "standard");
+  if (!vpc) throw new Error("Missing project VPC");
+  const subnets = db.network.subnets.filter((item) => item.vpcId === vpc.id);
+  expect(subnets).toHaveLength(2);
+  const createdVolume = await request("/storage/volumes", "POST", {
+    name: "eks-static-block", kind: "block", tier: "essd_pl0", sizeGb: 100,
+    projectId: template.projectId, region: template.region, zone: `${template.region}-a`,
+  });
+  expect(createdVolume.status).toBe(201);
+  const spec = structuredClone(template.spec);
+  spec.controlPlaneTier = "standard";
+  spec.nodePools = [{ ...spec.nodePools[0], name: "gpu-pool-1", nodeCount: 2, minNodes: 1, maxNodes: 2 }];
+  spec.gpuCount = spec.nodePools[0].gpuPerNode * 2;
+  spec.workloads = [];
+  spec.scaling = null;
+  spec.defaultPvcGb = 0;
+  spec.localPvGb = 100;
+  spec.vpc = vpc.id;
+  spec.subnet = subnets[0].id;
+  spec.subnets = subnets.map((item) => item.id);
+  spec.volumeBindings = [{ volumeId: createdVolume.data.id, pvName: "training-pv", pvcName: "training-pvc", namespace: "default" }];
+  const order = await request("/deployment-orders", "POST", {
+    kind: "vgpu", name: "eks-storage-network-check", projectId: template.projectId,
+    region: template.region, mode: "on_demand", labels: [], nodePool: template.nodePool, spec,
+  });
+  expect(order.status, JSON.stringify(order.data)).toBe(201);
+  const cluster = db.resources.find((item) => item.resourceUuid === order.data.resource.resourceUuid);
+  if (!cluster || cluster.kind !== "vgpu") throw new Error("Missing created cluster");
+  cluster.status = "running";
+  const firstView = (await request(`/metrics/vgpu/${cluster.resourceUuid}/cluster`)).data;
+  expect(new Set(firstView.nodes.map((node: { zone: string }) => node.zone))).toEqual(new Set([`${template.region}-a`, `${template.region}-b`]));
+  expect(firstView.storage.pvcs).toMatchObject([{ name: "training-pvc", status: "Bound" }]);
+  expect(db.volumes.find((item) => item.id === createdVolume.data.id)).toMatchObject({ resourceUuid: cluster.resourceUuid, role: "pvc" });
+  const pvcWorkload = await request(`/resources/${cluster.resourceUuid}/workloads`, "POST", {
+    name: "train-with-pvc", namespace: "default", kind: "Deployment", replicas: 9,
+    gpuPerPod: 1, cpuPerPod: 4, memoryGbPerPod: 16, nodePoolName: "gpu-pool-1",
+    pvcName: "training-pvc", localStorageGb: 0, tolerateGpuTaint: true,
+  });
+  expect(pvcWorkload.status).toBe(201);
+  expect(pvcWorkload.data.cluster.workloads[0].pods.filter((pod: { phase: string }) => pod.phase === "Running")).toHaveLength(8);
+  expect(pvcWorkload.data.cluster.workloads[0].pods.filter((pod: { phase: string }) => pod.phase === "Pending")).toHaveLength(1);
+  const localWorkload = await request(`/resources/${cluster.resourceUuid}/workloads`, "POST", {
+    name: "local-cache", namespace: "default", kind: "Job", replicas: 3,
+    gpuPerPod: 0, cpuPerPod: 4, memoryGbPerPod: 16, nodePoolName: "gpu-pool-1",
+    localStorageGb: 60, tolerateGpuTaint: true,
+  });
+  expect(localWorkload.status).toBe(201);
+  expect(localWorkload.data.cluster.storage.pvs.filter((pv: { source: string }) => pv.source === "local")).toHaveLength(2);
+  expect(localWorkload.data.cluster.storage.pvcs.filter((pvc: { status: string }) => pvc.status === "Pending")).toHaveLength(1);
+  expect((await request(`/resources/${cluster.resourceUuid}?confirm=${cluster.displayId}`, "DELETE")).status).toBe(200);
+  expect(db.volumes.find((item) => item.id === createdVolume.data.id)).toMatchObject({ resourceUuid: null, role: "custom", deletedAt: null });
 });

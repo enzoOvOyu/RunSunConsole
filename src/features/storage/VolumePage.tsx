@@ -43,6 +43,7 @@ export default function VolumePage() {
   const [projectId, setProjectId] = useState(activeProject);
   const [tier, setTier] = useState("");
   const [sizeGb, setSizeGb] = useState(100);
+  const [zone, setZone] = useState(`${region}-a`);
   const [targetResource, setTargetResource] = useState("");
   const [mountPath, setMountPath] = useState("/mnt/storage");
   const { id, setId } = useDrawer();
@@ -109,6 +110,7 @@ export default function VolumePage() {
     setTier(plans[0]?.tier || "");
     setSizeGb(plans[0]?.minGb || 100);
     setName("");
+    setZone(`${region}-a`);
     setNewOpen(true);
   };
   return (
@@ -188,6 +190,7 @@ export default function VolumePage() {
             columns={[
               { accessorKey: "name", header: t("common.name") },
               { accessorKey: "tier", header: t("storage.tier") },
+              ...(kind === "block" ? [{ accessorKey: "zone", header: t("eks.availableZones"), cell: ({ row }: { row: { original: VolumeRow } }) => row.original.zone || `${row.original.region}-a` }] : []),
               {
                 accessorKey: "sizeGb",
                 header: t("storage.sizeGb"),
@@ -242,6 +245,7 @@ export default function VolumePage() {
                   [t("common.name"), v.name],
                   [t("common.type"), t(`storage.kind.${v.kind}`)],
                   [t("storage.tier"), v.tier],
+                  ...(kind === "block" ? [[t("eks.availableZones"), v.zone || `${v.region}-a`] as [string, string]] : []),
                   [t("storage.sizeGb"), `${v.sizeGb.toLocaleString()} GB`],
                   [t("common.region"), t(`common.${v.region}`)],
                   [t("common.project"), projectName(v.projectId)],
@@ -442,6 +446,11 @@ export default function VolumePage() {
             <Field label={t("common.region")}>
               <strong>{t(`common.${region}`)}</strong>
             </Field>
+            {kind === "block" && <Field label={t("eks.availableZones")}>
+              <select value={zone} onChange={(event) => setZone(event.target.value)}>
+                {["a", "b"].map((suffix) => <option key={suffix} value={`${region}-${suffix}`}>{region.toUpperCase()}-{suffix.toUpperCase()}</option>)}
+              </select>
+            </Field>}
             <Field label={t("storage.tier")}>
               <select
                 value={selectedPlan?.tier || ""}
@@ -520,6 +529,7 @@ export default function VolumePage() {
                     sizeGb,
                     projectId,
                     region,
+                    zone: kind === "block" ? zone : undefined,
                   }),
                 "success.created",
               );

@@ -267,6 +267,8 @@ export function NodePoolsPanel({
   const [selected, setSelected] = useState<ClusterView["nodes"][number] | null>(null);
   const [resizePool, setResizePool] = useState<number | null>(null);
   const [targetNodes, setTargetNodes] = useState(1);
+  const [minNodes, setMinNodes] = useState(1);
+  const [maxNodes, setMaxNodes] = useState(64);
   const rates = useData<Rate[]>(["rates", r.region], EP.rates + query({ region: r.region }));
   const role = useAuth((state) => state.role);
   const { run, busy } = useAction();
@@ -274,7 +276,7 @@ export function NodePoolsPanel({
   const changeNodeState = (nodeUuid: string, action: "cordon" | "uncordon") => run(() => post(`${EP.resources}/${r.resourceUuid}/${action}`, { nodeUuid }));
   const changePoolSize = async () => {
     if (resizePool == null) return;
-    const result = await run(() => post(`${EP.resources}/${r.resourceUuid}/resize`, { poolIndex: resizePool, count: targetNodes }));
+    const result = await run(() => post(`${EP.resources}/${r.resourceUuid}/resize`, { poolIndex: resizePool, count: targetNodes, minNodes, maxNodes }));
     if (result) setResizePool(null);
   };
   const currentPool = resizePool == null ? undefined : r.spec.nodePools[resizePool];
@@ -284,11 +286,13 @@ export function NodePoolsPanel({
   return (
     <div className="stack">
       {r.spec.nodePools.map((p, i) => (
-        <Panel key={i} title={poolDisplayName(p.poolCode)} action={<Button disabled={!canWrite(role) || busy} onClick={() => { setResizePool(i); setTargetNodes(p.nodeCount); }}>{t("cluster.adjustNodeCount")}</Button>}>
+        <Panel key={i} title={`${p.name || `gpu-pool-${i + 1}`} · ${poolDisplayName(p.poolCode)}`} action={<Button disabled={!canWrite(role) || busy} onClick={() => { setResizePool(i); setTargetNodes(p.nodeCount); setMinNodes(p.minNodes ?? 1); setMaxNodes(p.maxNodes ?? 64); }}>{t("cluster.adjustNodeCount")}</Button>}>
           <KeyValues
             items={[
-              [t("resource.nodeCount"), p.nodeCount],
-              [t("resource.gpu"), p.nodeCount * p.gpuPerNode],
+              [t("resource.nodeCount"), `${p.nodeCount} · ready ${q.data?.nodes.filter((n) => n.poolIndex === i && n.state === "ready").length ?? "—"}`],
+              [`${t("eks.minNodes")} / ${t("eks.maxNodes")}`, `${p.minNodes ?? 1} / ${p.maxNodes ?? 64}`],
+              [t("resource.gpu"), `${p.nodeCount * p.gpuPerNode} · allocated ${q.data?.nodes.filter((n) => n.poolIndex === i).reduce((a, n) => a + n.allocatedGpu, 0) ?? 0}`],
+              ["CPU / RAM", `${q.data?.nodes.filter((n) => n.poolIndex === i).reduce((a, n) => a + n.cpuCount, 0) ?? 0} vCPU / ${q.data?.nodes.filter((n) => n.poolIndex === i).reduce((a, n) => a + n.memoryGb, 0) ?? 0} GB`],
               [t("resource.slicing"), p.slicingPolicy + " · " + p.migProfile],
               [t("cluster.autoscaler"), t("common." + (q.data?.poolStatus || "pending"))],
             ]}
@@ -302,8 +306,9 @@ export function NodePoolsPanel({
           onRow={setSelected}
           columns={[
             { accessorKey: "name", header: t("common.name") },
-            { accessorKey: "poolCode", header: t("cluster.nodePool") , cell: ({ row }) => poolDisplayName(row.original.poolCode) },
+            { accessorKey: "poolName", header: t("cluster.nodePool") },
             { accessorKey: "state", header: t("common.status"), cell: ({ row }) => <Badge status={row.original.state} /> },
+            { accessorKey: "gpuModel", header: t("eks.gpuModel") },
             { accessorKey: "gpuCount", header: "GPU" },
             { accessorKey: "allocatedGpu", header: t("cluster.gpuAllocated") },
             { id: "straggler", header: "Straggler", cell: ({ row }) => row.original.straggler ? <span className="danger-text">⚠ {number(row.original.ratio, 2)}×</span> : number(row.original.ratio, 2) + "×" },
@@ -343,7 +348,11 @@ export function NodePoolsPanel({
           <Field label={t("cluster.targetNodeCount")} hint="1–64">
             <input className="input" type="number" min={1} max={64} value={targetNodes} onChange={(event) => setTargetNodes(Number(event.target.value))} />
           </Field>
-          <Button variant="primary" disabled={!canWrite(role) || busy || !Number.isInteger(targetNodes) || targetNodes < 1 || targetNodes > 64} onClick={() => void changePoolSize()}>{t("common.confirm")}</Button>
+          <div className="form-grid">
+            <Field label={t("eks.minNodes")}><input className="input" type="number" min={1} max={64} value={minNodes} onChange={(event) => setMinNodes(Number(event.target.value))} /></Field>
+            <Field label={t("eks.maxNodes")}><input className="input" type="number" min={1} max={64} value={maxNodes} onChange={(event) => setMaxNodes(Number(event.target.value))} /></Field>
+          </div>
+          <Button variant="primary" disabled={!canWrite(role) || busy || !Number.isInteger(targetNodes) || !Number.isInteger(minNodes) || !Number.isInteger(maxNodes) || minNodes < 1 || maxNodes > 64 || minNodes > targetNodes || targetNodes > maxNodes} onClick={() => void changePoolSize()}>{t("common.confirm")}</Button>
         </div>}
       </Modal>
       <Modal
@@ -352,78 +361,136 @@ export function NodePoolsPanel({
         title={selected?.name || t("cluster.nodes")}
       >
         {selected && (
-          <KeyValues
-            items={Object.entries(selected).map(([key, value]) => [
-              key,
-              String(value),
-            ])}
-          />
+          <KeyValues items={[
+            [t("cluster.nodePool"), selected.poolName],
+            [t("common.status"), selected.state],
+            ["Node IP", selected.privateIp],
+            [t("eks.availableZones"), selected.zone],
+            ["OS / Kubernetes", `${selected.os} / ${selected.k8sVersion}`],
+            [t("eks.gpuModel"), selected.gpuModel],
+            ["GPU", `${selected.allocatedGpu} / ${selected.gpuCount}`],
+            ["vCPU", `${selected.allocatedCpu} / ${selected.cpuCount}`],
+            ["RAM", `${selected.allocatedMemoryGb} / ${selected.memoryGb} GB`],
+            [t("eks.localPv"), `${selected.allocatedLocalGb} / ${r.spec.localPvGb || 0} GB`],
+            [t("eks.nodeSelector"), Object.entries(selected.labels).map(([key, value]) => `${key}=${value}`).join(", ")],
+            [t("eks.gpuTaint"), selected.taints.join(", ") || "—"],
+            [t("cluster.scheduling"), selected.cordoned ? t("cluster.stopScheduling") : t("common.enabled")],
+          ]} />
         )}
       </Modal>
     </div>
   );
 }
-export function WorkloadsPanel({
-  resource: r,
-}: {
-  resource: ResourceOf<"vgpu">;
-}) {
+function clusterReason(reason: string) {
+  if (reason === "Cluster is not running") return t("eks.clusterNotRunning");
+  if (reason === "No node matches the pool selector, taint tolerance and scheduling state") return t("eks.noMatchingNode");
+  if (reason === "Insufficient GPU, CPU or memory on matching nodes") return t("eks.insufficientNodeCapacity");
+  if (reason === "PVC is not bound to an available block volume") return t("eks.pvcNotBound");
+  if (reason === "Insufficient local PV capacity on matching nodes") return t("eks.localPvInsufficient");
+  return reason;
+}
+export function WorkloadsPanel({ resource: r }: { resource: ResourceOf<"vgpu"> }) {
   const q = useData<ClusterView>(
     ["cluster-runtime", r.resourceUuid],
     `${EP.metrics}/${r.kind}/${r.resourceUuid}/cluster`,
     { poll: true },
   );
+  const role = useAuth((state) => state.role);
+  const { run, busy } = useAction();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [namespace, setNamespace] = useState("default");
+  const [kind, setKind] = useState<"Deployment" | "StatefulSet" | "Job">("Deployment");
+  const [replicas, setReplicas] = useState(1);
+  const [gpuPerPod, setGpuPerPod] = useState(1);
+  const [cpuPerPod, setCpuPerPod] = useState(4);
+  const [memoryGbPerPod, setMemoryGbPerPod] = useState(16);
+  const [nodePoolName, setNodePoolName] = useState("");
+  const [gpuModel, setGpuModel] = useState("");
+  const [selectorKey, setSelectorKey] = useState("");
+  const [selectorValue, setSelectorValue] = useState("");
+  const [pvcName, setPvcName] = useState("");
+  const [localStorageGb, setLocalStorageGb] = useState(0);
+  const [tolerateGpuTaint, setTolerateGpuTaint] = useState(true);
+  const submit = async () => {
+    const result = await run(() => post(`${EP.resources}/${r.resourceUuid}/workloads`, {
+      name: name.trim(), namespace: namespace.trim(), kind, replicas,
+      gpuPerPod, cpuPerPod, memoryGbPerPod, nodePoolName, gpuModel,
+      selectorKey: selectorKey.trim(), selectorValue: selectorValue.trim(),
+      pvcName, localStorageGb, tolerateGpuTaint,
+    }));
+    if (result) { setOpen(false); setName(""); }
+  };
   if (q.isPending) return <Loading />;
   if (q.error) return <ErrorState error={q.error} />;
   const data = q.data;
   return (
     <div className="stack">
+      <Panel title={t("tab.workloads")} action={<Button variant="primary" disabled={!canWrite(role) || busy || r.status !== "running"} onClick={() => setOpen(true)}> {t("eks.createWorkload")}</Button>}>
+        <KeyValues items={[
+          [t("eks.gpuCapacity"), `${data.summary.gpuAllocated} ${t("eks.allocated")} / ${data.summary.gpuTotal} ${t("eks.physical")}`],
+          [t("eks.cpuRequests"), `${data.summary.cpuAllocated} / ${data.summary.cpuTotal} vCPU`],
+          [t("eks.memoryRequests"), `${data.summary.memoryGbAllocated} / ${data.summary.memoryGbTotal} GB`],
+          ["Scheduling", data.scheduling.length ? `${data.scheduling.reduce((n, item) => n + item.count, 0)} Pending` : "Ready"],
+        ]} />
+      </Panel>
+      {data.workloads.length === 0 && <Empty text={t("common.noData")} />}
       {data.workloads.map((workload) => (
-        <Panel
-          key={workload.namespace}
-          title={`Namespace · ${workload.namespace}`}
-        >
-          <details open>
-            <summary>
-              {workload.deployment} ·{" "}
-              {workload.pods.filter((p) => p.phase === "Running").length}{" "}
-              Running / {workload.pods.length}
-            </summary>
-            <div style={{ marginTop: 16 }}>
-              <DataTable
-                data={workload.pods}
-                columns={[
-                  { accessorKey: "name", header: "Pod" },
-                  {
-                    accessorKey: "phase",
-                    header: t("common.status"),
-                    cell: ({ row }) => (
-                      <Badge status={row.original.phase.toLowerCase()} />
-                    ),
-                  },
-                  { accessorKey: "gpuCount", header: "GPU" },
-                  { id: "node", header: t("cluster.nodes"), cell: ({ row }) => row.original.nodeUuid || "—" },
-                  { accessorKey: "restarts", header: t("cluster.restarts") },
-                  { accessorKey: "oomKilled", header: "OOM" },
-                  {
-                    accessorKey: "waitingReason",
-                    header: t("cluster.waitingReason"),
-                  },
-                ]}
-              />
-            </div>
-          </details>
+        <Panel key={workload.id} title={`${workload.kind} · ${workload.namespace}/${workload.deployment}`}
+          action={<Button variant="ghost" disabled={!canWrite(role) || busy} onClick={() => {
+            if (window.confirm(`Delete ${workload.namespace}/${workload.deployment}?`))
+              void run(() => post(`${EP.resources}/${r.resourceUuid}/workloads/${workload.id}/delete`, {}));
+          }}>{t("common.delete")}</Button>}>
+          <KeyValues items={[
+            [t("eks.readyDesired"), `${workload.pods.filter((p) => p.phase === "Running").length} / ${workload.pods.length}`],
+            [t("eks.perPod"), `${workload.gpuPerPod} GPU · ${workload.cpuPerPod} vCPU · ${workload.memoryGbPerPod} GB`],
+            [t("cluster.nodePool"), workload.nodePoolName || t("eks.anyPool")],
+            [t("eks.gpuModel"), workload.gpuModel || t("eks.anyPool")],
+            [t("eks.nodeSelector"), workload.selectorKey ? `${workload.selectorKey}=${workload.selectorValue}` : "—"],
+            ["PVC", workload.pvcName || "—"],
+            [t("eks.localPv"), workload.localStorageGb ? `${workload.localStorageGb} GB / Pod` : "—"],
+            ["GPU taint", workload.tolerateGpuTaint ? t("eks.tolerated") : t("eks.notTolerated")],
+          ]} />
+          <DataTable data={workload.pods} columns={[
+            { accessorKey: "name", header: "Pod" },
+            { accessorKey: "phase", header: t("common.status"), cell: ({ row }) => <Badge status={row.original.phase.toLowerCase()} /> },
+            { accessorKey: "gpuCount", header: t("eks.gpuRequest") },
+            { accessorKey: "cpuCount", header: t("eks.cpuRequest") },
+            { accessorKey: "memoryGb", header: t("eks.ramGb") },
+            { accessorKey: "pvcName", header: "PVC", cell: ({ row }) => row.original.pvcName || "—" },
+            { id: "node", header: t("cluster.nodes"), cell: ({ row }) => row.original.nodeUuid || "—" },
+            { accessorKey: "waitingReason", header: t("cluster.waitingReason"), cell: ({ row }) => clusterReason(row.original.waitingReason) || "—" },
+          ]} />
         </Panel>
       ))}
-      <Panel title={t("cluster.scheduling")}>
-        <DataTable
-          data={data.scheduling}
-          columns={[
-            { accessorKey: "reason", header: t("common.reason") },
-            { accessorKey: "count", header: t("common.count") },
-          ]}
-        />
-      </Panel>
+      {data.scheduling.length > 0 && <Panel title={t("cluster.scheduling")}>
+        <DataTable data={data.scheduling} columns={[
+          { accessorKey: "reason", header: t("common.reason"), cell: ({ row }) => clusterReason(row.original.reason) },
+          { accessorKey: "count", header: t("common.count") },
+        ]} />
+      </Panel>}
+      <Modal open={open} onClose={() => setOpen(false)} title={t("eks.createWorkloadTitle")}>
+        <div className="stack">
+          <div className="form-grid">
+            <Field label={t("eks.kind")}><select value={kind} onChange={(e) => setKind(e.target.value as typeof kind)}><option>Deployment</option><option>StatefulSet</option><option>Job</option></select></Field>
+            <Field label={t("eks.namespace")}><input className="input" value={namespace} onChange={(e) => { setNamespace(e.target.value); setPvcName(""); }} /></Field>
+            <Field label={t("common.name")}><input className="input" value={name} onChange={(e) => setName(e.target.value)} /></Field>
+            <Field label={t("eks.replicas")}><input className="input" type="number" min={1} max={64} value={replicas} onChange={(e) => setReplicas(Number(e.target.value))} /></Field>
+            <Field label={t("eks.gpuPerPod")}><input className="input" type="number" min={0} max={72} value={gpuPerPod} onChange={(e) => setGpuPerPod(Number(e.target.value))} /></Field>
+            <Field label={t("eks.cpuPerPod")}><input className="input" type="number" min={1} max={128} value={cpuPerPod} onChange={(e) => setCpuPerPod(Number(e.target.value))} /></Field>
+            <Field label={t("eks.memoryPerPod")}><input className="input" type="number" min={1} max={1024} value={memoryGbPerPod} onChange={(e) => setMemoryGbPerPod(Number(e.target.value))} /></Field>
+            <Field label={t("cluster.nodePool")}><select value={nodePoolName} onChange={(e) => setNodePoolName(e.target.value)}><option value="">{t("eks.anyPool")}</option>{r.spec.nodePools.map((pool, i) => <option key={i} value={pool.name || `gpu-pool-${i+1}`}>{pool.name || `gpu-pool-${i+1}`} · {poolDisplayName(pool.poolCode)}</option>)}</select></Field>
+            <Field label={t("eks.gpuModel")}><select value={gpuModel} onChange={(e) => setGpuModel(e.target.value)}><option value="">{t("eks.anyPool")}</option>{[...new Set((q.data?.nodes || []).map((node) => node.gpuModel))].map((model) => <option key={model} value={model}>{model}</option>)}</select></Field>
+            <Field label={t("eks.nodeSelector")}><input className="input" placeholder="workload.runsuncloud.com/type" value={selectorKey} onChange={(e) => setSelectorKey(e.target.value)} /></Field>
+            <Field label={t("eks.selectorValue")}><input className="input" value={selectorValue} onChange={(e) => setSelectorValue(e.target.value)} /></Field>
+            <Field label="PVC"><select value={pvcName} onChange={(e) => setPvcName(e.target.value)}><option value="">{t("eks.noPvc")}</option>{data.storage.pvcs.filter((claim) => claim.namespace === namespace && claim.status === "Bound").map((claim) => <option key={claim.name} value={claim.name}>{claim.name} · {claim.sizeGb} GB</option>)}</select></Field>
+            {(r.spec.localPvGb || 0) > 0 && <Field label={t("eks.localStoragePerPod")}><input className="input" type="number" min={0} max={r.spec.localPvGb} value={localStorageGb} onChange={(e) => setLocalStorageGb(Number(e.target.value))} /></Field>}
+            <Field label={t("eks.gpuTaint")}><select value={tolerateGpuTaint ? "yes" : "no"} onChange={(e) => setTolerateGpuTaint(e.target.value === "yes")}><option value="yes"> {t("eks.tolerate")}</option><option value="no"> {t("eks.doNotTolerate")}</option></select></Field>
+          </div>
+          <small> {t("eks.schedulerHint")}</small>
+          <Button variant="primary" disabled={busy || !/^[a-z][a-z0-9-]{0,61}[a-z0-9]$/.test(name.trim()) || !/^[a-z][a-z0-9-]{0,61}[a-z0-9]$/.test(namespace.trim()) || !Number.isInteger(replicas) || replicas < 1 || replicas > 64 || !Number.isInteger(gpuPerPod) || gpuPerPod < 0 || gpuPerPod > 72 || !Number.isInteger(cpuPerPod) || cpuPerPod < 1 || cpuPerPod > 128 || !Number.isInteger(memoryGbPerPod) || memoryGbPerPod < 1 || memoryGbPerPod > 1024 || (!!selectorKey.trim() !== !!selectorValue.trim()) || !Number.isInteger(localStorageGb) || localStorageGb < 0 || localStorageGb > (r.spec.localPvGb || 0)} onClick={() => void submit()}>{t("common.create")}</Button>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -444,7 +511,7 @@ export function ClusterNetworkPanel({
           items={[
             [t("field.networkPlugin"), r.spec.networkPlugin],
             ["CNI errors", q.data.network.cniErrors],
-            ["Service P99", q.data.network.serviceP99Ms + " ms"],
+            ["Service P99", q.data.network.serviceP99Ms == null ? "—" : q.data.network.serviceP99Ms + " ms"],
             ["Ingress QPS", r.spec.ingressEnabled ? q.data.network.ingressQps : t("common.notEnabled")],
             ["VPC peering", t("common." + q.data.network.vpcPeering)],
             [
@@ -457,6 +524,25 @@ export function ClusterNetworkPanel({
           ]}
         />
       </Panel>
+      {q.data.storage.pvs.length > 0 && <Panel title="PersistentVolumes">
+        <DataTable data={q.data.storage.pvs} columns={[
+          { accessorKey: "name", header: "PV" },
+          { accessorKey: "source", header: t("common.type") },
+          { accessorKey: "sizeGb", header: t("storage.sizeGb") },
+          { accessorKey: "zone", header: t("eks.availableZones") },
+          { accessorKey: "nodeUuid", header: t("cluster.nodes"), cell: ({ row }) => row.original.nodeUuid || "—" },
+          { accessorKey: "status", header: t("common.status"), cell: ({ row }) => <Badge status={row.original.status.toLowerCase()} /> },
+        ]} />
+      </Panel>}
+      {q.data.storage.pvcs.length > 0 && <Panel title="PersistentVolumeClaims">
+        <DataTable data={q.data.storage.pvcs} columns={[
+          { accessorKey: "namespace", header: t("eks.namespace") },
+          { accessorKey: "name", header: "PVC" },
+          { accessorKey: "pvName", header: "PV", cell: ({ row }) => row.original.pvName || "—" },
+          { accessorKey: "sizeGb", header: t("storage.sizeGb") },
+          { accessorKey: "status", header: t("common.status"), cell: ({ row }) => <Badge status={row.original.status.toLowerCase()} /> },
+        ]} />
+      </Panel>}
     </div>
   ) : q.error ? (
     <ErrorState error={q.error} />
@@ -512,6 +598,7 @@ export function ReplicaManagement({
               cell: ({ row }) => <Badge status={row.original.phase} />,
             },
             { accessorKey: "node", header: t("cluster.nodes") },
+            { accessorKey: "gpuModel", header: "GPU model" },
             { accessorKey: "gpuCount", header: "GPU" },
             { accessorKey: "memoryGb", header: "VRAM GB" },
             {

@@ -1693,6 +1693,7 @@ async function dispatch(request: Request, settleBilling = true) {
           used: allocation.usedGb,
           requested: sizeGb,
         });
+      const zone = kind === "block" ? z.enum([`${code}-a`, `${code}-b`] as [string, string]).parse(body.zone || `${code}-a`) : undefined;
       const volume = {
         id: crypto.randomUUID(),
         name,
@@ -1702,6 +1703,7 @@ async function dispatch(request: Request, settleBilling = true) {
         sizeGb,
         projectId,
         region: code,
+        zone,
         resourceUuid: null,
         mountPath: "",
         createdAt: new Date().toISOString(),
@@ -2191,6 +2193,55 @@ async function dispatch(request: Request, settleBilling = true) {
         );
       }
     }
+    if (r.kind === "vgpu" && action === "workloads" && method === "POST") {
+      if (r.deletedAt || r.status !== "running") fail(409, "INVALID_STATE");
+      const input = z.object({
+        name: z.string().trim().regex(/^[a-z][a-z0-9-]{0,61}[a-z0-9]$/),
+        namespace: z.string().trim().regex(/^[a-z][a-z0-9-]{0,61}[a-z0-9]$/),
+        kind: z.enum(["Deployment", "StatefulSet", "Job"]),
+        replicas: z.number().int().min(1).max(64),
+        gpuPerPod: z.number().int().min(0).max(72),
+        cpuPerPod: z.number().int().min(1).max(128),
+        memoryGbPerPod: z.number().int().min(1).max(1024),
+        nodePoolName: z.string(),
+        gpuModel: z.string().optional(),
+        selectorKey: z.string().optional(),
+        selectorValue: z.string().optional(),
+        pvcName: z.string().optional(), localStorageGb: z.number().int().min(0).max(32768).optional(),
+        tolerateGpuTaint: z.boolean(),
+      }).parse(body);
+      if (input.nodePoolName && !r.spec.nodePools.some((pool, i) =>
+        (pool.name || `gpu-pool-${i + 1}`) === input.nodePoolName))
+        fail(422, "INVALID_NODE_POOL");
+      if (input.gpuModel && !r.spec.nodePools.some((pool) => GPU_SPECS[pool.poolCode].gpuModel === input.gpuModel))
+        fail(422, "INVALID_GPU_MODEL");
+      if (!!input.selectorKey !== !!input.selectorValue ||
+        (input.selectorKey && !/^[a-z0-9.-]+(?:\/[a-z0-9.-]+)?$/.test(input.selectorKey)))
+        fail(422, "INVALID_NODE_SELECTOR");
+      if (input.pvcName && !((input.namespace === "default" && input.pvcName === "default-pvc" && r.spec.defaultPvcGb > 0) ||
+        (r.spec.volumeBindings || []).some((binding) => binding.namespace === input.namespace && binding.pvcName === input.pvcName)))
+        fail(422, "INVALID_CLUSTER_PVC");
+      if (input.localStorageGb && (!r.spec.localPvGb || input.localStorageGb > r.spec.localPvGb))
+        fail(422, "INVALID_LOCAL_PV_SIZE");
+      if ((r.spec.workloads || []).some((workload) =>
+        workload.namespace === input.namespace && workload.name === input.name))
+        fail(409, "WORKLOAD_NAME_CONFLICT");
+      const workload = { ...input, id: crypto.randomUUID() };
+      r.spec.workloads = [...(r.spec.workloads || []), workload];
+      addEvent(r, "workload-created", r.status, r.status);
+      persist();
+      return json({ workload, cluster: clusterView(r) }, 201);
+    }
+    if (r.kind === "vgpu" && action?.startsWith("workloads/") && method === "POST") {
+      const [, workloadId, operation] = action.split("/");
+      if (operation !== "delete") fail(404, "NOT_FOUND");
+      const workloads = r.spec.workloads || [];
+      if (!workloads.some((workload) => workload.id === workloadId)) fail(404, "NOT_FOUND");
+      r.spec.workloads = workloads.filter((workload) => workload.id !== workloadId);
+      addEvent(r, "workload-deleted", r.status, r.status);
+      persist();
+      return json(clusterView(r));
+    }
     if (method === "DELETE") {
       if (r.deletedAt) fail(409, "ALREADY_DELETED");
       if (r.status === "terminating") fail(409, "INVALID_STATE");
@@ -2212,8 +2263,13 @@ async function dispatch(request: Request, settleBilling = true) {
       delete db.consolePasswordFingerprints[r.resourceUuid];
       r.deletedAt = new Date().toISOString();
       for (const volume of db.volumes)
-        if (volume.resourceUuid === r.resourceUuid)
-          volume.deletedAt = r.deletedAt;
+        if (volume.resourceUuid === r.resourceUuid) {
+          if (r.kind === "vgpu" && r.spec.volumeBindings?.some((binding) => binding.volumeId === volume.id)) {
+            volume.resourceUuid = null;
+            volume.role = "custom";
+            volume.mountPath = "";
+          } else volume.deletedAt = r.deletedAt;
+        }
       for (const bucket of db.buckets)
         if (bucket.attachedResourceUuid === r.resourceUuid) {
           bucket.attachedResourceUuid = null;
@@ -2355,8 +2411,15 @@ async function dispatch(request: Request, settleBilling = true) {
             .min(0)
             .max(next.spec.nodePools.length - 1)
             .parse(body.poolIndex);
-          resizePreviousCount = next.spec.nodePools[poolIndex].nodeCount;
-          next.spec.nodePools[poolIndex].nodeCount = z
+          const targetPool = next.spec.nodePools[poolIndex];
+          const minNodes = body.minNodes === undefined ? (targetPool.minNodes ?? 1) : z.number().int().min(1).max(64).parse(body.minNodes);
+          const maxNodes = body.maxNodes === undefined ? (targetPool.maxNodes ?? 64) : z.number().int().min(1).max(64).parse(body.maxNodes);
+          if (minNodes > maxNodes || Number(body.count) < minNodes || Number(body.count) > maxNodes)
+            fail(422, "INVALID_NODE_POOL_RANGE");
+          resizePreviousCount = targetPool.nodeCount;
+          targetPool.minNodes = minNodes;
+          targetPool.maxNodes = maxNodes;
+          targetPool.nodeCount = z
             .number()
             .int()
             .min(1)
@@ -2370,6 +2433,13 @@ async function dispatch(request: Request, settleBilling = true) {
           );
           precheck(next, r.resourceUuid);
           r.spec = next.spec;
+          // Removed node identities must not retain a cordon marker if the pool grows later.
+          const prefix = `cluster-node:${r.resourceUuid}-${poolIndex}-`;
+          r.labels = r.labels.filter((label) => {
+            if (!label.startsWith(prefix) || !label.endsWith(":cordoned")) return true;
+            const index = Number(label.slice(prefix.length, -":cordoned".length));
+            return Number.isInteger(index) && index < targetPool.nodeCount;
+          });
         } else fail(422, "VALIDATION_ERROR");
       } else fail(404, "NOT_FOUND");
       if (action === "resize") syncResourceNetwork(db.network, r);
@@ -2456,6 +2526,34 @@ async function dispatch(request: Request, settleBilling = true) {
         : spec.quantity * spec.gpuPerInstance;
     if (parsed.kind === "gpu_baremetal" && "machineCount" in spec)
       spec.gpuCount = spec.machineCount * pool.gpusPerNode;
+    if (parsed.kind === "vgpu" && "nodePools" in spec) {
+      if (!/^[a-z][a-z0-9-]{1,61}[a-z0-9]$/.test(parsed.name))
+        fail(422, "INVALID_CLUSTER_NAME");
+      if (db.resources.some((item) => item.kind === "vgpu" && !item.deletedAt &&
+        item.projectId === parsed.projectId && item.region === parsed.region &&
+        item.name.toLowerCase() === parsed.name.toLowerCase()))
+        fail(409, "CLUSTER_NAME_CONFLICT");
+      const podCidr = spec.podCidr || "172.20.0.0/16";
+      const serviceCidr = spec.serviceCidr || "172.21.0.0/16";
+      const vpc = db.network.vpcs.find((item) => item.id === spec.vpc);
+      if (!cidrRange(podCidr) || !cidrRange(serviceCidr) ||
+        cidrOverlaps(podCidr, serviceCidr) ||
+        (vpc && (cidrOverlaps(podCidr, vpc.cidr) || cidrOverlaps(serviceCidr, vpc.cidr))))
+        fail(422, "CLUSTER_CIDR_CONFLICT");
+      if (!spec.nodePools.every((nodePool) =>
+        (nodePool.minNodes ?? 1) <= nodePool.nodeCount &&
+        nodePool.nodeCount <= (nodePool.maxNodes ?? 64)))
+        fail(422, "INVALID_NODE_POOL_RANGE");
+      if (!spec.nodePools.every((nodePool) => {
+        const image = IMAGES.find((item) => item.id === (nodePool.imageRef || "ubuntu-22.04"));
+        const hardware = GPU_SPECS[nodePool.poolCode];
+        return image?.type === "os" && image.osFamily !== "Windows Server" &&
+          image.architectures.includes(hardware.cpuArchitecture) &&
+          image.supportedGpuModels.includes(nodePool.poolCode);
+      })) fail(422, "INVALID_NODE_IMAGE");
+      spec.podCidr = podCidr;
+      spec.serviceCidr = serviceCidr;
+    }
     if (parsed.kind === "vgpu" && "nodePools" in spec)
       spec.nodePools = spec.nodePools.map((pool) => ({
         ...pool,
@@ -2476,6 +2574,23 @@ async function dispatch(request: Request, settleBilling = true) {
         (r) => r.displayId === displayId(parsed.kind, resourceUuid),
       )
     );
+    if (parsed.kind === "vgpu" && "nodePools" in spec) {
+      const bindings = spec.volumeBindings || [];
+      if (new Set(bindings.map((binding) => binding.volumeId)).size !== bindings.length ||
+        new Set(bindings.map((binding) => binding.pvName)).size !== bindings.length ||
+        new Set(bindings.map((binding) => `${binding.namespace}/${binding.pvcName}`)).size !== bindings.length)
+        fail(422, "INVALID_CLUSTER_VOLUME_BINDING");
+      const selectedZones = new Set((spec.subnets || []).map((id) => db.network.subnets.find((subnet) => subnet.id === id)?.zone));
+      for (const binding of bindings) {
+        const volume = db.volumes.find((item) => item.id === binding.volumeId && !item.deletedAt);
+        if (!volume || volume.kind !== "block" || volume.role !== "custom" || volume.resourceUuid ||
+          volume.projectId !== parsed.projectId || volume.region !== parsed.region ||
+          (selectedZones.size && !selectedZones.has(volume.zone || `${volume.region}-a`)))
+          fail(422, "INVALID_CLUSTER_VOLUME_BINDING");
+      }
+      if (spec.localPvGb && spec.nodePools.some((nodePool) => spec.localPvGb! > GPU_SPECS[nodePool.poolCode].localNvmeGb))
+        fail(422, "INVALID_LOCAL_PV_SIZE");
+    }
     for (const row of spec.storageSelections || [])
       if (
         row.kind === "object" &&
@@ -2499,6 +2614,12 @@ async function dispatch(request: Request, settleBilling = true) {
     precheck(r);
     syncResourceNetwork(db.network, r);
     db.resources.push(r);
+    if (r.kind === "vgpu") for (const binding of r.spec.volumeBindings || []) {
+      const volume = db.volumes.find((item) => item.id === binding.volumeId)!;
+      volume.resourceUuid = r.resourceUuid;
+      volume.role = "pvc";
+      volume.mountPath = `/pvc/${binding.namespace}/${binding.pvcName}`;
+    }
     if (
       (r.kind === "gpu_vm" || r.kind === "gpu_baremetal") &&
       r.spec.authMethod === "password"
@@ -2507,7 +2628,9 @@ async function dispatch(request: Request, settleBilling = true) {
       db.consolePasswordFingerprints[r.resourceUuid] =
         consolePasswordFingerprint(r.resourceUuid, password);
     }
-    db.volumes.push(...volumesForResource(r));
+    db.volumes.push(...volumesForResource(r).map((volume) => r.kind === "vgpu" ? {
+      ...volume, zone: db.network.subnets.find((subnet) => subnet.id === r.spec.subnet)?.zone || `${r.region}-a`,
+    } : volume));
     for (const row of spec.storageSelections || []) {
       if (row.kind !== "object") continue;
       db.buckets.push({

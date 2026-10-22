@@ -91,6 +91,15 @@ export function seedResources(): Resource[] {
       spec.nodePools[0].slicingPolicy = ["mig", "time_slicing", "mps"][i % 3];
       spec.storageClass = ["ssd", "nvme", "shared-fs"][i % 3];
       spec.subnet = `${region}-default`;
+      spec.workloads = [{
+        id: `seed-workload-${region}-${i}`,
+        name: `training-${region}-${i + 1}`,
+        namespace: "training", kind: "Deployment",
+        replicas: Math.min(count, 4), gpuPerPod: 1,
+        cpuPerPod: 4, memoryGbPerPod: 16,
+        nodePoolName: spec.nodePools[0].name || "gpu-pool-1",
+        tolerateGpuTaint: true,
+      }];
     }
     if ("replicas" in spec) {
       spec.gpuPerReplica = count;

@@ -859,7 +859,7 @@ export function DeploymentOptionSelect({
     />
   );
 }
-export function Review() {
+export function Review({ hideSpec = false }: { hideSpec?: boolean } = {}) {
   const { form } = useSpec();
   const projects = useData<Project[]>(["projects"], EP.projects);
   const images = useData<Image[]>(["images"], EP.images);
@@ -883,7 +883,7 @@ export function Review() {
         return value
           .map(
             (pool) =>
-              `${poolDisplayName(pool.poolCode)} · ${pool.nodeCount} ${t("common.nodes")} · ${pool.slicingPolicy} ${pool.migProfile}`,
+              `${pool.name || "gpu-pool"} · ${poolDisplayName(pool.poolCode)} · ${pool.nodeCount} ${t("common.nodes")} (${pool.minNodes ?? 1}–${pool.maxNodes ?? 64}) · ${pool.nodeCount * pool.gpuPerNode} GPU · ${pool.imageRef || "ubuntu-22.04"}`,
           )
           .join(" / ");
       return value.join(", ");
@@ -913,15 +913,16 @@ export function Review() {
           ],
           [t("common.region"), t("common." + values.region)],
           [t("common.name"), values.name],
-          ...Object.entries(spec)
+          ...(hideSpec ? [] : Object.entries(spec)
             .filter(
               ([key, value]) =>
-                !("gpuPerInstance" in spec) ||
+                (!("nodePools" in spec) || key !== "workloads") &&
+                (!("gpuPerInstance" in spec) ||
                 (key !== "env" &&
                   key !== "entrypoint" &&
                   (key !== "runtimeImageRef" ||
                     (!!value &&
-                      images.data?.some((image) => image.id === value)))),
+                      images.data?.some((image) => image.id === value))))),
             )
             .map(([key, value]): [string, string] => [
               "gpuPerInstance" in spec && key === "vcpu"
@@ -934,7 +935,7 @@ export function Review() {
                       ? t("wizard.runtimeImage")
                       : t("field." + key),
               renderValue(key, value),
-            ]),
+            ])),
         ]}
       />
       <Check

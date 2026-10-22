@@ -8,6 +8,7 @@ import type {
   NetworkState,
   NetworkScope,
   NetworkInterface,
+  Subnet,
   ElasticIp,
   SecurityRule,
 } from "../../types/network";
@@ -241,13 +242,36 @@ export function resolveNetwork(n: NetworkState, r: Resource) {
     groups: groups.filter((g): g is NonNullable<typeof g> => !!g),
   };
 }
+export function clusterSubnets(n: NetworkState, r: Extract<Resource, { kind: "vgpu" }>) {
+  const { vpc, subnet } = resolveNetwork(n, r);
+  const ids = r.spec.subnets?.length ? r.spec.subnets : [subnet.id];
+  if (new Set(ids).size !== ids.length || !ids.includes(subnet.id))
+    networkFail(422, "INVALID_CLUSTER_SUBNETS");
+  const selected = ids.map((id) => n.subnets.find((item) => item.id === id && !item.deletedAt));
+  if (selected.some((item) => !item || item.vpcId !== vpc.id || item.projectId !== r.projectId || item.region !== r.region))
+    networkFail(409, "NETWORK_SCOPE_MISMATCH");
+  const subnets = selected as Subnet[];
+  if (r.spec.controlPlaneTier === "ha" && !!r.spec.subnets?.length && new Set(subnets.map((item) => item.zone)).size < 2)
+    networkFail(422, "INVALID_CLUSTER_SUBNETS");
+  return subnets;
+}
 export function checkResourceNetwork(n: NetworkState, r: Resource, peak = 1) {
   const { subnet } = resolveNetwork(n, r);
   const controlPlane =
     r.kind === "vgpu" ? (r.spec.controlPlaneTier === "ha" ? 3 : 1) : 0;
   const needed =
     Math.ceil((interfaceCount(r) - controlPlane) * peak) + controlPlane;
-  if (availableIps(n, subnet.id, r.resourceUuid) < needed)
+  if (r.kind === "vgpu") {
+    const subnets = clusterSubnets(n, r);
+    const counts = new Map<string, number>();
+    for (let index = 0; index < needed; index++) {
+      const id = subnets[index % subnets.length].id;
+      counts.set(id, (counts.get(id) || 0) + 1);
+    }
+    for (const [id, count] of counts)
+      if (availableIps(n, id, r.resourceUuid) < count)
+        networkFail(409, "SUBNET_EXHAUSTED", { requested: count, available: availableIps(n, id, r.resourceUuid) });
+  } else if (availableIps(n, subnet.id, r.resourceUuid) < needed)
     networkFail(409, "SUBNET_EXHAUSTED", {
       requested: needed,
       available: availableIps(n, subnet.id, r.resourceUuid),
@@ -325,6 +349,7 @@ export function syncResourceNetwork(
   r.spec.subnet = subnet.id;
   r.spec.securityGroups = groups.map((g) => g.id);
   const count = interfaceCount(r);
+  const clusterNetwork = r.kind === "vgpu" ? clusterSubnets(n, r) : null;
   const existing = n.interfaces.filter(
     (i) => i.resourceUuid === r.resourceUuid && !i.releasedAt,
   );
@@ -334,6 +359,7 @@ export function syncResourceNetwork(
     let nic = existing.find((i) => i.index === index);
     const newlyAllocated = !nic;
     if (!nic) {
+      const targetSubnet = clusterNetwork ? clusterNetwork[index % clusterNetwork.length] : subnet;
       nic = {
         id: `${r.resourceUuid}-eni-${index}-${n.interfaces.filter((i) => i.resourceUuid === r.resourceUuid && i.index === index).length}`,
         resourceUuid: r.resourceUuid,
@@ -343,8 +369,8 @@ export function syncResourceNetwork(
         projectId: r.projectId,
         region: r.region,
         vpcId: vpc.id,
-        subnetId: subnet.id,
-        privateIp: nextPrivateIp(n, subnet.id),
+        subnetId: targetSubnet.id,
+        privateIp: nextPrivateIp(n, targetSubnet.id),
         securityGroupIds: groups.map((g) => g.id),
         releasedAt: null,
       };

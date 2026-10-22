@@ -177,6 +177,14 @@ export const baremetalSchema = z
       });
   });
 export const nodePoolSchema = z.object({
+  name: z.string().trim().regex(/^[a-z][a-z0-9-]{1,30}[a-z0-9]$/).optional(),
+  role: z.enum(["gpu", "general"]).optional(),
+  minNodes: z.number().int().min(1).max(64).optional(),
+  maxNodes: z.number().int().min(1).max(64).optional(),
+  diskGb: z.number().int().min(100).max(4096).optional(),
+  imageRef: z.string().optional(),
+  labels: z.record(z.string(), z.string()).optional(),
+  gpuTaint: z.boolean().optional(),
   poolCode: z.enum(POOLS),
   nodeCount: z.number().int().min(1).max(64),
   gpuPerNode: z.number().int().positive(),
@@ -185,10 +193,37 @@ export const nodePoolSchema = z.object({
   timeSliceShare: z.number().int().min(2).max(8),
 });
 export const vgpuSchema = z.object({
+  description: z.string().trim().max(500).optional(),
+  subnets: z.array(z.string()).max(3).optional(),
+  volumeBindings: z.array(z.object({
+    volumeId: z.string().min(1),
+    pvName: z.string().regex(/^[a-z][a-z0-9-]{1,61}[a-z0-9]$/),
+    pvcName: z.string().regex(/^[a-z][a-z0-9-]{1,61}[a-z0-9]$/),
+    namespace: z.string().regex(/^[a-z][a-z0-9-]{0,61}[a-z0-9]$/),
+  })).max(8).optional(),
+  localPvGb: z.number().int().min(0).max(32768).optional(),
+  podCidr: z.string().optional(),
+  serviceCidr: z.string().optional(),
+  workloads: z.array(z.object({
+    id: z.string(), name: z.string(), namespace: z.string(),
+    kind: z.enum(["Deployment", "StatefulSet", "Job"]),
+    replicas: z.number().int().min(1).max(64),
+    gpuPerPod: z.number().int().min(0).max(72),
+    cpuPerPod: z.number().int().min(1).max(128),
+    memoryGbPerPod: z.number().int().min(1).max(1024),
+    nodePoolName: z.string(), gpuModel: z.string().optional(),
+    selectorKey: z.string().optional(), selectorValue: z.string().optional(),
+    pvcName: z.string().optional(), localStorageGb: z.number().int().min(0).max(32768).optional(),
+    tolerateGpuTaint: z.boolean(),
+  })).optional(),
   ...common,
   k8sVersion: z.enum(["1.28", "1.29", "1.30", "1.31"]),
   controlPlaneTier: z.enum(["standard", "ha"]),
-  nodePools: z.array(nodePoolSchema).min(1).max(5),
+  nodePools: z.array(nodePoolSchema).min(1).max(5).refine(
+    (pools) => pools.every((p) => (p.minNodes ?? 1) <= p.nodeCount && p.nodeCount <= (p.maxNodes ?? 64)) &&
+      new Set(pools.map((p, i) => p.name || `pool-${i+1}`)).size === pools.length,
+    "INVALID_NODE_POOL_RANGE",
+  ),
   apiServerPublic: z.boolean(),
   authorizedCidr: z.string(),
   networkPlugin: z.enum(["cilium", "calico"]),

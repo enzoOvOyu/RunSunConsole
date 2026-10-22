@@ -53,6 +53,12 @@ export interface HardwareSnapshot {
   };
 }
 export interface ClusterView {
+  summary: {
+    totalNodes: number; readyNodes: number;
+    cpuTotal: number; cpuAllocated: number;
+    memoryGbTotal: number; memoryGbAllocated: number;
+    gpuTotal: number; gpuAllocated: number;
+  };
   components: { name: string; ready: number; desired: number }[];
   nodes: {
     poolIndex: number;
@@ -63,12 +69,37 @@ export interface ClusterView {
     cordoned: boolean;
     gpuCount: number;
     allocatedGpu: number;
+    cpuCount: number;
+    allocatedCpu: number;
+    memoryGb: number;
+    allocatedMemoryGb: number;
+    gpuModel: string;
+    poolName: string;
+    privateIp: string;
+    zone: string;
+    allocatedLocalGb: number;
+    os: string;
+    k8sVersion: string;
+    labels: Record<string, string>;
+    taints: string[];
     straggler: boolean;
     ratio: number;
   }[];
   workloads: {
+    id: string;
+    kind: string;
     namespace: string;
     deployment: string;
+    gpuPerPod: number;
+    cpuPerPod: number;
+    memoryGbPerPod: number;
+    nodePoolName: string;
+    gpuModel?: string;
+    selectorKey?: string;
+    selectorValue?: string;
+    pvcName?: string;
+    localStorageGb?: number;
+    tolerateGpuTaint: boolean;
     pods: {
       name: string;
       phase: string;
@@ -76,13 +107,17 @@ export interface ClusterView {
       oomKilled: number;
       waitingReason: string;
       gpuCount: number;
+      cpuCount: number;
+      memoryGb: number;
+      pvcName?: string;
+      localStorageGb?: number;
       nodeUuid: string | null;
     }[];
   }[];
   scheduling: { reason: string; count: number }[];
   network: {
     cniErrors: number;
-    serviceP99Ms: number;
+    serviceP99Ms: number | null;
     ingressQps: number | null;
     vpcPeering: string;
   };
@@ -93,6 +128,8 @@ export interface ClusterView {
     pvCapacityGb: number;
     provisioned: boolean;
     csiErrors: number;
+    pvs: { name: string; source: "block" | "file" | "local"; sizeGb: number; zone: string; nodeUuid: string | null; status: string; volumeId: string | null }[];
+    pvcs: { namespace: string; name: string; pvName: string | null; sizeGb: number; status: string }[];
   };
   plugins: {
     gpuOperator: string;

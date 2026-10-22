@@ -12,7 +12,9 @@ import {
   type Model,
   type Resource,
   type PriceEstimate,
+  type DeploymentOptions,
 } from "../../../types/domain";
+import type { StorageVolume } from "../../../types/storage";
 import { defaultSpec } from "../../../lib/config";
 import { orderSchema } from "../../../lib/schema";
 import { KIND_META, resourceLink } from "../../../lib/ids";
@@ -43,12 +45,22 @@ function normalizeServerCompute(spec: Resource["spec"]): Resource["spec"] {
   const vcpu = Math.max(8, Math.min(96, Math.round(rawVcpu / 8) * 8));
   return { ...spec, vcpu, memoryGb: vcpu * 2 };
 }
+interface ClusterLookups {
+  network?: DeploymentOptions;
+  volumes?: StorageVolume[];
+  pools: Pool[];
+  images: Image[];
+}
 interface Props {
   kind: Kind;
   steps: string[];
   render: (context: FormContext) => React.ReactNode;
-  validateStep: (values: WizardValues, step: number) => boolean;
+  validateStep: (values: WizardValues, step: number, lookups?: ClusterLookups) => boolean;
+  validateFirstStep?: (values: WizardValues) => boolean;
   firstStepContent?: React.ReactNode;
+  aside?: React.ReactNode;
+  stepHints?: string[];
+  clusterLayout?: boolean;
 }
 export function PoolCards({
   pools,
@@ -128,7 +140,11 @@ export function WizardLayout({
   steps,
   render,
   validateStep,
+  validateFirstStep,
   firstStepContent,
+  aside,
+  stepHints,
+  clusterLayout,
 }: Props) {
   const [params] = useSearchParams();
   const { region, setRegion } = useRegion();
@@ -166,7 +182,11 @@ export function WizardLayout({
       steps={steps}
       render={render}
       validateStep={validateStep}
+      validateFirstStep={validateFirstStep}
       firstStepContent={firstStepContent}
+      aside={aside}
+      stepHints={stepHints}
+      clusterLayout={clusterLayout}
       context={{
         kind,
         step: 0,
@@ -190,7 +210,11 @@ function WizardForm({
   steps,
   render,
   validateStep,
+  validateFirstStep,
   firstStepContent,
+  aside,
+  stepHints,
+  clusterLayout,
   context,
   region,
   setRegion,
@@ -204,7 +228,11 @@ function WizardForm({
   steps: string[];
   render: Props["render"];
   validateStep: Props["validateStep"];
+  validateFirstStep?: Props["validateFirstStep"];
   firstStepContent?: React.ReactNode;
+  aside?: React.ReactNode;
+  stepHints?: string[];
+  clusterLayout?: boolean;
   context: FormContext;
   region: WizardValues["region"];
   setRegion: (region: WizardValues["region"]) => void;
@@ -265,7 +293,9 @@ function WizardForm({
         spec:
           kind === "gpu_vm"
             ? normalizeServerCompute(structuredClone(clone.spec))
-            : structuredClone(clone.spec),
+            : kind === "vgpu" && clone.kind === "vgpu"
+              ? { ...structuredClone(clone.spec), volumeBindings: [] }
+              : structuredClone(clone.spec),
       };
     if (
       source.model &&
@@ -288,6 +318,20 @@ function WizardForm({
   };
   const form = useForm<WizardValues>({ defaultValues: initial() });
   const values = form.watch();
+  const clusterNetwork = useData<DeploymentOptions>(
+    ["cluster-network-options", values.region, values.projectId],
+    EP.options + query({ region: values.region, project_id: values.projectId, kind: "vgpu" }),
+    { enabled: kind === "vgpu" && !!values.projectId },
+  );
+  const clusterVolumes = useData<StorageVolume[]>(
+    ["cluster-block-volumes", values.region, values.projectId],
+    EP.storageVolumes + query({ region: values.region, project_id: values.projectId }),
+    { enabled: kind === "vgpu" && !!values.projectId },
+  );
+  const clusterLookups: ClusterLookups = {
+    network: clusterNetwork.data, volumes: clusterVolumes.data,
+    pools: context.pools, images: context.images,
+  };
   useEffect(() => {
     if (step > furthest) setFurthest(step);
   }, [step, furthest]);
@@ -341,7 +385,9 @@ function WizardForm({
       region: z.enum(REGIONS),
       name: z.string().min(3).max(63),
     })
-    .safeParse(values).success;
+    .safeParse(values).success &&
+    (kind !== "vgpu" || /^[a-z][a-z0-9-]{1,61}[a-z0-9]$/.test(values.name)) &&
+    (!validateFirstStep || validateFirstStep(values));
   const currentSize =
     "quantity" in values.spec
       ? values.spec.quantity
@@ -367,16 +413,15 @@ function WizardForm({
     const pool = context.pools.find((p) => p.code === code);
     return !pool?.available || count > pool.availableGpu;
   });
-  const poolStep = kind === "gpu_vm" || kind === "gpu_baremetal" ? 1 : 2;
+  const poolStep = kind === "vgpu" ? 3 : kind === "gpu_vm" || kind === "gpu_baremetal" ? 1 : 2;
   const scalingRangeInvalid =
     !!values.spec.scaling &&
     (values.spec.scaling.min_size > currentSize ||
       values.spec.scaling.max_size < currentSize);
   const valid =
-    (step === 0 ? firstValid : validateStep(values, step)) &&
+    (step === 0 ? firstValid : validateStep(values, step, clusterLookups)) &&
     !(step >= poolStep && overCapacity) &&
-    !scalingRangeInvalid &&
-    !form.formState.errors.spec;
+    !scalingRangeInvalid;
   const submit = async () => {
     const result = orderSchema.safeParse({ ...values, kind });
     if (!result.success || !values.agree) {
@@ -432,11 +477,11 @@ function WizardForm({
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          if (step === 4) void submit();
+          if (step === steps.length - 1) void submit();
           else if (valid) setStep(step + 1);
         }}
       >
-        <div className="wizard">
+        <div className={`wizard ${clusterLayout ? "cluster-wizard" : ""}`}>
           <nav className="wizard-steps">
             {steps.map((id, i) => (
               <button
@@ -447,7 +492,7 @@ function WizardForm({
                 onClick={() => setStep(i)}
               >
                 <span className="step-number">{i < step ? "✓" : i + 1}</span>
-                {t("wizard." + id)}
+                {clusterLayout ? <span className="wizard-step-copy"><strong>{t("wizard." + id)}</strong><small>{stepHints?.[i]}</small></span> : t("wizard." + id)}
               </button>
             ))}
           </nav>
@@ -473,6 +518,7 @@ function WizardForm({
                             form.setValue("spec", {
                               ...spec,
                               subnet: next + "-default",
+                              ...(kind === "vgpu" ? { vpc: "", subnets: undefined, securityGroups: [], volumeBindings: [] } : {}),
                             } as Resource["spec"]);
                           setRegion(next);
                         }}
@@ -516,7 +562,7 @@ function WizardForm({
               >
                 {t("common.previous")}
               </Button>
-              {step < 4 ? (
+              {step < steps.length - 1 ? (
                 <Button
                   variant="primary"
                   type="submit"
@@ -542,6 +588,7 @@ function WizardForm({
             </div>
           </div>
           <div className="cost-summary">
+            {aside}
             <Panel title={t("price.breakdown")} className="cost-panel">
               <div className="cost-mode">
                 <Field label={t("common.type")}>

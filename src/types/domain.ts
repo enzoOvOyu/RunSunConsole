@@ -99,7 +99,32 @@ export interface BaremetalSpec extends CommonSpec {
   vpc: string;
   subnet: string;
 }
+export interface ClusterWorkloadSpec {
+  id: string;
+  name: string;
+  namespace: string;
+  kind: "Deployment" | "StatefulSet" | "Job";
+  replicas: number;
+  gpuPerPod: number;
+  cpuPerPod: number;
+  memoryGbPerPod: number;
+  nodePoolName: string;
+  gpuModel?: string;
+  selectorKey?: string;
+  selectorValue?: string;
+  pvcName?: string;
+  localStorageGb?: number;
+  tolerateGpuTaint: boolean;
+}
 export interface NodePoolSpec {
+  name?: string;
+  role?: "gpu" | "general";
+  minNodes?: number;
+  maxNodes?: number;
+  diskGb?: number;
+  imageRef?: string;
+  labels?: Record<string, string>;
+  gpuTaint?: boolean;
   poolCode: PoolCode;
   nodeCount: number;
   gpuPerNode: number;
@@ -107,7 +132,20 @@ export interface NodePoolSpec {
   migProfile: string;
   timeSliceShare: number;
 }
+export interface ClusterVolumeBinding {
+  volumeId: string;
+  pvName: string;
+  pvcName: string;
+  namespace: string;
+}
 export interface VgpuSpec extends CommonSpec {
+  subnets?: string[];
+  volumeBindings?: ClusterVolumeBinding[];
+  localPvGb?: number;
+  description?: string;
+  podCidr?: string;
+  serviceCidr?: string;
+  workloads?: ClusterWorkloadSpec[];
   k8sVersion: string;
   controlPlaneTier: "standard" | "ha";
   nodePools: NodePoolSpec[];

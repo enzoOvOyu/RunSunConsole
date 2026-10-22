@@ -2284,3 +2284,39 @@ a:focus-visible {
   background: color-mix(in srgb, var(--rs-danger) 10%, transparent);
   border-color: color-mix(in srgb, var(--rs-danger) 25%, var(--rs-border));
 }
+
+/* Kubernetes create flow: resources stay visible beside the active configuration. */
+.cluster-wizard {
+  grid-template-columns: minmax(155px, 175px) minmax(0, 1fr) minmax(290px, 310px);
+  gap: 16px;
+}
+.cluster-wizard .wizard-steps {
+  grid-column: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+  position: sticky;
+  top: var(--rs-s5);
+}
+.cluster-wizard .wizard-step { width: 100%; align-items: flex-start; }
+.cluster-wizard .wizard-step-copy { display: grid; gap: 3px; min-width: 0; }
+.cluster-wizard .wizard-step-copy small { font-size: var(--rs-fs-xs); line-height: 1.35; color: var(--rs-text-secondary); }
+.cluster-wizard .wizard-step.current { background: var(--rs-brand-soft); box-shadow: inset 3px 0 var(--rs-brand); }
+.cluster-wizard .cost-summary { display: grid; gap: 16px; }
+.cluster-wizard .cost-panel .panel-body { text-align: left; }
+.cluster-resource-chain { display: grid; gap: 8px; }
+.cluster-resource-chain > div { border: 1px solid var(--rs-border); border-radius: var(--rs-radius-md); padding: 10px 12px; background: var(--rs-surface); }
+.cluster-resource-chain strong { display: block; font-size: var(--rs-fs-sm); }
+.cluster-resource-chain small { display: block; color: var(--rs-text-secondary); margin-top: 3px; overflow-wrap: anywhere; }
+.cluster-resource-chain .cluster-chain-arrow { text-align: center; border: 0; padding: 0; color: var(--rs-text-secondary); background: transparent; }
+.cluster-network-choice { display: grid; grid-template-columns: minmax(0,1.2fr) minmax(0,.8fr); gap: 12px; }
+.cluster-network-choice strong, .cluster-network-choice small { display: block; }
+.cluster-network-choice strong { margin-bottom: 8px; }
+.cluster-network-choice small { line-height: 1.45; color: var(--rs-text-secondary); }
+.cluster-network-choice > * { border: 1px solid var(--rs-border); border-radius: var(--rs-radius-md); padding: 14px; background: var(--rs-surface); }
+.cluster-network-choice .selected { border-color: var(--rs-brand); background: var(--rs-brand-soft); }
+.cluster-subnet-list { display: grid; gap: 8px; }
+.cluster-subnet-row { display: grid; grid-template-columns: 20px minmax(0,1.2fr) minmax(0,.9fr) minmax(0,.9fr); gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--rs-border); border-radius: var(--rs-radius-md); }
+.cluster-subnet-row small { display: block; color: var(--rs-text-secondary); overflow-wrap: anywhere; line-height: 1.4; }
+@media (max-width: 1400px) { .cluster-wizard { grid-template-columns: minmax(160px,190px) minmax(0,1fr); } .cluster-wizard .cost-summary { grid-column: 2; position: static; max-height: none; } }
+@media (max-width: 900px) { .cluster-wizard { grid-template-columns: 1fr; } .cluster-wizard .wizard-steps { grid-column: 1; flex-direction: row; overflow-x: auto; position: static; } .cluster-wizard .wizard-step { min-width: 150px; } .cluster-wizard .cost-summary { grid-column: 1; } .cluster-network-choice { grid-template-columns: 1fr; } .cluster-subnet-row { grid-template-columns: 20px minmax(0,1fr); } }

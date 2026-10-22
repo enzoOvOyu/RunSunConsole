@@ -154,75 +154,150 @@ export function clusterView(
   fault = "",
 ): ClusterView {
   const active = r.status === "running";
-  const count = r.spec.nodePools.reduce((n, p) => n + p.nodeCount, 0);
   const desired = r.spec.controlPlaneTier === "ha" ? 3 : 1;
-  const nodes = r.spec.nodePools.flatMap((pool, poolIndex) =>
-    Array.from({ length: pool.nodeCount }, (_, i) => {
-      const nodeUuid = `${r.resourceUuid}-${poolIndex}-${i}`;
+  const nodes: ClusterView["nodes"] = r.spec.nodePools.flatMap((pool, poolIndex) => {
+    const hardware = GPU_SPECS[pool.poolCode];
+    return Array.from({ length: pool.nodeCount }, (_, index) => {
+      const nodeUuid = `${r.resourceUuid}-${poolIndex}-${index}`;
       const cordoned = r.labels.includes(`cluster-node:${nodeUuid}:cordoned`);
       return {
         poolIndex, poolCode: pool.poolCode, nodeUuid,
-        name: `${r.displayId}-pool${poolIndex + 1}-node${i + 1}`,
+        poolName: pool.name || `gpu-pool-${poolIndex + 1}`,
+        name: `${r.displayId}-pool${poolIndex + 1}-node${index + 1}`,
         state: !active ? "initializing" : cordoned ? "unschedulable" : "ready",
-        cordoned,
-        gpuCount: GPU_SPECS[pool.poolCode].gpusPerNode,
-        allocatedGpu: active ? Math.floor(GPU_SPECS[pool.poolCode].gpusPerNode * 0.75) : 0,
-        straggler: fault === "straggler" && poolIndex === 0 && i === 0,
-        ratio: fault === "straggler" && poolIndex === 0 && i === 0 ? 1.55 : 1.04 + (i % 3) * 0.02,
+        cordoned, gpuCount: hardware.gpusPerNode, allocatedGpu: 0,
+        // The existing bare-metal mock assigns 16 vCPU per physical GPU.
+        cpuCount: hardware.gpusPerNode * 16, allocatedCpu: 0,
+        memoryGb: hardware.memorySystemGb, allocatedMemoryGb: 0,
+        gpuModel: hardware.gpuModel,
+        privateIp: db.network.interfaces.find((nic) => nic.resourceUuid === r.resourceUuid && !nic.releasedAt && nic.index === desired + r.spec.nodePools.slice(0, poolIndex).reduce((n, item) => n + item.nodeCount, 0) + index)?.privateIp || "—",
+        zone: (() => {
+          const nic = db.network.interfaces.find((item) => item.resourceUuid === r.resourceUuid && !item.releasedAt && item.index === desired + r.spec.nodePools.slice(0, poolIndex).reduce((n, item) => n + item.nodeCount, 0) + index);
+          return db.network.subnets.find((item) => item.id === nic?.subnetId)?.zone || `${r.region}-a`;
+        })(),
+        allocatedLocalGb: 0,
+        os: IMAGES.find((image) => image.id === pool.imageRef)?.name || "Ubuntu 22.04 LTS",
+        k8sVersion: r.spec.k8sVersion,
+        labels: { ...pool.labels, "runsuncloud.com/node-pool": pool.name || `gpu-pool-${poolIndex + 1}`, "nvidia.com/gpu.product": hardware.gpuModel },
+        taints: pool.gpuTaint === false ? [] : ["nvidia.com/gpu=true:NoSchedule"],
+        straggler: fault === "straggler" && poolIndex === 0 && index === 0,
+        ratio: fault === "straggler" && poolIndex === 0 && index === 0 ? 1.55 : 1.04 + (index % 3) * 0.02,
       };
-    }),
-  );
-  const schedulable = nodes.filter((node) => node.state === "ready");
-  const podCount = Math.min(count * 2, 32);
-  const capacity = schedulable.map((node) => ({
-    node,
-    remaining: Math.max(1, node.gpuCount - node.allocatedGpu),
+    });
+  });
+  const boundVolumes = (r.spec.volumeBindings || []).map((binding) => ({
+    binding, volume: db.volumes.find((item) => item.id === binding.volumeId && !item.deletedAt),
   }));
-  const pods = Array.from({ length: podCount }, (_, i) => {
-    const node = active ? capacity.find((entry) => entry.remaining > 0)?.node : null;
-    const phase = !active || !node ? "Pending" : "Running";
-    if (node && active) {
-      const entry = capacity.find((candidate) => candidate.node.nodeUuid === node.nodeUuid);
-      if (entry) entry.remaining -= 1;
-    }
+  const defaultVolume = r.spec.defaultPvcGb > 0 ? db.volumes.find((item) => item.resourceUuid === r.resourceUuid && item.role === "pvc" && item.id === `vol-${r.resourceUuid}-pvc` && !item.deletedAt) : undefined;
+  const pvcNodeLocks = new Map<string, string>();
+  const workloads: ClusterView["workloads"] = (r.spec.workloads || []).map((workload) => {
+    const pods = Array.from({ length: workload.replicas }, (_, index) => {
+      const claimKey = `${workload.namespace}/${workload.pvcName || ""}`;
+      const volume = boundVolumes.find(({ binding }) => `${binding.namespace}/${binding.pvcName}` === claimKey)?.volume ||
+        (claimKey === "default/default-pvc" ? defaultVolume : undefined);
+      const volumeZone = volume?.zone || (volume ? `${r.region}-a` : "");
+      const sharedFile = volume?.kind === "file";
+      const candidates = nodes.filter((node) =>
+        node.state === "ready" &&
+        (!workload.pvcName || (!!volume && (sharedFile || node.zone === volumeZone) && (sharedFile || !pvcNodeLocks.has(claimKey) || pvcNodeLocks.get(claimKey) === node.nodeUuid))) &&
+        (!workload.nodePoolName || node.poolName === workload.nodePoolName) &&
+        (!workload.gpuModel || node.gpuModel === workload.gpuModel) &&
+        (!workload.selectorKey || node.labels[workload.selectorKey] === workload.selectorValue) &&
+        (workload.tolerateGpuTaint || node.taints.length === 0));
+      const node = candidates.find((candidate) =>
+        candidate.gpuCount - candidate.allocatedGpu >= workload.gpuPerPod &&
+        candidate.cpuCount - candidate.allocatedCpu >= workload.cpuPerPod &&
+        candidate.memoryGb - candidate.allocatedMemoryGb >= workload.memoryGbPerPod &&
+        (r.spec.localPvGb || 0) - candidate.allocatedLocalGb >= (workload.localStorageGb || 0));
+      if (node) {
+        node.allocatedGpu += workload.gpuPerPod;
+        node.allocatedCpu += workload.cpuPerPod;
+        node.allocatedMemoryGb += workload.memoryGbPerPod;
+        node.allocatedLocalGb += workload.localStorageGb || 0;
+        if (workload.pvcName && !sharedFile) pvcNodeLocks.set(claimKey, node.nodeUuid);
+      }
+      const waitingReason = !active ? "Cluster is not running" :
+        workload.pvcName && !volume ? "PVC is not bound to an available block volume" :
+        !candidates.length ? "No node matches the pool selector, taint tolerance and scheduling state" :
+        !node && workload.localStorageGb ? "Insufficient local PV capacity on matching nodes" :
+        !node ? "Insufficient GPU, CPU or memory on matching nodes" : "";
+      return {
+        name: `${workload.name}-${index + 1}`,
+        phase: node ? "Running" : "Pending", restarts: 0, oomKilled: 0,
+        waitingReason, gpuCount: workload.gpuPerPod,
+        cpuCount: workload.cpuPerPod, memoryGb: workload.memoryGbPerPod,
+        pvcName: workload.pvcName, localStorageGb: workload.localStorageGb,
+        nodeUuid: node?.nodeUuid || null,
+      };
+    });
     return {
-      name: `trainer-${i + 1}`, phase, restarts: 0, oomKilled: 0,
-      waitingReason: phase === "Pending" ? (!active ? "Cluster is not running" : "No schedulable GPU node") : "",
-      gpuCount: 1, nodeUuid: node?.nodeUuid || null,
+      id: workload.id, kind: workload.kind, namespace: workload.namespace,
+      deployment: workload.name, gpuPerPod: workload.gpuPerPod,
+      cpuPerPod: workload.cpuPerPod, memoryGbPerPod: workload.memoryGbPerPod,
+      nodePoolName: workload.nodePoolName,
+      gpuModel: workload.gpuModel,
+      selectorKey: workload.selectorKey,
+      selectorValue: workload.selectorValue,
+      pvcName: workload.pvcName,
+      localStorageGb: workload.localStorageGb,
+      tolerateGpuTaint: workload.tolerateGpuTaint, pods,
     };
   });
-  const gatewayPhase = active ? "Running" : "Pending";
+  const summary = {
+    totalNodes: nodes.length,
+    readyNodes: active ? nodes.length : 0,
+    cpuTotal: nodes.reduce((n, node) => n + node.cpuCount, 0),
+    cpuAllocated: nodes.reduce((n, node) => n + node.allocatedCpu, 0),
+    memoryGbTotal: nodes.reduce((n, node) => n + node.memoryGb, 0),
+    memoryGbAllocated: nodes.reduce((n, node) => n + node.allocatedMemoryGb, 0),
+    gpuTotal: nodes.reduce((n, node) => n + node.gpuCount, 0),
+    gpuAllocated: nodes.reduce((n, node) => n + node.allocatedGpu, 0),
+  };
+  const pending = workloads.flatMap((workload) => workload.pods)
+    .filter((pod) => pod.phase === "Pending");
+  const reasons = new Map<string, number>();
+  for (const pod of pending) reasons.set(pod.waitingReason, (reasons.get(pod.waitingReason) || 0) + 1);
   const policy = db.policies.find((item) => item.resourceUuid === r.resourceUuid);
-  const pvcConfigured = r.spec.defaultPvcGb > 0;
+  const pvs: ClusterView["storage"]["pvs"] = [];
+  const pvcs: ClusterView["storage"]["pvcs"] = [];
+  if (defaultVolume) {
+    pvs.push({ name: `${r.displayId}-pv`, source: defaultVolume.kind === "file" ? "file" : "block", sizeGb: defaultVolume.sizeGb, zone: defaultVolume.kind === "file" ? "—" : defaultVolume.zone || `${r.region}-a`, nodeUuid: null, status: "Bound", volumeId: defaultVolume.id });
+    pvcs.push({ namespace: "default", name: "default-pvc", pvName: `${r.displayId}-pv`, sizeGb: defaultVolume.sizeGb, status: "Bound" });
+  }
+  for (const { binding, volume } of boundVolumes) {
+    const ready = !!volume && volume.resourceUuid === r.resourceUuid;
+    pvs.push({ name: binding.pvName, source: "block", sizeGb: volume?.sizeGb || 0, zone: volume?.zone || `${r.region}-a`, nodeUuid: null, status: ready ? "Bound" : "Pending", volumeId: binding.volumeId });
+    pvcs.push({ namespace: binding.namespace, name: binding.pvcName, pvName: ready ? binding.pvName : null, sizeGb: volume?.sizeGb || 0, status: ready ? "Bound" : "Pending" });
+  }
+  for (const workload of workloads) for (const pod of workload.pods) if (pod.localStorageGb) {
+    const pvName = `${pod.name}-local-pv`;
+    if (pod.nodeUuid) pvs.push({ name: pvName, source: "local", sizeGb: pod.localStorageGb, zone: nodes.find((node) => node.nodeUuid === pod.nodeUuid)?.zone || `${r.region}-a`, nodeUuid: pod.nodeUuid, status: "Bound", volumeId: null });
+    pvcs.push({ namespace: workload.namespace, name: `${pod.name}-local`, pvName: pod.nodeUuid ? pvName : null, sizeGb: pod.localStorageGb, status: pod.nodeUuid ? "Bound" : "Pending" });
+  }
   return {
+    summary,
     components: ["API Server", "etcd", "Scheduler", "Controller-Manager"].map(
       (name) => ({ name, ready: active ? desired : 0, desired }),
     ),
-    nodes,
-    workloads: [
-      { namespace: "training", deployment: `${r.displayId}-trainer`, pods },
-      { namespace: "inference", deployment: `${r.displayId}-gateway`, pods: [{
-        name: "gateway-1", phase: gatewayPhase, restarts: 0, oomKilled: 0,
-        waitingReason: active ? "" : "Cluster is not running", gpuCount: 0,
-        nodeUuid: active ? schedulable[0]?.nodeUuid || null : null,
-      }] },
-    ],
-    scheduling: active && pods.some((pod) => pod.phase === "Pending")
-      ? [{ reason: "No schedulable GPU node", count: pods.filter((pod) => pod.phase === "Pending").length }]
-      : [],
+    nodes, workloads,
+    scheduling: [...reasons].map(([reason, count]) => ({ reason, count })),
     network: {
-      cniErrors: 0, serviceP99Ms: 12.4,
-      ingressQps: r.spec.ingressEnabled ? (active ? 180 : 0) : null,
+      cniErrors: 0, serviceP99Ms: active && workloads.some((item) => item.pods.some((pod) => pod.phase === "Running")) ? 12.4 : null,
+      ingressQps: r.spec.ingressEnabled ? (active && workloads.some((item) => item.pods.some((pod) => pod.phase === "Running")) ? 180 : 0) : null,
       vpcPeering: active ? "ready" : "pending",
     },
     storage: {
-      bound: pvcConfigured ? 1 : 0, pending: 0, pendingReason: "",
-      pvCapacityGb: pvcConfigured ? r.spec.defaultPvcGb : 0,
-      provisioned: pvcConfigured, csiErrors: 0,
+      bound: pvcs.filter((item) => item.status === "Bound").length,
+      pending: pvcs.filter((item) => item.status === "Pending").length,
+      pendingReason: pvcs.some((item) => item.status === "Pending") ? "PVC has no matching available PV or node" : "",
+      pvCapacityGb: pvs.reduce((total, item) => total + item.sizeGb, 0),
+      provisioned: pvcs.length > 0 || (r.spec.localPvGb || 0) > 0,
+      csiErrors: 0, pvs, pvcs,
     },
     plugins: {
       gpuOperator: "24.9.1", devicePluginHealthy: active,
-      nfdVersion: "0.16.6", driverReady: active ? count : 0, driverDesired: count,
+      nfdVersion: "0.16.6", driverReady: active ? summary.totalNodes : 0,
+      driverDesired: summary.totalNodes,
     },
     poolStatus: !r.spec.scaling ? "idle" : policy?.status === "paused" ? "paused" : "idle",
   };
