@@ -2292,23 +2292,32 @@ a:focus-visible {
 
 /* Kubernetes create flow: resources stay visible beside the active configuration. */
 .cluster-wizard {
-  grid-template-columns: minmax(155px, 175px) minmax(0, 1fr) minmax(290px, 310px);
-  gap: 16px;
+  grid-template-columns: minmax(205px, .62fr) minmax(560px, 2fr) minmax(225px, .68fr);
+  grid-template-areas: "steps steps steps" "summary main cost";
+  gap: 16px 18px;
 }
 .cluster-wizard .wizard-steps {
-  grid-column: auto;
+  grid-area: steps;
+  grid-column: 1 / -1;
   display: flex;
-  flex-direction: column;
-  overflow: visible;
-  position: sticky;
-  top: var(--rs-s5);
+  flex-direction: row;
+  gap: 6px;
+  overflow: auto;
+  position: static;
 }
-.cluster-wizard .wizard-step { width: 100%; align-items: flex-start; }
-.cluster-wizard .wizard-step-copy { display: grid; gap: 3px; min-width: 0; }
-.cluster-wizard .wizard-step-copy small { font-size: var(--rs-fs-xs); line-height: 1.35; color: var(--rs-text-secondary); }
-.cluster-wizard .wizard-step.current { background: var(--rs-brand-soft); box-shadow: inset 3px 0 var(--rs-brand); }
-.cluster-wizard .cost-summary { display: grid; gap: 16px; }
+.cluster-wizard .wizard-step { width: auto; align-items: center; }
+.cluster-wizard .wizard-step-copy { display: contents; }
+.cluster-wizard .wizard-step-copy strong { font-weight: inherit; }
+.cluster-wizard .wizard-step-copy small { display: none; }
+.cluster-wizard .wizard-main { grid-area: main; min-width: 0; }
+.cluster-wizard .cost-summary { display: contents; }
+.cluster-wizard .cost-summary > :first-child { grid-area: summary; align-self: start; position: sticky; top: var(--rs-s5); }
+.cluster-wizard .cost-summary > .cost-panel { grid-area: cost; align-self: start; position: sticky; top: var(--rs-s5); max-height: calc(100dvh - 40px); overflow: auto; }
 .cluster-wizard .cost-panel .panel-body { text-align: left; }
+.cluster-wizard .cost-range { display: none; }
+.cluster-wizard .cost-summary > :first-child,
+.cluster-wizard .cost-summary > .cost-panel { min-width: 0; overflow-wrap: anywhere; }
+.cluster-wizard .cluster-resource-chain strong { overflow-wrap: anywhere; }
 .cluster-resource-chain { display: grid; gap: 8px; }
 .cluster-resource-chain > div { border: 1px solid var(--rs-border); border-radius: var(--rs-radius-md); padding: 10px 12px; background: var(--rs-surface); }
 .cluster-resource-chain strong { display: block; font-size: var(--rs-fs-sm); }
@@ -2325,8 +2334,18 @@ a:focus-visible {
 .cluster-subnet-row > span { min-width: 0; overflow-wrap: anywhere; }
 .cluster-subnet-row > .field-error { grid-column: 2 / -1; color: var(--rs-danger); }
 .cluster-subnet-row small { display: block; color: var(--rs-text-secondary); overflow-wrap: anywhere; line-height: 1.4; }
-@media (max-width: 1400px) { .cluster-wizard { grid-template-columns: minmax(160px,190px) minmax(0,1fr); } .cluster-wizard .cost-summary { grid-column: 2; position: static; max-height: none; } }
-@media (max-width: 900px) { .cluster-wizard { grid-template-columns: 1fr; } .cluster-wizard .wizard-steps { grid-column: 1; flex-direction: row; overflow-x: auto; position: static; } .cluster-wizard .wizard-step { min-width: 150px; } .cluster-wizard .cost-summary { grid-column: 1; } .cluster-network-choice { grid-template-columns: 1fr; } .cluster-subnet-row { grid-template-columns: 20px minmax(0,1fr); } }
+@media (max-width: 1400px) {
+  .cluster-wizard { grid-template-columns: minmax(220px, .75fr) minmax(0, 1.4fr); grid-template-areas: "steps steps" "summary main" "cost cost"; }
+  .cluster-wizard .cost-summary > .cost-panel { position: static; max-height: none; overflow: visible; }
+}
+@media (max-width: 900px) {
+  .cluster-wizard { grid-template-columns: 1fr; grid-template-areas: "steps" "main" "summary" "cost"; }
+  .cluster-wizard .wizard-steps { grid-column: 1; flex-direction: row; overflow-x: auto; position: static; }
+  .cluster-wizard .wizard-step { min-width: max-content; }
+  .cluster-wizard .cost-summary > :first-child { position: static; }
+  .cluster-network-choice { grid-template-columns: 1fr; }
+  .cluster-subnet-row { grid-template-columns: 20px minmax(0,1fr); }
+}
 
 .cluster-storage-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 12px 0; }
 .cluster-storage-option { display: grid; gap: 6px; width: 100%; min-height: 90px; padding: 14px; text-align: left; border: 1px solid var(--rs-border); border-radius: var(--rs-r-md); background: var(--rs-bg); color: var(--rs-text); cursor: pointer; transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease; }

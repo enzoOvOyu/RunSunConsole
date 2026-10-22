@@ -1846,7 +1846,7 @@ export default {
   "error.INVALID_CLUSTER_VOLUME_BINDING": "块存储必须空闲且与项目、地域和所选可用区一致；PV/PVC 名称不可重复。",
   "error.INVALID_CLUSTER_PVC": "工作负载所选 PVC 不属于当前命名空间或集群。",
   "error.INVALID_LOCAL_PV_SIZE": "本地 PV 容量超出所选节点的 NVMe 容量。",
-  "wizard.clusterProject": "项目",
+  "wizard.clusterProject": "项目与区域",
   "wizard.clusterNetwork": "网络",
   "wizard.clusterStorage": "存储",
   "wizard.clusterNodes": "Worker 节点与 GPU",

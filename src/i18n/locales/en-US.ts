@@ -1939,7 +1939,7 @@ export default {
   "error.INVALID_CLUSTER_VOLUME_BINDING": "Block volumes must be unattached and match the project, region and selected zones; PV/PVC names must be unique.",
   "error.INVALID_CLUSTER_PVC": "The selected PVC is not in this cluster and namespace.",
   "error.INVALID_LOCAL_PV_SIZE": "Local PV capacity exceeds node NVMe capacity.",
-  "wizard.clusterProject": "Project",
+  "wizard.clusterProject": "Project & Region",
   "wizard.clusterNetwork": "Network",
   "wizard.clusterStorage": "Storage",
   "wizard.clusterNodes": "Worker nodes and GPUs",
