@@ -2339,3 +2339,14 @@ a:focus-visible {
 .cluster-storage-flow strong { padding: 7px 10px; border: 1px solid var(--rs-border); border-radius: var(--rs-r-sm); background: var(--rs-bg); font-size: var(--rs-fs-sm); }
 .cluster-storage-flow b { color: var(--rs-text-secondary); font-weight: 400; }
 @media (max-width: 720px) { .cluster-storage-options { grid-template-columns: 1fr; } }
+
+.cluster-managed-intro { margin: 0 0 14px; color: var(--rs-text-secondary); line-height: 1.5; }
+.cluster-managed-architecture { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 12px; align-items: stretch; }
+.cluster-managed-layer { display: grid; gap: 8px; align-content: start; min-width: 0; padding: 14px; border: 1px solid var(--rs-border); border-radius: var(--rs-radius-md); background: var(--rs-surface); }
+.cluster-managed-layer.platform { border-color: var(--rs-brand); background: var(--rs-brand-soft); }
+.cluster-managed-layer > small { color: var(--rs-text-secondary); line-height: 1.4; }
+.cluster-managed-layer > strong { font-size: var(--rs-fs-sm); }
+.cluster-managed-components { display: flex; flex-wrap: wrap; gap: 6px; }
+.cluster-managed-components span { padding: 4px 8px; border: 1px solid var(--rs-border); border-radius: var(--rs-r-sm); background: var(--rs-surface); font-size: var(--rs-fs-xs); }
+.cluster-managed-link { align-self: center; color: var(--rs-brand); font-weight: 700; }
+@media (max-width: 720px) { .cluster-managed-architecture { grid-template-columns: 1fr; } .cluster-managed-link { justify-self: center; } }

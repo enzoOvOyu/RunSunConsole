@@ -91,15 +91,40 @@ function validStep(values: WizardValues, step: number, lookups?: { network?: Dep
   return vgpuSchema.safeParse(spec).success;
 }
 
+function ManagedControlPlane({ spec }: { spec: VgpuSpec }) {
+  const general = spec.nodePools.filter((pool) => pool.role === "general").length;
+  const gpu = spec.nodePools.filter((pool) => pool.role !== "general").length;
+  return <Panel title={t("eks.managedControlPlaneTitle")}>
+    <p className="cluster-managed-intro">{t("eks.managedControlPlaneIntro")}</p>
+    <div className="cluster-managed-architecture">
+      <div className="cluster-managed-layer platform">
+        <small>{t("eks.platformManaged")}</small>
+        <strong>{t("eks.managedControlPlane")}</strong>
+        <div className="cluster-managed-components"><span>API Server</span><span>etcd</span><span>Scheduler</span><span>Controller Manager</span></div>
+        <small>{t("eks.managedTierSummary", { tier: spec.controlPlaneTier.toUpperCase(), version: spec.k8sVersion })}</small>
+      </div>
+      <span className="cluster-managed-link" aria-hidden="true">↕</span>
+      <div className="cluster-managed-layer">
+        <small>{t("eks.customerManaged")}</small>
+        <strong>{t("eks.workerNodeGroups")}</strong>
+        <div className="cluster-managed-components"><span>{t("eks.generalWorkers", { count: general })}</span><span>{t("eks.gpuWorkers", { count: gpu })}</span></div>
+        <small>{t("eks.workerConfigLater")}</small>
+      </div>
+    </div>
+  </Panel>;
+}
+
 function ClusterBasics() {
   const { spec } = useSpec<VgpuSpec>();
   return <div className="stack">
+    <ManagedControlPlane spec={spec} />
     <p>{t("eks.projectStepIntro")}</p>
     <div className="form-grid">
       <SpecText name="description" label={t("common.description")} />
       <DeploymentOptionSelect name="k8sVersion" label={t("resource.k8s")} />
-      <SpecSelect name="controlPlaneTier" label={t("wizard.controlPlane")} options={["standard", "ha"]} />
+      <SpecSelect name="controlPlaneTier" label={t("eks.managedServiceTier")} options={["standard", "ha"]} />
     </div>
+    <small>{t("eks.managedTierHint")}</small>
     <Panel title={t("eks.apiAccess")}>
       <SpecCheck name="apiServerPublic" label={t("wizard.apiPublic")} />
       {spec.apiServerPublic && <SpecText name="authorizedCidr" label={t("wizard.cidr")} />}
@@ -178,6 +203,12 @@ function ClusterNetwork() {
   if (options.error) return <ErrorState error={options.error} />;
   return <div className="stack">
     <p>{t("eks.networkStepIntro")}</p>
+    <Panel title={t("eks.endpointNetworkPolicy")}>
+      <KeyValues items={[[t("eks.endpointAccess"), t(spec.apiServerPublic ? "eks.publicAndPrivateEndpoint" : "eks.privateEndpoint")],
+        [t("eks.authorizedNetworks"), spec.apiServerPublic ? spec.authorizedCidr : t("eks.selectedVpcNetwork")],
+        [t("eks.controlPlaneNetwork"), spec.controlPlaneTier === "ha" ? t("eks.haZoneRequirement") : t("eks.standardZoneRequirement")]]} />
+      <small>{t("eks.endpointWorkerCommunication")}</small>
+    </Panel>
     <Panel title={t("eks.vpcConfig")} action={<Button onClick={() => { setNewName(""); const cidr = nextVpcCidr(); setNewCidr(cidr); setNewSubnets(plannedSubnets(cidr, region)); setPlanError(""); setCreateOpen(true); }}>{t("network.createVpc")}</Button>}>
       <Field label={t("eks.existingVpc")}><select value={selected?.id || ""} onChange={(event) => {
         const next = vpcs.find((vpc) => vpc.id === event.target.value);
@@ -313,7 +344,7 @@ function ClusterNodes({ pools, images }: FormContext) {
     const nodePools = spec.nodePools.map((pool, i) => i === index ? { ...pool, ...patch } : pool);
     update({ nodePools, gpuCount: nodePools.reduce((sum, pool) => sum + pool.nodeCount * pool.gpuPerNode, 0) });
   };
-  return <div className="stack"><p>{t("eks.nodeStepIntro")}</p>
+  return <div className="stack"><p>{t("eks.nodeStepIntro")}</p><div className="notice">{t("eks.workerOnlyNotice")}</div>
     {spec.nodePools.map((pool, index) => {
       const hardware = pools.find((item) => item.code === pool.poolCode);
       return <Panel key={index} title={`${t("cluster.nodePool")} ${index + 1} · ${poolName(pool, index)}`} action={spec.nodePools.length > 1 ? <Button onClick={() => update({ nodePools: spec.nodePools.filter((_, i) => i !== index) })}>{t("wizard.removePool")}</Button> : undefined}>
@@ -411,10 +442,14 @@ function ClusterConfirm({ context }: { context: FormContext }) {
   const vpc = useData<DeploymentOptions>(["cluster-network-options", values.region, values.projectId], EP.options + query({ region: values.region, project_id: values.projectId, kind: "vgpu" }));
   const selected = vpc.data?.vpcs.find((item) => item.id === spec.vpc);
   return <div className="stack"><p>{t("eks.confirmStepIntro")}</p>
+    <ManagedControlPlane spec={spec} />
     <Panel title={t("eks.resourceSummary")}><KeyValues items={[
       [t("common.project"), context.projects.find((project) => project.id === values.projectId)?.name || values.projectId],
       [t("common.region"), t(`common.${values.region}`)], [t("common.name"), values.name],
-      [t("resource.k8s"), spec.k8sVersion], [t("wizard.controlPlane"), spec.controlPlaneTier],
+      [t("resource.k8s"), spec.k8sVersion], [t("eks.managementMode"), t("eks.platformManaged")],
+      [t("eks.managedServiceTier"), spec.controlPlaneTier.toUpperCase()],
+      [t("eks.endpointAccess"), t(spec.apiServerPublic ? "eks.publicAndPrivateEndpoint" : "eks.privateEndpoint")],
+      [t("eks.authorizedNetworks"), spec.apiServerPublic ? spec.authorizedCidr : t("eks.selectedVpcNetwork")],
       ["VPC", `${selected?.name || spec.vpc} · ${selected?.cidr || ""}`],
       [t("eks.subnetConfig"), selected?.subnets.filter((item) => selectedSubnets(spec).includes(item.id)).map((item) => `${item.name} (${item.zone}, ${item.cidr})`).join(" / ") || spec.subnets?.join(" / ") || "—"],
       ["CNI", spec.networkPlugin], ["Pod / Service CIDR", `${spec.podCidr} / ${spec.serviceCidr}`],
@@ -442,9 +477,9 @@ function ClusterAside() {
     <div className="cluster-chain-arrow">↓</div>
     <div><strong>{t("eks.subnetConfig")}</strong><small>{subnetNames.length ? subnetNames.join(" / ") : t("network.select")}</small></div>
     <div className="cluster-chain-arrow">↓</div>
-    <div><strong>Kubernetes · {spec.k8sVersion}</strong><small>CNI {spec.networkPlugin} · {spec.controlPlaneTier}</small></div>
+    <div><strong>{t("eks.managedControlPlane")} · Kubernetes {spec.k8sVersion}</strong><small>{t("eks.platformManaged")} · {spec.controlPlaneTier.toUpperCase()}</small></div>
     <div className="cluster-chain-arrow">↓</div>
-    <div><strong>{t("cluster.nodePool")} / Pod</strong><small>{t("eks.poolCount", { pools: spec.nodePools.length, nodes: spec.nodePools.reduce((sum, pool) => sum + pool.nodeCount, 0), gpus: gpuCount })}</small></div>
+    <div><strong>{t("eks.workerNodeGroups")} / Pod</strong><small>{t("eks.poolCount", { pools: spec.nodePools.length, nodes: spec.nodePools.reduce((sum, pool) => sum + pool.nodeCount, 0), gpus: gpuCount })}</small></div>
     <div className="cluster-chain-arrow">↓</div>
     <div><strong>{t("eks.storageRelationship")}</strong><small>{t(`eks.storageMode.${spec.storageMode || "dynamic_block"}`)} · {spec.storageMode === "local_nvme" ? spec.localPvGb : spec.defaultPvcGb} GB · {spec.storageMode === "shared_file" ? 1 : spec.nodePools.reduce((n, pool) => n + pool.nodeCount, 0)} PV</small></div>
   </div></Panel>;

@@ -28,6 +28,10 @@ export function VgpuDetail({ resource: r }: { resource: ResourceOf<"vgpu"> }) {
     { poll: tab === "overview" },
   );
   const topology = import.meta.env.VITE_FEATURE_TOPOLOGY !== "false";
+  const controlComponents = cluster.data?.components || [];
+  const controlHealth = r.status === "running" && controlComponents.length > 0 && controlComponents.every((part) => part.ready === part.desired)
+    ? t("eks.controlPlaneHealthy") : r.status === "running" ? t("eks.controlPlaneInitializing") : t("eks.controlPlaneUnavailable");
+  const endpoint = `https://${r.displayId}.${r.region}.runsun.cloud`;
   return (
     <>
       <Tabs
@@ -61,7 +65,10 @@ export function VgpuDetail({ resource: r }: { resource: ResourceOf<"vgpu"> }) {
               [t("eks.created"), new Date(r.createdAt).toLocaleString()],
               ["VPC / Subnet", `${r.spec.vpc} / ${r.spec.subnet}`],
               ["Pod / Service CIDR", `${r.spec.podCidr || "172.20.0.0/16"} / ${r.spec.serviceCidr || "172.21.0.0/16"}`],
-              [t("wizard.controlPlane"), r.spec.controlPlaneTier],
+              [t("eks.managementMode"), t("eks.platformManaged")],
+              [t("eks.managedServiceTier"), r.spec.controlPlaneTier.toUpperCase()],
+              [t("eks.endpointAccess"), t(r.spec.apiServerPublic ? "eks.publicAndPrivateEndpoint" : "eks.privateEndpoint")],
+              [t("eks.controlPlaneHealth"), controlHealth],
               [
                 t("resource.nodeCount"),
                 r.spec.nodePools.reduce((a, p) => a + p.nodeCount, 0),
@@ -77,9 +84,10 @@ export function VgpuDetail({ resource: r }: { resource: ResourceOf<"vgpu"> }) {
         </Panel>
       ) : tab === "controlPlane" ? (
         <div className="stack">
+          <Panel title={t("eks.managedControlPlaneTitle")}><KeyValues items={[[t("eks.managementMode"), t("eks.platformManaged")], [t("resource.k8s"), r.spec.k8sVersion], [t("eks.managedServiceTier"), r.spec.controlPlaneTier.toUpperCase()], [t("eks.controlPlaneHealth"), controlHealth]]} /><small>{t("eks.managedControlPlaneIntro")}</small></Panel>
           <ControlPlanePanel resource={r} />
           <Panel title={t("eks.clusterPermissionsTitle")}><KeyValues items={[[t("eks.initialAuthorization"), t(r.spec.rbacDefaultAdmin ? "eks.projectAdminGranted" : "eks.projectReadOnly")]]} /></Panel>
-          <Panel title={t("eks.connectionTitle")} action={<Kubeconfig resource={r} />}><KeyValues items={[["API Server", `https://${r.displayId}.${r.region}.runsun.cloud`], [t("eks.kubeconfigAccess"), t("eks.kubeconfigAfterCreate")]]} /><small>{t("eks.connectionMockHint")}</small></Panel>
+          <Panel title={t("eks.connectionTitle")} action={<Kubeconfig resource={r} />}><KeyValues items={[["API Server", endpoint], [t("eks.endpointAccess"), t(r.spec.apiServerPublic ? "eks.publicAndPrivateEndpoint" : "eks.privateEndpoint")], [t("eks.authorizedNetworks"), r.spec.apiServerPublic ? r.spec.authorizedCidr : t("eks.selectedVpcNetwork")], [t("eks.kubeconfigAccess"), t("eks.kubeconfigAfterCreate")]]} /><small>{t("eks.connectionMockHint")}</small></Panel>
         </div>
       ) : tab === "nodePools" ? (
         <NodePoolsPanel resource={r} />
