@@ -23,9 +23,9 @@ import {
   DataTable,
   KeyValues,
   Progress,
-  CopyButton,
   Empty,
   Loading,
+  Badge,
   ErrorState,
   Tabs,
   copy,
@@ -44,6 +44,9 @@ export default function StoragePage() {
   const [quotaGb, setQuotaGb] = useState(2000);
   const [bucketProject, setBucketProject] = useState(projectId);
   const [search, setSearch] = useUrlState("q");
+  const [projectFilter, setProjectFilter] = useState("");
+  const [classFilter, setClassFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const [prefix, setPrefix] = useState("");
   const [tab, setTab] = useState("objects");
   const [grid, setGrid] = useState(false);
@@ -81,11 +84,19 @@ export default function StoragePage() {
   const { run, busy } = useAction();
   const bucket = overview.data?.bucket;
   const projectName = (value?: string) =>
-    dt(
-      projects.data?.find((project) => project.id === value)?.name ||
-        value ||
-        "—",
-    );
+    dt(projects.data?.find((project) => project.id === value)?.name || value || "—");
+  const bucketRows = (q.data || []).filter((bucket) => {
+    const needle = search.trim().toLowerCase();
+    const searchable = [bucket.name, bucket.id, formatResourceId("obj", bucket.id), bucket.projectId || "", formatResourceId("prj", bucket.projectId || ""), projectName(bucket.projectId)].join(" ").toLowerCase();
+    return (!needle || searchable.includes(needle)) &&
+      (!projectFilter || bucket.projectId === projectFilter) &&
+      (!classFilter || (bucket.storageClass || "STANDARD") === classFilter) &&
+      (!statusFilter || bucket.status === statusFilter);
+  });
+  const actualBytes = bucketRows.reduce((sum, item) => sum + item.objects.reduce((bytes, object) => bytes + object.size, 0), 0);
+  const bucketLimitGb = bucketRows.reduce((sum, item) => sum + item.quotaGb, 0);
+  const objectCount = bucketRows.reduce((sum, item) => sum + item.objects.length, 0);
+  const filterActive = !!(search || projectFilter || classFilter || statusFilter);
   const upload = async (files: FileList | null) => {
     if (!files || !id) return;
     for (const file of Array.from(files)) {
@@ -139,71 +150,46 @@ export default function StoragePage() {
           </Button>
         }
       />
-      <div className="grid grid-3 resource-summary-grid">
-        <Panel
-          title={t("storage.bucketCount")}
-          className="resource-summary-card"
-        >
-          <div className="resource-summary-value">{q.data?.length ?? "—"}</div>
-          <small>{t("nav.object")}</small>
-        </Panel>
-        <Panel
-          title={t("storage.allocatedCapacity")}
-          className="resource-summary-card"
-        >
-          <div className="resource-summary-value">
-            {objectQuota?.usedGb.toLocaleString() || "—"}
-            <span className="resource-unit">GB</span>
-          </div>
-          <small>{t("storage.allocatedCapacity")}</small>
-        </Panel>
-        <Panel
-          title={t("storage.availableCapacity")}
-          className="resource-summary-card"
-        >
-          <div className="resource-summary-value">
-            {objectQuota
-              ? (objectQuota.limitGb - objectQuota.usedGb).toLocaleString()
-              : "—"}
-            <span className="resource-unit">GB</span>
-          </div>
-          {objectQuota && (
-            <div className="resource-summary-progress">
-              <Progress
-                value={(objectQuota.usedGb / objectQuota.limitGb) * 100}
-              />
-              <small>
-                {objectQuota.usedGb.toLocaleString()} /{" "}
-                {objectQuota.limitGb.toLocaleString()} GB
-              </small>
-            </div>
-          )}
-        </Panel>
+      <div className="grid grid-4 resource-summary-grid storage-object-summary">
+        <Panel title={t("storage.bucketCount")} className="resource-summary-card"><div className="resource-summary-value">{q.data ? bucketRows.length : "—"}</div><small>{t("nav.object")}</small></Panel>
+        <Panel title={t("storage.totalBucketLimits")} className="resource-summary-card"><div className="resource-summary-value">{q.data ? size(bucketLimitGb) : "—"}<span className="resource-unit">{t("storage.configuredLimit")}</span></div><small>{t("storage.bucketLimitIndependent")}</small></Panel>
+        <Panel title={t("storage.actualUsage")} className="resource-summary-card"><div className="resource-summary-value">{q.data ? size(actualBytes / 1e9) : "—"}</div><small>{t("storage.fromObjectRecords")}</small></Panel>
+        <Panel title={t("storage.objects")} className="resource-summary-card"><div className="resource-summary-value">{q.data ? objectCount : "—"}</div><small>{t("storage.objectCount")}</small></Panel>
       </div>
-      <div className="toolbar">
+      <Panel title={t("storage.regionalObjectQuota")} className="storage-regional-quota">
+        {objectQuota ? <><div className="between"><strong>{t("storage.regionalQuotaRemaining")}: {size(Math.max(0, objectQuota.limitGb - objectQuota.usedGb))}</strong><small>{t("storage.regionUsage", { used: objectQuota.usedGb.toLocaleString(), limit: objectQuota.limitGb.toLocaleString() })} GB</small></div><Progress value={objectQuota.limitGb > 0 ? objectQuota.usedGb / objectQuota.limitGb * 100 : 0} /></> : <small>—</small>}
+        <small>{t("storage.regionQuotaUsesActual")}</small>
+      </Panel>
+      <div className="toolbar storage-volume-filters">
         <RegionFilter />
-        <input
-          className="input search"
-          placeholder={t("common.search")}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+        <input className="input search" aria-label={t("common.search")} placeholder={t("common.search")} value={search} onChange={(event) => setSearch(event.target.value)} />
+        <select aria-label={t("common.project")} value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}>
+          <option value="">{t("common.allProjects")}</option>
+          {projects.data?.filter((project) => !project.deletedAt).map((project) => <option key={project.id} value={project.id}>{dt(project.name)} · {formatResourceId("prj", project.id)}</option>)}
+        </select>
+        <select aria-label={t("storage.tier")} value={classFilter} onChange={(event) => setClassFilter(event.target.value)}>
+          <option value="">{t("storage.allTiers")}</option><option value="STANDARD">STANDARD</option><option value="IA">IA</option>
+        </select>
+        <select aria-label={t("common.status")} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+          <option value="">{t("storage.allStatuses")}</option><option value="active">{t("common.active")}</option>
+        </select>
+        {filterActive && <Button onClick={() => { setSearch(""); setProjectFilter(""); setClassFilter(""); setStatusFilter(""); }}>{t("common.reset")}</Button>}
       </div>
       <div className="panel">
         {q.isPending ? (
           <Loading />
         ) : q.error ? (
           <ErrorState error={q.error} />
-        ) : (
+        ) : bucketRows.length ? (
           <DataTable
-            data={(q.data || []).filter((b) => b.name.includes(search))}
+            data={bucketRows}
             onRow={(b) => {
               setId(b.id);
               setPrefix("");
               setTab("objects");
             }}
             columns={[
-              { accessorKey: "name", header: t("common.name") },
+              { accessorKey: "name", header: t("common.name"), cell: ({ row }) => <div className="storage-resource-cell"><strong>{row.original.name}</strong><small className="resource-id">{formatResourceId("obj", row.original.id)}</small></div> },
               {
                 accessorKey: "region",
                 header: t("common.region"),
@@ -212,13 +198,14 @@ export default function StoragePage() {
               {
                 accessorKey: "projectId",
                 header: t("common.project"),
-                cell: ({ row }) => projectName(row.original.projectId),
+                cell: ({ row }) => <div className="storage-project-cell"><span>{projectName(row.original.projectId)}</span><small className="resource-id">{formatResourceId("prj", row.original.projectId || "")}</small></div>,
               },
               {
                 accessorKey: "storageClass",
                 header: t("storage.tier"),
                 cell: ({ row }) => row.original.storageClass || "STANDARD",
               },
+              { accessorKey: "quotaGb", header: t("storage.bucketLimit"), cell: ({ row }) => size(row.original.quotaGb) },
               {
                 id: "count",
                 header: t("storage.objects"),
@@ -228,9 +215,7 @@ export default function StoragePage() {
                 id: "capacity",
                 header: t("storage.capacity"),
                 cell: ({ row }) =>
-                  size(
-                    row.original.objects.reduce((a, o) => a + o.size, 0) / 1e9,
-                  ),
+                  row.original.objects.length ? size(row.original.objects.reduce((a, o) => a + o.size, 0) / 1e9) : size(0),
               },
               {
                 accessorKey: "createdAt",
@@ -238,13 +223,15 @@ export default function StoragePage() {
                 cell: ({ row }) => date(row.original.createdAt),
               },
               {
-                accessorKey: "access",
+                accessorKey: "status",
                 header: t("common.status"),
-                cell: ({ row }) => t("common." + row.original.access),
+                cell: ({ row }) => <Badge status={row.original.status} label={t("common.active")} />,
               },
+              { accessorKey: "access", header: t("storage.accessPolicy"), cell: ({ row }) => t("common." + row.original.access) },
+              { id: "operation", header: t("common.action"), cell: ({ row }) => <Button onClick={(event) => { event.stopPropagation(); setId(row.original.id); setPrefix(""); setTab("objects"); }}>{t("common.details")}</Button> },
             ]}
           />
-        )}
+        ) : <Empty text={t(filterActive ? "common.noResults" : "storage.noBuckets")} />}
       </div>
       <Modal
         drawer
@@ -268,8 +255,12 @@ export default function StoragePage() {
                   [t("common.name"), bucket.name],
                   [t("common.region"), t("common." + bucket.region)],
                   [t("storage.tier"), bucket.storageClass || "STANDARD"],
-                  [t("common.project"), projectName(bucket.projectId)],
-                  [t("common.status"), t("common." + bucket.access)],
+                  [t("storage.bucketLimit"), size(bucket.quotaGb)],
+                  [t("storage.actualUsage"), overview.data ? size(overview.data.usedGb) : t("storage.noUsageData")],
+                  [t("storage.objects"), overview.data?.objectCount ?? "—"],
+                  [t("common.project"), `${projectName(bucket.projectId)} · ${formatResourceId("prj", bucket.projectId || "")}`],
+                  [t("common.status"), t("common.active")],
+                  [t("storage.accessPolicy"), t("common." + bucket.access)],
                   [
                     t("storage.source"),
                     t(
@@ -283,23 +274,11 @@ export default function StoragePage() {
               />
             </Panel>
             <Panel title={t("storage.accessDetails")}>
-              <KeyValues
-                items={[
-                  [
-                    t("storage.endpoint"),
-                    `https://s3.${bucket.region}.runsun.cloud`,
-                  ],
-                  [
-                    t("storage.bucketUrl"),
-                    `https://s3.${bucket.region}.runsun.cloud/${bucket.name}`,
-                  ],
-                  [
-                    t("storage.attached"),
-                    bucket.references[0]?.name || t("storage.unattached"),
-                  ],
-                  [t("storage.lifecycle"), String(bucket.lifecycle.length)],
-                ]}
-              />
+              <KeyValues items={[
+                [t("storage.accessPolicy"), t("common." + bucket.access)],
+                [t("storage.attached"), bucket.references[0]?.name || t("storage.unattached")],
+                [t("storage.lifecycle"), String(bucket.lifecycle.length)],
+              ]} />
             </Panel>
             {bucket.references[0] && (
               <Link to={bucket.references[0].href}>
@@ -351,16 +330,7 @@ export default function StoragePage() {
                   value={(overview.data.usedGb / overview.data.quotaGb) * 100}
                 />
               </div>
-              <div className="row">
-                <code>s3.{bucket.region}.runsun.cloud</code>
-                <CopyButton
-                  value={`https://s3.${bucket.region}.runsun.cloud`}
-                />
-              </div>
-              <small>
-                {t("storage.requests")} ·{" "}
-                {overview.data.requests.map((r) => r.value).join(" / ")}
-              </small>
+              <small>{t("storage.bucketLimitHint")}</small>
             </Panel>
             <Tabs
               items={["objects", "lifecycle"].map((id) => ({
@@ -597,7 +567,7 @@ export default function StoragePage() {
                   ?.filter((project) => !project.deletedAt)
                   .map((project) => (
                     <option key={project.id} value={project.id}>
-                      {dt(project.name)}
+                      {dt(project.name)} · {formatResourceId("prj", project.id)}
                     </option>
                   ))}
               </select>
@@ -635,9 +605,7 @@ export default function StoragePage() {
               quotaGb < 100 ||
               quotaGb > 1048500 ||
               quotaGb % 100 !== 0 ||
-              !bucketProject ||
-              (!!objectQuota &&
-                quotaGb > objectQuota.limitGb - objectQuota.usedGb)
+              !bucketProject
             }
             onClick={async () => {
               const b = await run(

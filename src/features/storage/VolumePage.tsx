@@ -2,7 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { StorageProduct, StorageVolume } from "../../types/storage";
-import type { Kind, Project, Quota, Resource } from "../../types/domain";
+import type { DeploymentOptions, Kind, Project, Quota, Resource } from "../../types/domain";
 import { EP, post, query, remove } from "../../lib/api-client";
 import { formatResourceId, resourceLink } from "../../lib/ids";
 import { useRegion } from "../../stores/region";
@@ -27,6 +27,8 @@ import {
   ErrorState,
   Empty,
   Progress,
+  Badge,
+  CopyButton,
 } from "../../components/ui";
 
 type VolumeRow = StorageVolume & {
@@ -82,6 +84,11 @@ export default function VolumePage() {
         size: 1000,
       }),
   );
+  const networkOptions = useData<DeploymentOptions>(
+    ["storage-network-options", region, detail.data?.projectId || projectId],
+    EP.options + query({ region, project_id: detail.data?.projectId || projectId, kind: "gpu_vm" }),
+    { enabled: kind === "block" && !!id },
+  );
   const quotas = useData<Quota[]>(
     ["storage-quotas", region],
     EP.quotas + query({ region }),
@@ -104,7 +111,7 @@ export default function VolumePage() {
       availableProjects[0]?.id || "";
   const projectName = (value: string) =>
     dt(projects.data?.find((project) => project.id === value)?.name || value);
-  const kindRows = (list.data || []).filter((volume) => volume.kind === kind);
+  const kindRows = (list.data || []).filter((volume) => volume.kind === kind && volume.inventoryScope !== "regional_pool");
   const rows = kindRows.filter((volume) => {
     const needle = search.trim().toLowerCase();
     const searchable = [
@@ -121,14 +128,23 @@ export default function VolumePage() {
   });
   const filterActive = !!(search || projectFilter || tierFilter || statusFilter || zoneFilter);
   const v = detail.data;
+  const targetZone = (resource: Resource) => networkOptions.data?.vpcs
+    .flatMap((vpc) => vpc.subnets)
+    .find((subnet) => subnet.id === resource.spec.subnet)?.zone;
   const attachable = (resources.data?.items || []).filter(
     (resource) =>
       resource.projectId === v?.projectId &&
       resource.region === v?.region &&
+      resource.status === "running" &&
       (kind === "block"
-        ? resource.kind === "gpu_vm"
+        ? resource.kind === "gpu_vm" && targetZone(resource) === (v?.zone || `${v?.region}-a`)
         : ["gpu_vm", "inference", "vgpu"].includes(resource.kind)),
   );
+  const linkedResource = v?.resourceUuid ? resources.data?.items.find((resource) => resource.resourceUuid === v.resourceUuid) : undefined;
+  const clusterBinding = linkedResource?.kind === "vgpu" ? linkedResource.spec.volumeBindings?.find((binding) => binding.volumeId === v?.id) : undefined;
+  const linkedWorkloads = linkedResource?.kind === "vgpu" && clusterBinding
+    ? linkedResource.spec.workloads?.filter((workload) => workload.namespace === clusterBinding.namespace && workload.pvcName === clusterBinding.pvcName) || []
+    : [];
   const targetIsCluster = attachable.some((resource) => resource.resourceUuid === targetResource && resource.kind === "vgpu");
   const openCreate = () => {
     setProjectId(selectedProjectId);
@@ -157,21 +173,21 @@ export default function VolumePage() {
       />
       <div className="grid grid-3 resource-summary-grid">
         <Panel
-          title={t("storage.volumeList")}
+          title={t("storage.volumeCount")}
           className="resource-summary-card"
         >
-          <div className="resource-summary-value">{kindRows.length}</div>
-          <small>{t("storage.kind." + kind)}</small>
+          <div className="resource-summary-value">{rows.length}</div>
+          <small>{t("storage.filteredResources")}</small>
         </Panel>
         <Panel
-          title={t("storage.allocatedCapacity")}
+          title={t("storage.configuredCapacity")}
           className="resource-summary-card"
         >
           <div className="resource-summary-value">
-            {capacity?.usedGb.toLocaleString() || "—"}
+            {rows.reduce((sum, volume) => sum + volume.sizeGb, 0).toLocaleString()}
             <span className="resource-unit">GB</span>
           </div>
-          <small>{t("storage.allocatedCapacity")}</small>
+          <small>{t("storage.configuredCapacity")}</small>
         </Panel>
         <Panel
           title={t("storage.availableCapacity")}
@@ -179,7 +195,7 @@ export default function VolumePage() {
         >
           <div className="resource-summary-value">
             {capacity
-              ? (capacity.limitGb - capacity.usedGb).toLocaleString()
+              ? Math.max(0, capacity.limitGb - capacity.usedGb).toLocaleString()
               : "—"}
             <span className="resource-unit">GB</span>
           </div>
@@ -187,8 +203,7 @@ export default function VolumePage() {
             <div className="resource-summary-progress">
               <Progress value={(capacity.usedGb / capacity.limitGb) * 100} />
               <small>
-                {capacity.usedGb.toLocaleString()} /{" "}
-                {capacity.limitGb.toLocaleString()} GB
+                {t("storage.regionUsage", { used: capacity.usedGb.toLocaleString(), limit: capacity.limitGb.toLocaleString() })} GB
               </small>
             </div>
           )}
@@ -232,35 +247,22 @@ export default function VolumePage() {
             data={rows}
             onRow={(row) => setId(row.id)}
             columns={[
-              { accessorKey: "name", header: t("common.name") },
-              { accessorKey: "tier", header: t("storage.tier") },
-              ...(kind === "block" ? [{ accessorKey: "zone", header: t("eks.availableZones"), cell: ({ row }: { row: { original: VolumeRow } }) => row.original.zone || `${row.original.region}-a` }] : []),
-              {
-                accessorKey: "sizeGb",
-                header: t("storage.sizeGb"),
-                cell: ({ row }) => `${row.original.sizeGb.toLocaleString()} GB`,
-              },
-              {
-                accessorKey: "region",
-                header: t("common.region"),
-                cell: ({ row }) => t(`common.${row.original.region}`),
-              },
-              {
-                accessorKey: "projectId",
-                header: t("common.project"),
-                cell: ({ row }) => <div className="storage-project-cell"><span>{projectName(row.original.projectId)}</span><small className="resource-id">{formatResourceId("prj", row.original.projectId)}</small></div>,
-              },
-              {
-                accessorKey: "resourceName",
-                header: t("storage.attached"),
-                cell: ({ row }) =>
-                  row.original.resourceName || t("storage.unattached"),
-              },
-              {
-                accessorKey: "createdAt",
-                header: t("common.createdAt"),
-                cell: ({ row }) => date(row.original.createdAt),
-              },
+              { accessorKey: "name", header: t("common.name"), cell: ({ row }) => <div className="storage-resource-cell"><strong>{row.original.name}</strong><small className="resource-id">{formatResourceId(kind === "block" ? "blk" : "fil", row.original.id)}</small></div> },
+              { accessorKey: "sizeGb", header: t(kind === "file" ? "storage.capacityOrQuota" : "storage.sizeGb"), cell: ({ row }) => `${row.original.sizeGb.toLocaleString()} GB` },
+              { accessorKey: "tier", header: t(kind === "block" ? "storage.performanceProfile" : "storage.tier"), cell: ({ row }) => <div className="storage-profile-cell"><strong>{t(`storage.profile.${row.original.tier}`)}</strong><small>{row.original.tier}</small></div> },
+              ...(kind === "block" ? [
+                { accessorKey: "zone", header: t("eks.availableZones"), cell: ({ row }: { row: { original: VolumeRow } }) => row.original.zone || `${row.original.region}-a` },
+              ] : [
+                { accessorKey: "protocol", header: t("network.protocol"), cell: () => t("storage.protocolNotModeled") },
+                { accessorKey: "region", header: t("common.region"), cell: ({ row }: { row: { original: VolumeRow } }) => t(`common.${row.original.region}`) },
+                { id: "mountPoints", header: t("storage.mountPoints"), cell: ({ row }: { row: { original: VolumeRow } }) => row.original.resourceUuid ? "1" : "0" },
+              ]),
+              { accessorKey: "status", header: t("common.status"), cell: ({ row }) => <Badge status={row.original.resourceUuid ? "in_use" : "available"} label={t(row.original.resourceUuid ? "storage.inUse" : "storage.available")} /> },
+              { accessorKey: "resourceName", header: t("storage.attached"), cell: ({ row }) => row.original.resourceName || t("storage.unattached") },
+              ...(kind === "file" ? [{ accessorKey: "mountPath", header: t("storage.mountPath"), cell: ({ row }: { row: { original: VolumeRow } }) => row.original.mountPath || t("storage.notMounted") }] : []),
+              { accessorKey: "projectId", header: t("common.project"), cell: ({ row }) => <div className="storage-project-cell"><span>{projectName(row.original.projectId)}</span><small className="resource-id">{formatResourceId("prj", row.original.projectId)}</small></div> },
+              { accessorKey: "createdAt", header: t("common.createdAt"), cell: ({ row }) => date(row.original.createdAt) },
+              { id: "operation", header: t("common.action"), cell: ({ row }) => <Button onClick={(event) => { event.stopPropagation(); setId(row.original.id); }}>{t("common.details")}</Button> },
             ]}
           />
         ) : (
@@ -317,8 +319,11 @@ export default function VolumePage() {
                     v.mountPath || t("storage.notMounted"),
                   ],
                   [t("storage.role"), t(`storage.role.${v.role}`)],
+                  ...(kind === "file" ? [[t("network.protocol"), t("storage.protocolNotModeled")] as [string, string]] : []),
+                  ...(kind === "block" ? [[t("eks.availableZones"), v.zone || `${v.region}-a`] as [string, string]] : []),
                 ]}
               />
+              {kind === "file" && v.mountPath && <div className="row"><code>{v.mountPath}</code><CopyButton value={v.mountPath} /></div>}
               {v.resourceUuid && v.resourceKind && (
                 <Link
                   to={resourceLink({
@@ -331,6 +336,7 @@ export default function VolumePage() {
                 </Link>
               )}
             </Panel>
+            {kind === "file" && linkedResource?.kind === "vgpu" && <Panel title={t("storage.workloadAssociations")}><KeyValues items={[[t("resource.k8s"), `${linkedResource.name} · ${linkedResource.displayId}`], [t("storage.pvc"), clusterBinding?.pvcName || t("storage.noPvcBinding")], [t("storage.workload"), linkedWorkloads.map((workload) => `${workload.name} (${workload.namespace})`).join(", ") || t("storage.noWorkloadConsumer")]]} /></Panel>}
             {v.role === "custom" && !v.resourceUuid && (
               <Panel title={t("storage.useVolume")}>
                 <div className="stack">
@@ -342,6 +348,7 @@ export default function VolumePage() {
                       }
                     >
                       <option value="">{t("storage.selectTarget")}</option>
+                      {!attachable.length && <option value="" disabled>{t(kind === "block" ? "storage.noCompatibleVmZone" : "storage.noAttachableResource")}</option>}
                       {attachable.map((resource) => (
                         <option
                           key={resource.resourceUuid}

@@ -35,4 +35,5 @@ export interface StorageVolume {
   mountPath: string;
   createdAt: string;
   deletedAt: string | null;
+  inventoryScope?: "tenant" | "regional_pool";
 }

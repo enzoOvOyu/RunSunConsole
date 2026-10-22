@@ -117,20 +117,12 @@ it("creates multiple volumes and an attached bucket with one deployment order", 
   const after = (await request("/quotas?region=jp")).data.find(
     (quota: { metric: string }) => quota.metric === "storage",
   );
-  expect(after.usedValue - before.usedValue).toBe(1000);
+  expect(after.usedValue - before.usedValue).toBe(500);
   expect(after.storageBreakdown).toEqual(
     before.storageBreakdown.map(
       (item: { kind: string; usedGb: number; limitGb: number }) => ({
         ...item,
-        usedGb:
-          item.usedGb +
-          (item.kind === "block"
-            ? 300
-            : item.kind === "file"
-              ? 200
-              : item.kind === "object"
-                ? 500
-                : 0),
+        usedGb: item.usedGb + (item.kind === "block" ? 300 : item.kind === "file" ? 200 : 0),
       }),
     ),
   );
@@ -195,7 +187,7 @@ it("creates and deletes standalone block and file volumes with regional quota up
   expect(blocked.status).toBe(409);
 });
 
-it("rejects invalid standalone storage sizes and object capacity above the regional quota", async () => {
+it("validates volume specs and keeps bucket ceilings separate from regional actual usage", async () => {
   const invalid = await request("/storage/volumes", "POST", {
     name: "invalid-size",
     kind: "block",
@@ -212,10 +204,12 @@ it("rejects invalid standalone storage sizes and object capacity above the regio
     storageClass: "STANDARD",
     quotaGb: 100000,
   });
-  expect(object.status).toBe(409);
+  expect(object.status).toBe(201);
+  const objectQuota = (await request("/quotas?region=jp")).data.find((quota: { metric: string }) => quota.metric === "storage").storageBreakdown.find((item: { kind: string }) => item.kind === "object");
+  expect(objectQuota.usedGb).toBeLessThan(100);
 });
 
-it("creates an object bucket, manages lifecycle rules, and releases quota on deletion", async () => {
+it("creates object buckets without reserving regional quota and meters actual object bytes", async () => {
   const before = (await request("/quotas?region=jp")).data.find(
     (quota: { metric: string }) => quota.metric === "storage",
   );
@@ -245,7 +239,19 @@ it("creates an object bucket, manages lifecycle rules, and releases quota on del
   const afterCreate = (await request("/quotas?region=jp")).data.find(
     (quota: { metric: string }) => quota.metric === "storage",
   );
-  expect(afterCreate.usedValue).toBe(before.usedValue + 1000);
+  expect(afterCreate.usedValue).toBe(before.usedValue);
+  const beforeUpload = afterCreate.storageBreakdown.find((item: { kind: string }) => item.kind === "object").usedGb;
+  const uploaded = await request(`/buckets/${created.data.id}/objects`, "POST", {
+    key: "usage-check.txt", size: 1_000_000, contentType: "text/plain", content: "data:text/plain;base64,eA==",
+  });
+  expect(uploaded.status).toBe(201);
+  const afterUpload = (await request("/quotas?region=jp")).data.find((quota: { metric: string }) => quota.metric === "storage");
+  expect(afterUpload.storageBreakdown.find((item: { kind: string }) => item.kind === "object").usedGb).toBeCloseTo(beforeUpload + 0.001);
+  const removedObject = await fetch(`http://localhost/api/buckets/${created.data.id}/objects?key=usage-check.txt`, {
+    method: "DELETE",
+    headers: { "X-Role": "owner" },
+  });
+  expect(removedObject.status).toBe(204);
   const deleted = await fetch(
     `http://localhost/api/buckets/${created.data.id}`,
     {
@@ -294,32 +300,19 @@ it("applies due object lifecycle rules to matching objects", async () => {
   );
 });
 
-it("removes seeded storage from quota when its backing record is deleted", async () => {
+it("keeps regional storage allocation baselines out of tenant volume APIs", async () => {
   const volume = db.volumes.find(
     (item) => item.id.includes("-allocated-") && item.region === "jp",
   )!;
   const before = (await request("/quotas?region=jp")).data.find(
     (quota: { metric: string }) => quota.metric === "storage",
   );
-  const response = await fetch(
-    `http://localhost/api/storage/volumes/${volume.id}`,
-    {
-      method: "DELETE",
-      headers: { "X-Role": "owner" },
-    },
-  );
-  expect(response.status).toBe(204);
+  const listed = await request("/storage/volumes?region=jp");
+  expect(listed.data.some((item: { id: string }) => item.id === volume.id)).toBe(false);
+  const detail = await request(`/storage/volumes/${volume.id}`);
+  expect(detail.status).toBe(404);
   const after = (await request("/quotas?region=jp")).data.find(
     (quota: { metric: string }) => quota.metric === "storage",
   );
-  expect(after.usedValue).toBe(before.usedValue - volume.sizeGb);
-  expect(
-    after.storageBreakdown.find(
-      (item: { kind: string }) => item.kind === volume.kind,
-    ).usedGb,
-  ).toBe(
-    before.storageBreakdown.find(
-      (item: { kind: string }) => item.kind === volume.kind,
-    ).usedGb - volume.sizeGb,
-  );
+  expect(after.usedValue).toBe(before.usedValue);
 });

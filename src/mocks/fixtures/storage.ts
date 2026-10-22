@@ -101,7 +101,7 @@ export function volumesForResource(resource: Resource): StorageVolume[] {
   return volumes;
 }
 
-// Existing tenant allocations are represented by individual volumes, not quota baselines.
+// Regional quota reservations are not tenant-owned volumes.
 const allocatedStorageGb = {
   jp: { block: 360_000, file: 280_000 },
   sg: { block: 180_000, file: 140_000 },
@@ -145,6 +145,7 @@ export function seedStandaloneVolumes(resources: Resource[]): StorageVolume[] {
           mountPath: "",
           createdAt: resources[0].createdAt,
           deletedAt: null,
+          inventoryScope: "regional_pool",
         });
         remaining -= sizeGb;
       }

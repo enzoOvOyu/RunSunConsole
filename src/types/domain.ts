@@ -446,6 +446,7 @@ export interface Bucket {
   storageClass?: "STANDARD" | "IA";
   attachedResourceUuid?: ResourceUuid | null;
   access: "private" | "public_read";
+  status: "active";
   quotaGb: number;
   createdAt: string;
   objects: StorageObject[];

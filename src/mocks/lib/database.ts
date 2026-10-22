@@ -503,10 +503,13 @@ export function restoreDatabase() {
           ),
         ];
       data.volumes ??= seedStorageVolumes(data.resources);
+      for (const volume of data.volumes)
+        if (volume.id.includes("-allocated-")) volume.inventoryScope = "regional_pool";
       for (const bucket of data.buckets) {
         bucket.projectId ??= "default";
         bucket.storageClass ??= "STANDARD";
         bucket.attachedResourceUuid ??= null;
+        bucket.status ??= "active";
       }
       if (!data.storageAllocationMigrationVersion) {
         const existingIds = new Set(data.volumes.map((volume) => volume.id));

@@ -151,6 +151,7 @@ export const BUCKETS: Bucket[] = ["jp", "jp", "sg", "us"].map((region, i) => ({
   name: i === 1 ? "runsun-jp-legacy-artifacts" : `runsun-${region}-artifacts`,
   region: region as Bucket["region"],
   access: "private",
+  status: "active",
   projectId: "default",
   storageClass: "STANDARD",
   attachedResourceUuid: null,

@@ -82,7 +82,7 @@ it("shares one quota snapshot between overview and regional quota pages", async 
     db.volumes
       .filter((volume) => !volume.deletedAt)
       .reduce((sum, volume) => sum + volume.sizeGb, 0) +
-      db.buckets.reduce((sum, bucket) => sum + bucket.quotaGb, 0),
+      db.buckets.reduce((sum, bucket) => sum + bucket.objects.reduce((bytes, object) => bytes + object.size, 0) / 1e9, 0),
   );
   expect(
     storage.every(
@@ -168,7 +168,7 @@ it("computes host RAM from VM, physical machine, node pool and replica allocatio
     db.volumes
       .filter((volume) => !volume.deletedAt)
       .reduce((sum, volume) => sum + volume.sizeGb, 0) +
-      db.buckets.reduce((sum, bucket) => sum + bucket.quotaGb, 0),
+      db.buckets.reduce((sum, bucket) => sum + bucket.objects.reduce((bytes, object) => bytes + object.size, 0) / 1e9, 0),
   );
   for (const r of db.resources) {
     if (r.kind === "gpu_baremetal")

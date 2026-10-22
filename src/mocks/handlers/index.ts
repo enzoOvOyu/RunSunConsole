@@ -131,7 +131,7 @@ function storageQuotaBreakdown(region: Region, exclude?: string) {
                 bucket.region === region &&
                 (!exclude || bucket.attachedResourceUuid !== exclude),
             )
-            .reduce((total, bucket) => total + bucket.quotaGb, 0)
+            .reduce((total, bucket) => total + bucket.objects.reduce((bytes, object) => bytes + object.size, 0) / 1e9, 0)
         : db.volumes
             .filter(
               (volume) =>
@@ -1652,6 +1652,7 @@ async function dispatch(request: Request, settleBilling = true) {
           .filter(
             (volume) =>
               !volume.deletedAt &&
+              volume.inventoryScope !== "regional_pool" &&
               (!region || volume.region === region) &&
               (!qs.get("project_id") ||
                 volume.projectId === qs.get("project_id")),
@@ -1740,6 +1741,7 @@ async function dispatch(request: Request, settleBilling = true) {
       db.volumes.find(
         (item) => item.id === volumeActionMatch[1] && !item.deletedAt,
       ) || fail(404, "NOT_FOUND");
+    if (volume.inventoryScope === "regional_pool") fail(404, "NOT_FOUND");
     const action = volumeActionMatch[2];
     const attachedCluster = db.resources.find((item) => item.resourceUuid === volume.resourceUuid && item.kind === "vgpu" && !item.deletedAt);
     const clusterBinding = attachedCluster?.kind === "vgpu" ? attachedCluster.spec.volumeBindings?.find((item) => item.volumeId === volume.id) : undefined;
@@ -1757,6 +1759,9 @@ async function dispatch(request: Request, settleBilling = true) {
         db.resources.find(
           (item) => item.resourceUuid === resourceUuid && !item.deletedAt,
         ) || fail(404, "NOT_FOUND");
+      if (target.status !== "running") fail(409, "INVALID_STATE");
+      const targetInterface = db.network.interfaces.find((item) => item.resourceUuid === target.resourceUuid && !item.releasedAt);
+      const targetSubnet = db.network.subnets.find((item) => item.id === (targetInterface?.subnetId || ("subnet" in target.spec ? target.spec.subnet : "")));
       if (
         target.projectId !== volume.projectId ||
         target.region !== volume.region ||
@@ -1765,6 +1770,7 @@ async function dispatch(request: Request, settleBilling = true) {
           : !["gpu_vm", "inference", "vgpu"].includes(target.kind))
       )
         fail(422, "VALIDATION_ERROR");
+      if (volume.kind === "block" && targetSubnet?.zone !== (volume.zone || `${volume.region}-a`)) fail(422, "INVALID_ZONE");
       if (target.kind === "vgpu" && volume.kind === "file") {
         const bindings = target.spec.volumeBindings || [];
         const index = Array.from({ length: 8 }, (_, i) => i + 1).find((number) => !bindings.some((binding) => binding.pvName === `file-pv-${number}`));
@@ -1811,6 +1817,7 @@ async function dispatch(request: Request, settleBilling = true) {
     const volume =
       db.volumes.find((v) => v.id === volumeMatch[1] && !v.deletedAt) ||
       fail(404, "NOT_FOUND");
+    if (volume.inventoryScope === "regional_pool") fail(404, "NOT_FOUND");
     if (method === "DELETE") {
       if (volume.resourceUuid || volume.role !== "custom")
         fail(409, "HAS_DEPENDENCIES");
@@ -2707,6 +2714,7 @@ async function dispatch(request: Request, settleBilling = true) {
         storageClass: row.tier === "oss_ia" ? "IA" : "STANDARD",
         attachedResourceUuid: r.resourceUuid,
         access: "private",
+        status: "active",
         quotaGb: row.sizeGb,
         createdAt: r.createdAt,
         objects: [],
@@ -3568,16 +3576,6 @@ async function dispatch(request: Request, settleBilling = true) {
         .min(100)
         .max(1048500)
         .parse(body.quotaGb);
-      const allocation = storageQuotaBreakdown(code).find(
-        (item) => item.kind === "object",
-      );
-      if (allocation && allocation.usedGb + quotaGb > allocation.limitGb)
-        fail(409, "QUOTA_EXCEEDED", {
-          metric: "storage",
-          limit: allocation.limitGb,
-          used: allocation.usedGb,
-          requested: quotaGb,
-        });
       const b = {
         id: crypto.randomUUID(),
         name,
@@ -3589,6 +3587,7 @@ async function dispatch(request: Request, settleBilling = true) {
           .parse(body.storageClass),
         attachedResourceUuid: null,
         access: "private" as const,
+        status: "active" as const,
         quotaGb,
         createdAt: new Date().toISOString(),
         objects: [],
@@ -3689,10 +3688,15 @@ async function dispatch(request: Request, settleBilling = true) {
         if (o.size > 20_000_000) fail(422, "INVALID_FILE");
         const previous = b.objects.find((x) => x.key === key)?.size || 0;
         if (
-          b.objects.reduce((a, o) => a + o.size, 0) - previous + o.size >
+          b.objects.reduce((a, item) => a + item.size, 0) - previous + o.size >
           b.quotaGb * 1e9
         )
-          fail(409, "QUOTA_EXCEEDED");
+          fail(409, "BUCKET_LIMIT_EXCEEDED");
+        const regionalBytes = db.buckets
+          .filter((bucket) => bucket.region === b.region)
+          .reduce((sum, bucket) => sum + bucket.objects.reduce((bytes, item) => bytes + item.size, 0), 0);
+        if (regionalBytes - previous + o.size > storageLimits[b.region].object * 1e9)
+          fail(409, "QUOTA_EXCEEDED", { metric: "storage", kind: "object" });
         try {
           await putObject(`${b.id}:${key}`, content);
         } catch {
