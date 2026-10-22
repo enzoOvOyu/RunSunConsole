@@ -42,7 +42,7 @@ export function privateCidr(value: string) {
 }
 export function subnetCapacity(value: string) {
   const range = cidrRange(value);
-  return range ? Math.max(0, range.size - 4) : 0;
+  return range ? Math.max(0, range.size - 5) : 0;
 }
 export function isPublicIpv4(value: string) {
   const ip = ipv4Number(value);
@@ -112,4 +112,17 @@ export function vpcNetworkType(vpc: {
   return /bare.?metal|(^|[-_])bm([-_]|$)/i.test(`${vpc.id} ${vpc.name}`)
     ? "baremetal"
     : "standard";
+}
+
+export function suggestedClusterCidrs(blocked: string[], currentPod = "", currentService = "") {
+  const candidates = [
+    ...Array.from({ length: 16 }, (_, index) => `10.${240 + index}.0.0/16`),
+    ...Array.from({ length: 12 }, (_, index) => `172.${20 + index}.0.0/16`),
+    ...Array.from({ length: 16 }, (_, index) => `192.168.${index * 16}.0/20`),
+  ];
+  const valid = (cidr: string) => !!cidrRange(cidr) && privateCidr(cidr) && blocked.every((range) => !cidrOverlaps(cidr, range));
+  const podCidr = valid(currentPod) ? currentPod : candidates.find(valid);
+  const serviceCidr = valid(currentService) && !cidrOverlaps(currentService, podCidr || "")
+    ? currentService : candidates.find((cidr) => valid(cidr) && !cidrOverlaps(cidr, podCidr || ""));
+  return podCidr && serviceCidr ? { podCidr, serviceCidr } : null;
 }

@@ -12,11 +12,13 @@ import {
   nextPrivateIp,
   validVpcCidr,
   verifySubnet,
+  defaultRules,
 } from "../lib/network";
 import {
   cidrRange,
   cidrContains,
   cidrOverlaps,
+  privateCidr,
   isPublicIpv4,
   vpcNetworkType,
 } from "../../lib/network";
@@ -1002,6 +1004,14 @@ async function dispatchNetwork(
         const s = scope(body);
         checkNetworkQuota(s.region, "vpc");
         const cidr = z.string().refine(validVpcCidr).parse(body.cidr);
+        const plan = z.array(z.object({ name: named, cidr: z.string(), zone: z.string() })).min(1).max(8).optional().parse(body.subnets);
+        if (plan) {
+          checkNetworkQuota(s.region, "subnet", plan.length);
+          checkNetworkQuota(s.region, "security_group");
+          if (plan.some((subnet) => !verifySubnet(cidr, subnet.cidr) || ![`${s.region}-a`, `${s.region}-b`].includes(subnet.zone)) ||
+            plan.some((subnet, index) => plan.slice(index + 1).some((other) => cidrOverlaps(subnet.cidr, other.cidr))))
+            fail(422, "INVALID_CLUSTER_SUBNETS");
+        }
         const v = {
           ...s,
           id: `vpc-${crypto.randomUUID().slice(0, 12)}`,
@@ -1016,6 +1026,13 @@ async function dispatchNetwork(
           .parse(body.networkType);
         const createdVpc = { ...v, networkType };
         n.vpcs.push(createdVpc);
+        if (plan) {
+          for (const subnet of plan) n.subnets.push({ ...s, ...subnet, id: `vsw-${crypto.randomUUID().slice(0, 12)}`,
+            vpcId: v.id, createdAt: v.createdAt });
+          n.groups.push({ ...s, id: `sg-${crypto.randomUUID().slice(0, 12)}`, vpcId: v.id,
+            name: "default", description: "", intraGroupPolicy: "allow", isDefault: true,
+            rules: defaultRules(cidr), createdAt: v.createdAt });
+        }
         networkAudit(n, s, v.id, "vpcCreate");
         persist();
         return json(createdVpc, 201);
@@ -2564,10 +2581,11 @@ async function dispatch(request: Request, settleBilling = true) {
         fail(409, "CLUSTER_NAME_CONFLICT");
       const podCidr = spec.podCidr || "172.20.0.0/16";
       const serviceCidr = spec.serviceCidr || "172.21.0.0/16";
-      const vpc = db.network.vpcs.find((item) => item.id === spec.vpc);
-      if (!cidrRange(podCidr) || !cidrRange(serviceCidr) ||
+      const knownVpcCidrs = db.network.vpcs.filter((item) => !item.deletedAt && item.projectId === parsed.projectId && item.region === parsed.region && vpcNetworkType(item) === "standard").map((item) => item.cidr);
+      if (!["cilium", "calico"].includes(spec.networkPlugin) || !privateCidr(podCidr) || !privateCidr(serviceCidr) ||
+        !cidrRange(podCidr) || !cidrRange(serviceCidr) ||
         cidrOverlaps(podCidr, serviceCidr) ||
-        (vpc && (cidrOverlaps(podCidr, vpc.cidr) || cidrOverlaps(serviceCidr, vpc.cidr))))
+        knownVpcCidrs.some((cidr) => cidrOverlaps(podCidr, cidr) || cidrOverlaps(serviceCidr, cidr)))
         fail(422, "CLUSTER_CIDR_CONFLICT");
       if (spec.ingressEnabled && (spec.ingressClass !== "nginx" || !spec.securityGroups?.length || !spec.vpc || !spec.subnet))
         fail(422, "VALIDATION_ERROR");

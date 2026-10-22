@@ -19,6 +19,7 @@ import {
   subnetCapacity,
   privateCidr,
   cidrContains,
+  cidrOverlaps,
   vpcNetworkType,
 } from "../../lib/network";
 export class NetworkFailure extends Error {
@@ -250,7 +251,14 @@ export function clusterSubnets(n: NetworkState, r: Extract<Resource, { kind: "vg
   const selected = ids.map((id) => n.subnets.find((item) => item.id === id && !item.deletedAt));
   if (selected.some((item) => !item || item.vpcId !== vpc.id || item.projectId !== r.projectId || item.region !== r.region))
     networkFail(409, "NETWORK_SCOPE_MISMATCH");
+  const allVpcSubnets = n.subnets.filter((item) => item.vpcId === vpc.id && !item.deletedAt);
+  if (allVpcSubnets.some((item) => !verifySubnet(vpc.cidr, item.cidr)) ||
+    allVpcSubnets.some((item, index) => allVpcSubnets.slice(index + 1).some((other) => cidrOverlaps(item.cidr, other.cidr))))
+    networkFail(422, "INVALID_CLUSTER_SUBNETS");
   const subnets = selected as Subnet[];
+  if (subnets.some((item) => !cidrContains(vpc.cidr, item.cidr) || !verifySubnet(vpc.cidr, item.cidr)) ||
+    subnets.some((item, index) => subnets.slice(index + 1).some((other) => cidrOverlaps(item.cidr, other.cidr))))
+    networkFail(422, "INVALID_CLUSTER_SUBNETS");
   if (r.spec.controlPlaneTier === "ha" && !!r.spec.subnets?.length && new Set(subnets.map((item) => item.zone)).size < 2)
     networkFail(422, "INVALID_CLUSTER_SUBNETS");
   return subnets;
@@ -306,7 +314,7 @@ export function nextPrivateIp(n: NetworkState, id: string) {
       .filter((t) => t.subnetId === id && !t.deletedAt)
       .map((t) => t.privateIp),
   ]);
-  for (let offset = 1; offset <= range.size - 4; offset++) {
+  for (let offset = 4; offset <= range.size - 2; offset++) {
     const ip = ipv4String(range.start + offset);
     if (!used.has(ip)) return ip;
   }

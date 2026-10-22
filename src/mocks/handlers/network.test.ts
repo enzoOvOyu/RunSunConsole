@@ -14,6 +14,7 @@ import {
   cidrOverlaps,
   subnetCapacity,
   evaluateSecurityGroups,
+  suggestedClusterCidrs,
 } from "../../lib/network";
 const server = setupServer(...handlers);
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
@@ -42,7 +43,7 @@ async function vpcSetup(cidr = "10.100.0.0/16") {
       ...scope(),
       vpcId: v.id,
       name: "isolated-subnet",
-      cidr: "10.100.0.0/29",
+      cidr: "10.100.0.0/28",
       zone: "jp-a",
     })
   ).data;
@@ -64,13 +65,49 @@ async function eip() {
     })
   ).data;
 }
-it("validates canonical CIDRs, containment, overlap and four reserved subnet addresses", () => {
+it("validates canonical CIDRs, containment, overlap and five reserved subnet addresses", () => {
   expect(cidrRange("10.0.0.1/24")).toBeNull();
   expect(cidrRange("010.0.0.0/24")).toBeNull();
   expect(cidrRange("10.0.0.0/33")).toBeNull();
   expect(cidrContains("10.0.0.0/16", "10.0.1.0/24")).toBe(true);
   expect(cidrOverlaps("10.0.0.0/24", "10.0.0.128/25")).toBe(true);
-  expect(subnetCapacity("10.0.0.0/29")).toBe(4);
+  expect(subnetCapacity("10.0.0.0/29")).toBe(3);
+});
+it("rejects overlapping persisted subnets without rewriting their CIDRs", () => {
+  const cluster = db.resources.find((item) => item.kind === "vgpu" && item.region === "jp");
+  if (!cluster || cluster.kind !== "vgpu") throw new Error("Missing cluster");
+  const subnets = db.network.subnets.filter((item) => item.vpcId === cluster.spec.vpc);
+  expect(subnets.length).toBeGreaterThanOrEqual(2);
+  const original = subnets[1].cidr;
+  subnets[1].cidr = subnets[0].cidr;
+  expect(() => checkResourceNetwork(db.network, cluster)).toThrow("INVALID_CLUSTER_SUBNETS");
+  expect(subnets[1].cidr).toBe(subnets[0].cidr);
+  subnets[1].cidr = original;
+});
+it("suggests non-overlapping Pod and Service CIDRs while preserving valid input", () => {
+  const selected = suggestedClusterCidrs(["10.240.0.0/16", "172.20.0.0/16"], "172.21.0.0/16", "10.241.0.0/16");
+  expect(selected).toEqual({ podCidr: "172.21.0.0/16", serviceCidr: "10.241.0.0/16" });
+  expect(cidrOverlaps(selected!.podCidr, selected!.serviceCidr)).toBe(false);
+});
+it("seeds distinct subnets and creates a linked VPC plan atomically", async () => {
+  const defaultVpc = db.network.vpcs.find((item) => item.projectId === scope().projectId && item.region === "jp" && item.networkType === "standard")!;
+  const defaults = db.network.subnets.filter((item) => item.vpcId === defaultVpc.id);
+  expect(defaults.map((item) => item.cidr)).toEqual(["10.16.0.0/20", "10.16.16.0/20"]);
+  const invalid = await request("/vpcs", "POST", { ...scope(), name: "invalid-plan", cidr: "10.104.0.0/16",
+    subnets: [{ name: "a", cidr: "10.104.0.0/20", zone: "jp-a" }, { name: "b", cidr: "10.104.0.0/20", zone: "jp-b" }] });
+  expect(invalid.status).toBe(422);
+  expect(db.network.vpcs.some((item) => item.name === "invalid-plan")).toBe(false);
+  const created = await request("/vpcs", "POST", { ...scope(), name: "cluster-plan", cidr: "10.104.0.0/16",
+    subnets: [{ name: "gpu-a", cidr: "10.104.0.0/20", zone: "jp-a" }, { name: "gpu-b", cidr: "10.104.16.0/20", zone: "jp-b" }] });
+  expect(created.status).toBe(201);
+  const subnets = db.network.subnets.filter((item) => item.vpcId === created.data.id);
+  expect(subnets).toHaveLength(2);
+  expect(new Set(subnets.map((item) => item.cidr)).size).toBe(2);
+  expect(db.network.groups.some((item) => item.vpcId === created.data.id && item.isDefault)).toBe(true);
+  const options = await fetch(`http://localhost/api/deployment-options?region=jp&project_id=${scope().projectId}&kind=vgpu`);
+  const result = await options.json() as { vpcs: { id: string; subnets: { id: string }[] }[]; securityGroups: { vpcId: string }[] };
+  expect(result.vpcs.find((item) => item.id === created.data.id)?.subnets).toHaveLength(2);
+  expect(result.securityGroups.some((item) => item.vpcId === created.data.id)).toBe(true);
 });
 it("scopes real deployment options and rejects overlapping or cross-project subnets", async () => {
   const { v, subnet } = await vpcSetup();
@@ -141,7 +178,8 @@ it("allocates unique per-member addresses, reserves peak capacity and retains pr
   );
   expect(nics).toHaveLength(4);
   expect(new Set(nics.map((i) => i.privateIp)).size).toBe(4);
-  expect(() => checkResourceNetwork(db.network, r, 2)).toThrow(
+  expect(nics.every((i) => Number(i.privateIp.split(".")[3]) >= 4)).toBe(true);
+  expect(() => checkResourceNetwork(db.network, r, 3)).toThrow(
     "SUBNET_EXHAUSTED",
   );
   r.status = "stopped";

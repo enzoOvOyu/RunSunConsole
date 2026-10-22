@@ -1,15 +1,15 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { z } from "zod";
 import type { DeploymentOptions, Pool, Image, VgpuSpec } from "../../types/domain";
-import { cidrOverlaps, cidrRange, vpcNetworkType } from "../../lib/network";
-import { EP, query } from "../../lib/api-client";
+import { cidrContains, cidrOverlaps, cidrRange, ipv4String, privateCidr, subnetCapacity, suggestedClusterCidrs, vpcNetworkType } from "../../lib/network";
+import { EP, post, query } from "../../lib/api-client";
 import { storageSelectionsSchema, nodePoolSchema, vgpuSchema, isCidr } from "../../lib/schema";
 import { imageSupportsArchitecture, imageSupportsPool } from "./shared/image-compat";
 import { t } from "../../i18n";
 import { useAuth } from "../../stores/auth";
-import { Button, Field, Loading, Panel, KeyValues, ErrorState, Check } from "../../components/ui";
-import { useData } from "../shared/hooks";
+import { Button, Field, Loading, Panel, KeyValues, ErrorState, Check, Modal } from "../../components/ui";
+import { useAction, useData } from "../shared/hooks";
 import { WizardLayout, PoolCards } from "./shared/WizardLayout";
 import {
   useSpec, SpecCheck, SpecNumber, SpecSelect, SpecText,
@@ -19,18 +19,31 @@ import {
 
 const poolName = (pool: VgpuSpec["nodePools"][number], index: number) => pool.name || `gpu-pool-${index + 1}`;
 const selectedSubnets = (spec: VgpuSpec) => spec.subnets?.length ? spec.subnets : (spec.subnet ? [spec.subnet] : []);
-const suggestedCidrs = (vpcCidr: string) => {
-  const candidates = ["172.20.0.0/16", "172.21.0.0/16", "172.22.0.0/16", "172.23.0.0/16", "10.240.0.0/16", "10.241.0.0/16", "10.242.0.0/16", "192.168.240.0/20", "192.168.224.0/20"];
-  const available = candidates.filter((cidr) => !cidrOverlaps(cidr, vpcCidr));
-  return { podCidr: available[0] || "172.20.0.0/16", serviceCidr: available[1] || "172.21.0.0/16" };
-};
-const cidrProblem = (podCidr: string, serviceCidr: string, vpcCidr: string) => {
-  if (!cidrRange(podCidr)) return "eks.invalidPodCidr";
-  if (!cidrRange(serviceCidr)) return "eks.invalidServiceCidr";
+const cidrProblem = (podCidr: string, serviceCidr: string, blocked: string[]) => {
+  if (!cidrRange(podCidr) || !privateCidr(podCidr)) return "eks.invalidPodCidr";
+  if (!cidrRange(serviceCidr) || !privateCidr(serviceCidr)) return "eks.invalidServiceCidr";
   if (cidrOverlaps(podCidr, serviceCidr)) return "eks.podServiceOverlap";
-  if (cidrOverlaps(podCidr, vpcCidr)) return "eks.podVpcOverlap";
-  if (cidrOverlaps(serviceCidr, vpcCidr)) return "eks.serviceVpcOverlap";
+  if (blocked.some((cidr) => cidrOverlaps(podCidr, cidr))) return "eks.podVpcOverlap";
+  if (blocked.some((cidr) => cidrOverlaps(serviceCidr, cidr))) return "eks.serviceVpcOverlap";
   return "";
+};
+const vpcSubnetsValid = (vpc: DeploymentOptions["vpcs"][number]) =>
+  vpc.subnets.every((subnet) => !!cidrRange(subnet.cidr) && cidrContains(vpc.cidr, subnet.cidr) && cidrRange(subnet.cidr)!.prefix <= 29) &&
+  vpc.subnets.every((subnet, index) => vpc.subnets.slice(index + 1).every((other) => !cidrOverlaps(subnet.cidr, other.cidr)));
+const requiredIps = (spec: VgpuSpec) => {
+  const current = spec.nodePools.reduce((count, pool) => count + pool.nodeCount, 0);
+  const peak = spec.scaling ? Math.max(current, spec.scaling.max_size) : current;
+  return peak + (spec.controlPlaneTier === "ha" ? 3 : 1);
+};
+const subnetDemand = (index: number, selectedCount: number, total: number) =>
+  Math.floor(total / selectedCount) + (index < total % selectedCount ? 1 : 0);
+const plannedSubnets = (cidr: string, region: string) => {
+  const range = cidrRange(cidr);
+  if (!range || range.prefix > 28) return [{ name: "gpu-a", cidr: "", zone: `${region}-a` }, { name: "gpu-b", cidr: "", zone: `${region}-b` }];
+  const prefix = Math.min(29, range.prefix + 4);
+  const size = 2 ** (32 - prefix);
+  return [{ name: "gpu-a", cidr: `${ipv4String(range.start)}/${prefix}`, zone: `${region}-a` },
+    { name: "gpu-b", cidr: `${ipv4String(range.start + size)}/${prefix}`, zone: `${region}-b` }];
 };
 
 function validStep(values: WizardValues, step: number, lookups?: { network?: DeploymentOptions; pools: Pool[]; images: Image[] }) {
@@ -41,16 +54,15 @@ function validStep(values: WizardValues, step: number, lookups?: { network?: Dep
     if (spec.apiServerPublic && !isCidr(spec.authorizedCidr)) return false;
     const subnets = selectedSubnets(spec);
     const vpc = lookups?.network?.vpcs.find((item) => item.id === spec.vpc && vpcNetworkType(item) === "standard");
-    const chosen = vpc?.subnets.filter((item) => subnets.includes(item.id)) || [];
-    const count = spec.nodePools.reduce((sum, pool) => sum + pool.nodeCount, 0) + (spec.controlPlaneTier === "ha" ? 3 : 1);
-    return !!vpc && subnets.length >= (spec.controlPlaneTier === "ha" ? 2 : 1) &&
-      chosen.length === subnets.length && new Set(subnets).size === subnets.length && subnets.includes(spec.subnet) &&
-      (spec.controlPlaneTier !== "ha" || new Set(chosen.map((item) => item.zone)).size >= 2) &&
-      chosen.every((item, index) => item.availableIps >= Math.floor(count / chosen.length) + (index < count % chosen.length ? 1 : 0)) &&
-      !!cidrRange(spec.podCidr || "") && !!cidrRange(spec.serviceCidr || "") &&
-      !cidrOverlaps(spec.podCidr || "", spec.serviceCidr || "") &&
-      !cidrOverlaps(spec.podCidr || "", vpc.cidr) && !cidrOverlaps(spec.serviceCidr || "", vpc.cidr) &&
-      !!spec.securityGroups?.length && spec.securityGroups.every((id) => lookups?.network?.securityGroups.some((item) => item.id === id && item.vpcId === vpc.id)) && !!spec.networkPlugin;
+    const chosen = subnets.map((id) => vpc?.subnets.find((item) => item.id === id));
+    const count = requiredIps(spec);
+    return !!vpc && vpcSubnetsValid(vpc) && subnets.length >= (spec.controlPlaneTier === "ha" ? 2 : 1) &&
+      chosen.every((item) => !!item) && new Set(subnets).size === subnets.length && subnets.includes(spec.subnet) &&
+      (spec.controlPlaneTier !== "ha" || new Set(chosen.map((item) => item?.zone)).size >= 2) &&
+      chosen.every((item, index) => item!.availableIps >= subnetDemand(index, chosen.length, count)) &&
+      !cidrProblem(spec.podCidr || "", spec.serviceCidr || "", lookups?.network?.vpcs.filter((item) => item.projectId === values.projectId && item.region === values.region && vpcNetworkType(item) === "standard").map((item) => item.cidr) || [vpc.cidr]) &&
+      ["cilium", "calico"].includes(spec.networkPlugin) &&
+      !!spec.securityGroups?.length && spec.securityGroups.every((id) => lookups?.network?.securityGroups.some((item) => item.id === id && item.vpcId === vpc.id));
   }
   if (step === 2) {
     const mode = spec.storageMode || "dynamic_block";
@@ -100,6 +112,13 @@ function ClusterBasics() {
 function ClusterNetwork() {
   const { spec, update, form } = useSpec<VgpuSpec>();
   const region = form.watch("region"), projectId = form.watch("projectId");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newCidr, setNewCidr] = useState("10.100.0.0/16");
+  const [newSubnets, setNewSubnets] = useState(() => plannedSubnets("10.100.0.0/16", region));
+  const [planError, setPlanError] = useState("");
+  const [suggestion, setSuggestion] = useState<{ podCidr: string; serviceCidr: string } | null>(null);
+  const { run, busy } = useAction();
   const options = useData<DeploymentOptions>(["cluster-network-options", region, projectId],
     EP.options + query({ region, project_id: projectId, kind: "vgpu" }), { enabled: !!projectId, poll: true, pollMs: 5000 });
   const vpcs = (options.data?.vpcs || []).filter((vpc) => vpcNetworkType(vpc) === "standard");
@@ -119,59 +138,114 @@ function ClusterNetwork() {
       form.setValue("spec", { ...current, vpc: vpc.id, subnet: primary, subnets: chosen, securityGroups: nextGroups }, { shouldDirty: true, shouldValidate: true });
   }, [options.data, form, region, projectId]);
   const ids = selectedSubnets(spec);
-  const zones = new Set(selected?.subnets.filter((subnet) => ids.includes(subnet.id)).map((subnet) => subnet.zone));
-  const cidrError = selected ? cidrProblem(spec.podCidr || "", spec.serviceCidr || "", selected.cidr) : "";
-  const nodeCount = spec.nodePools.reduce((sum, pool) => sum + pool.nodeCount, 0);
-  const neededIps = nodeCount + (spec.controlPlaneTier === "ha" ? 3 : 1);
-  const chosen = selected?.subnets.filter((subnet) => ids.includes(subnet.id)) || [];
+  const chosen = ids.map((id) => selected?.subnets.find((subnet) => subnet.id === id)).filter((item) => !!item);
+  const neededIps = requiredIps(spec);
   const totalIps = chosen.reduce((sum, subnet) => sum + subnet.availableIps, 0);
-  const ipsInvalid = chosen.length > 0 && chosen.some((subnet, index) =>
-    subnet.availableIps < Math.floor(neededIps / chosen.length) + (index < neededIps % chosen.length ? 1 : 0));
-  const zonesInvalid = spec.controlPlaneTier === "ha" && zones.size < 2;
+  const ipsInvalid = chosen.length > 0 && chosen.some((subnet, index) => subnet.availableIps < subnetDemand(index, chosen.length, neededIps));
+  const zonesInvalid = spec.controlPlaneTier === "ha" && new Set(chosen.map((item) => item.zone)).size < 2;
+  const layoutInvalid = !!selected && !vpcSubnetsValid(selected);
+  const cidrError = selected ? cidrProblem(spec.podCidr || "", spec.serviceCidr || "", vpcs.map((item) => item.cidr)) : "";
+  const blockedCidrs = vpcs.map((vpc) => vpc.cidr);
+  const nextVpcCidr = () => Array.from({ length: 100 }, (_, index) => `10.${100 + index}.0.0/16`).find((candidate) => blockedCidrs.every((cidr) => !cidrOverlaps(candidate, cidr))) || "10.100.0.0/16";
+  const switchVpc = (vpc: DeploymentOptions["vpcs"][number], data = options.data) => {
+    const subnets = vpc.subnets.slice(0, Math.min(2, vpc.subnets.length)).map((subnet) => subnet.id);
+    const proposed = suggestedClusterCidrs((data?.vpcs || []).map((item) => item.cidr), spec.podCidr, spec.serviceCidr);
+    update({ vpc: vpc.id, subnet: subnets[0] || "", subnets,
+      securityGroups: data?.securityGroups.filter((group) => group.vpcId === vpc.id).slice(0, 1).map((group) => group.id) || [],
+      volumeBindings: [], ...(proposed || { podCidr: "", serviceCidr: "" }) });
+    setSuggestion(null);
+  };
+  const updateNewCidr = (cidr: string) => { setNewCidr(cidr); setNewSubnets(plannedSubnets(cidr, region)); setPlanError(""); };
+  const createVpc = async () => {
+    const cidr = cidrRange(newCidr);
+    if (!newName.trim() || !cidr || !privateCidr(newCidr) || cidr.prefix < 8 || cidr.prefix > 28) { setPlanError(t("eks.invalidVpcPlan")); return; }
+    if (blockedCidrs.some((existing) => cidrOverlaps(newCidr, existing))) { setPlanError(t("eks.newVpcOverlap")); return; }
+    if (newSubnets.length < (spec.controlPlaneTier === "ha" ? 2 : 1) ||
+      newSubnets.some((subnet) => !subnet.name.trim() || !cidrContains(newCidr, subnet.cidr) || (cidrRange(subnet.cidr)?.prefix || 32) > 29 || ![`${region}-a`, `${region}-b`].includes(subnet.zone)) ||
+      newSubnets.some((subnet, index) => newSubnets.slice(index + 1).some((other) => cidrOverlaps(subnet.cidr, other.cidr))) ||
+      (spec.controlPlaneTier === "ha" && new Set(newSubnets.map((subnet) => subnet.zone)).size < 2)) { setPlanError(t("eks.invalidSubnetPlan")); return; }
+    const created = await run(() => post<DeploymentOptions["vpcs"][number]>(`${EP.network}/vpcs`, {
+      projectId, region, name: newName.trim(), cidr: newCidr, networkType: "standard",
+      subnets: newSubnets.map((subnet) => ({ ...subnet, name: subnet.name.trim() })),
+    }));
+    if (!created) return;
+    const refreshed = await options.refetch();
+    const vpc = refreshed.data?.vpcs.find((item) => item.id === created.id);
+    if (vpc) switchVpc(vpc, refreshed.data);
+    setCreateOpen(false);
+  };
   if (options.isPending) return <Loading />;
   if (options.error) return <ErrorState error={options.error} />;
   return <div className="stack">
     <p>{t("eks.networkStepIntro")}</p>
-    <Panel title={t("eks.vpcConfig")}>
-      <div className="cluster-network-choice">
-        <div className="selected"><strong>{t("eks.existingVpc")}</strong><Field label="VPC"><select value={selected?.id || ""} onChange={(event) => {
-          const next = vpcs.find((vpc) => vpc.id === event.target.value);
-          if (!next) return;
-          const subnets = next.subnets.slice(0, Math.min(2, next.subnets.length)).map((subnet) => subnet.id);
-          update({ vpc: next.id, subnet: subnets[0] || "", subnets,
-            securityGroups: options.data?.securityGroups.filter((group) => group.vpcId === next.id).slice(0, 1).map((group) => group.id) || [],
-            volumeBindings: [], ...suggestedCidrs(next.cidr) });
-        }}><option value="">{t("network.select")}</option>{vpcs.map((vpc) => <option key={vpc.id} value={vpc.id}>{vpc.name} · {vpc.cidr}</option>)}</select></Field></div>
-        <Link to={`/network/vpcs?region=${region}&project_id=${projectId}`} target="_blank" rel="noreferrer"><strong>{t("network.createVpc")}</strong><small>{t("eks.createVpcHint")}</small></Link>
-      </div>
+    <Panel title={t("eks.vpcConfig")} action={<Button onClick={() => { setNewName(""); const cidr = nextVpcCidr(); setNewCidr(cidr); setNewSubnets(plannedSubnets(cidr, region)); setPlanError(""); setCreateOpen(true); }}>{t("network.createVpc")}</Button>}>
+      <Field label={t("eks.existingVpc")}><select value={selected?.id || ""} onChange={(event) => {
+        const next = vpcs.find((vpc) => vpc.id === event.target.value);
+        if (next) switchVpc(next);
+      }}><option value="">{t("network.select")}</option>{vpcs.map((vpc) => <option key={vpc.id} value={vpc.id}>{vpc.name} · {vpc.id} · {vpc.cidr}</option>)}</select></Field>
       {selected && <KeyValues items={[["VPC CIDR", selected.cidr], [t("eks.availableZones"), new Set(selected.subnets.map((subnet) => subnet.zone)).size], [t("eks.subnetCount"), selected.subnets.length]]} />}
+      {layoutInvalid && <p className="field-error">{t("eks.vpcSubnetConflict")}</p>}
       {selected && !selected.subnets.length && <p className="field-error">{t("eks.noVpcSubnets")} <Link to={`/network/vpcs?region=${region}&project_id=${projectId}&drawer=${selected.id}`} target="_blank" rel="noreferrer">{t("eks.manageVpcSubnets")}</Link></p>}
     </Panel>
-    <Panel title={t("eks.subnetConfig")}>
-      <small>{t("eks.subnetHint")}</small>
+    <Panel title={t("eks.nodeSubnetTitle")} hint={t("eks.nodeSubnetHint")}>
+      <KeyValues items={[[t("eks.controlPlaneIpCount"), spec.controlPlaneTier === "ha" ? 3 : 1],
+        [t("eks.currentGpuNodes"), spec.nodePools.reduce((count, pool) => count + pool.nodeCount, 0)],
+        [t("eks.peakIpDemand"), neededIps]]} />
       <div className="cluster-subnet-list">
-        {(selected?.subnets || []).map((subnet) => <label className="cluster-subnet-row" key={subnet.id}>
-          <input type="checkbox" checked={ids.includes(subnet.id)} onChange={(event) => {
-            const next = event.target.checked ? [...ids, subnet.id] : ids.filter((id) => id !== subnet.id);
-            update({ subnets: next, subnet: next[0] || "", volumeBindings: [] });
-          }} />
-          <span><strong>{subnet.name}</strong><small>{subnet.id}</small></span><span>{subnet.zone}<small>{subnet.cidr}</small></span><span>{t("network.availableIp", { count: subnet.availableIps })}</span>
-        </label>)}
+        {(selected?.subnets || []).map((subnet) => {
+          const index = ids.indexOf(subnet.id);
+          const demand = index < 0 ? 0 : subnetDemand(index, ids.length, neededIps);
+          const invalid = !cidrContains(selected!.cidr, subnet.cidr) || selected!.subnets.some((other) => other.id !== subnet.id && cidrOverlaps(other.cidr, subnet.cidr));
+          return <label className="cluster-subnet-row" key={subnet.id}>
+            <input type="checkbox" checked={index >= 0} onChange={(event) => {
+              const next = event.target.checked ? [...ids, subnet.id] : ids.filter((id) => id !== subnet.id);
+              update({ subnets: next, subnet: next[0] || "", volumeBindings: [] });
+            }} />
+            <span><strong>{subnet.name}</strong><small>{subnet.id}</small></span>
+            <span><strong>{subnet.zone}</strong><small>{subnet.cidr}</small></span>
+            <span><strong>{t("eks.privateNodeSubnet")}</strong><small>{t("eks.fiveReservedIps", { total: subnetCapacity(subnet.cidr) })}</small></span>
+            <span><strong>{t("network.availableIp", { count: subnet.availableIps })}</strong><small>{index >= 0 ? t("eks.requiredIpInSubnet", { count: demand }) : t("eks.notSelected")}</small></span>
+            {invalid && <small className="field-error">{t("eks.vpcSubnetConflict")}</small>}
+          </label>;
+        })}
       </div>
       {selected && selected.subnets.length > 0 && !ids.length && <p className="field-error">{t("eks.chooseSubnet")}</p>}
       {zonesInvalid && <p className="field-error">{t("eks.haNeedsTwoZones")}</p>}
       {ipsInvalid && <p className="field-error">{t("eks.subnetIpsInsufficient", { needed: neededIps, available: totalIps })}</p>}
+      <small>{t("eks.privateRouteHint")}</small>
     </Panel>
-    <Panel title={t("eks.podNetwork")} action={selected ? <Button onClick={() => update(suggestedCidrs(selected.cidr))}>{t("eks.autoCidrs")}</Button> : undefined}>
-      <small>{t("eks.cidrExplainer")}</small>
-      <div className="form-grid"><SpecText name="podCidr" label={t("eks.podCidr")} /><SpecText name="serviceCidr" label={t("eks.serviceCidr")} />
-        <SpecSelect name="networkPlugin" label="CNI" options={["cilium", "calico"]} />
-        <Field label={t("field.securityGroups")}><select value={spec.securityGroups?.[0] || ""} onChange={(event) => update({ securityGroups: event.target.value ? [event.target.value] : [] })}><option value="">{t("network.select")}</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></Field>
+    <Panel title={t("eks.kubernetesNetworkTitle")}>
+      <div className="form-grid">
+        <Field label="CNI"><select value={spec.networkPlugin} onChange={(event) => update({ networkPlugin: event.target.value })}><option value="cilium">Cilium · Overlay</option><option value="calico">Calico · Overlay</option></select></Field>
+        <Field label={t("field.securityGroups")}><select value={spec.securityGroups?.[0] || ""} onChange={(event) => update({ securityGroups: event.target.value ? [event.target.value] : [] })}><option value="">{t("network.select")}</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name} · {group.id}</option>)}</select></Field>
+        <Field label={t("eks.podCidr")}><input className="input" value={spec.podCidr || ""} onChange={(event) => update({ podCidr: event.target.value })} />{cidrError === "eks.invalidPodCidr" || cidrError === "eks.podVpcOverlap" || cidrError === "eks.podServiceOverlap" ? <small className="field-error">{t(cidrError)}</small> : null}</Field>
+        <Field label={t("eks.serviceCidr")}><input className="input" value={spec.serviceCidr || ""} onChange={(event) => update({ serviceCidr: event.target.value })} />{cidrError === "eks.invalidServiceCidr" || cidrError === "eks.serviceVpcOverlap" || cidrError === "eks.podServiceOverlap" ? <small className="field-error">{t(cidrError)}</small> : null}</Field>
       </div>
       {!groups.length && selected && <p className="field-error">{t("eks.noSecurityGroup")} <Link to={`/network/security-groups?region=${region}&project_id=${projectId}`} target="_blank" rel="noreferrer">{t("eks.manageSecurityGroup")}</Link></p>}
-      <small>{t("eks.cniHint")}</small>
-      {cidrError && <p className="field-error">{t(cidrError)} {t("eks.cidrSuggestion", suggestedCidrs(selected?.cidr || ""))}</p>}
+      <small>{t("eks.cniOverlayHint")}</small>
+      <small>{t("eks.securityGroupScope")}</small>
+      <div className="row"><Button onClick={() => setSuggestion(suggestedClusterCidrs(blockedCidrs, spec.podCidr, spec.serviceCidr))} disabled={!selected}>{t("eks.autoCidrs")}</Button></div>
+      {suggestion && <div className="notice"><strong>{t("eks.cidrProposal")}</strong><span>{t("eks.podCidr")}: {suggestion.podCidr} · {t("eks.serviceCidr")}: {suggestion.serviceCidr}</span><Button onClick={() => { update(suggestion); setSuggestion(null); }}>{t("eks.applyCidrs")}</Button></div>}
+      {!suggestion && selected && !suggestedClusterCidrs(blockedCidrs, spec.podCidr, spec.serviceCidr) && <p className="field-error">{t("eks.noCidrCandidate")}</p>}
     </Panel>
+    <Panel title={t("eks.networkTopology")}><div className="cluster-storage-flow"><span><strong>VPC · {selected?.name || "—"} ({selected?.cidr || "—"})</strong></span>
+      {chosen.map((subnet, index) => <span key={subnet.id}><b aria-hidden="true">→</b><strong>{subnet.name} · {subnet.zone} · {subnetDemand(index, chosen.length, neededIps)} IP</strong></span>)}
+      <span><b aria-hidden="true">→</b><strong>{t("eks.controlAndGpuNodes", { control: spec.controlPlaneTier === "ha" ? 3 : 1, nodes: spec.nodePools.reduce((count, pool) => count + pool.nodeCount, 0) })}</strong></span>
+      <span><b aria-hidden="true">→</b><strong>{spec.networkPlugin} · Pod {spec.podCidr || "—"} / Service {spec.serviceCidr || "—"}</strong></span>
+    </div><small>{t("eks.networkTopologyHint")}</small></Panel>
+    <Modal open={createOpen} onClose={() => setCreateOpen(false)} title={t("network.createVpc")} description={t("eks.createVpcModalHint")}>
+      <div className="stack"><div className="form-grid"><Field label={t("common.name")}><input className="input" value={newName} onChange={(event) => setNewName(event.target.value)} /></Field>
+        <Field label="VPC CIDR"><input className="input" value={newCidr} onChange={(event) => updateNewCidr(event.target.value)} /></Field></div>
+        {newSubnets.map((subnet, index) => <div className="form-grid" key={index}>
+          <Field label={t("eks.subnetNameIndex", { index: index + 1 })}><input className="input" value={subnet.name} onChange={(event) => setNewSubnets(newSubnets.map((item, i) => i === index ? { ...item, name: event.target.value } : item))} /></Field>
+          <Field label="CIDR"><input className="input" value={subnet.cidr} onChange={(event) => setNewSubnets(newSubnets.map((item, i) => i === index ? { ...item, cidr: event.target.value } : item))} /></Field>
+          <Field label={t("eks.availableZones")}><select value={subnet.zone} onChange={(event) => setNewSubnets(newSubnets.map((item, i) => i === index ? { ...item, zone: event.target.value } : item))}><option value={`${region}-a`}>{region}-a</option><option value={`${region}-b`}>{region}-b</option></select></Field>
+        </div>)}
+        {planError && <p className="field-error">{planError}</p>}
+        <small>{t("eks.vpcPlanSecurityGroup")}</small>
+        <div className="row"><Button variant="primary" disabled={busy || !projectId} onClick={() => void createVpc()}>{t("network.createVpc")}</Button><Button onClick={() => setCreateOpen(false)}>{t("common.cancel")}</Button></div>
+      </div>
+    </Modal>
   </div>;
 }
 
