@@ -862,6 +862,7 @@ export function DeploymentOptionSelect({
 export function Review() {
   const { form } = useSpec();
   const projects = useData<Project[]>(["projects"], EP.projects);
+  const images = useData<Image[]>(["images"], EP.images);
   const values = form.watch();
   const spec = values.spec;
   const renderValue = (key: string, value: unknown) => {
@@ -873,6 +874,10 @@ export function Review() {
     )
       return poolDisplayName(value);
     if (value === null || value === undefined || value === "") return "—";
+    if (key === "runtimeImageRef") {
+      const image = images.data?.find((item) => item.id === value);
+      return image ? dt(image.name) : "—";
+    }
     if (Array.isArray(value)) {
       if (key === "nodePools")
         return value
@@ -910,9 +915,13 @@ export function Review() {
           [t("common.name"), values.name],
           ...Object.entries(spec)
             .filter(
-              ([key]) =>
+              ([key, value]) =>
                 !("gpuPerInstance" in spec) ||
-                (key !== "env" && key !== "entrypoint"),
+                (key !== "env" &&
+                  key !== "entrypoint" &&
+                  (key !== "runtimeImageRef" ||
+                    (!!value &&
+                      images.data?.some((image) => image.id === value)))),
             )
             .map(([key, value]): [string, string] => [
               "gpuPerInstance" in spec && key === "vcpu"
@@ -921,7 +930,9 @@ export function Review() {
                   ? t("images.memoryPerInstance")
                   : "gpuPerInstance" in spec && key === "gpuCount"
                     ? t("images.totalGpuCount")
-                    : t("field." + key),
+                    : key === "runtimeImageRef"
+                      ? t("wizard.runtimeImage")
+                      : t("field." + key),
               renderValue(key, value),
             ]),
         ]}
