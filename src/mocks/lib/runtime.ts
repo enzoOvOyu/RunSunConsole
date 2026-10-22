@@ -76,18 +76,10 @@ export function hardwareSnapshot(
 ): HardwareSnapshot {
   const gpu = GPU_SPECS[r.nodePool];
   const liquid = ["B200_NVL72", "B300", "GB300_NVL72"].includes(r.nodePool);
-  const imageRef =
-    r.kind === "gpu_vm" || r.kind === "gpu_baremetal"
-      ? r.spec.imageRef
-      : undefined;
-  const runtimeImageRef =
-    r.kind === "gpu_vm" ? r.spec.runtimeImageRef : undefined;
-  const osImage = imageRef
-    ? IMAGES.find((image) => image.id === imageRef)
-    : undefined;
-  const runtimeImage = runtimeImageRef
-    ? IMAGES.find((image) => image.id === runtimeImageRef)
-    : undefined;
+  const imageRef = r.kind === "gpu_vm" || r.kind === "gpu_baremetal" ? r.spec.imageRef : undefined;
+  const runtimeImageRef = r.kind === "gpu_vm" ? r.spec.runtimeImageRef : undefined;
+  const osImage = imageRef ? IMAGES.find((image) => image.id === imageRef) : undefined;
+  const runtimeImage = runtimeImageRef ? IMAGES.find((image) => image.id === runtimeImageRef) : undefined;
   const available = r.status === "running" || r.status === "error";
   const damaged = fault === "xid48";
   const machine =
@@ -152,8 +144,7 @@ export function hardwareSnapshot(
     firmware: {
       vbios: liquid ? "97.00.68.00.01" : "96.00.68.00.01",
       driver: osImage?.driverVersion || "—",
-      cuda:
-        runtimeImage?.cudaVersion || osImage?.cudaVersion || "Not installed",
+      cuda: runtimeImage?.cudaVersion || osImage?.cudaVersion || "Not installed",
       compliance: true,
     },
   };
@@ -170,21 +161,14 @@ export function clusterView(
       const nodeUuid = `${r.resourceUuid}-${poolIndex}-${i}`;
       const cordoned = r.labels.includes(`cluster-node:${nodeUuid}:cordoned`);
       return {
-        poolIndex,
-        poolCode: pool.poolCode,
-        nodeUuid,
+        poolIndex, poolCode: pool.poolCode, nodeUuid,
         name: `${r.displayId}-pool${poolIndex + 1}-node${i + 1}`,
         state: !active ? "initializing" : cordoned ? "unschedulable" : "ready",
         cordoned,
         gpuCount: GPU_SPECS[pool.poolCode].gpusPerNode,
-        allocatedGpu: active
-          ? Math.floor(GPU_SPECS[pool.poolCode].gpusPerNode * 0.75)
-          : 0,
+        allocatedGpu: active ? Math.floor(GPU_SPECS[pool.poolCode].gpusPerNode * 0.75) : 0,
         straggler: fault === "straggler" && poolIndex === 0 && i === 0,
-        ratio:
-          fault === "straggler" && poolIndex === 0 && i === 0
-            ? 1.55
-            : 1.04 + (i % 3) * 0.02,
+        ratio: fault === "straggler" && poolIndex === 0 && i === 0 ? 1.55 : 1.04 + (i % 3) * 0.02,
       };
     }),
   );
@@ -195,35 +179,20 @@ export function clusterView(
     remaining: Math.max(1, node.gpuCount - node.allocatedGpu),
   }));
   const pods = Array.from({ length: podCount }, (_, i) => {
-    const node = active
-      ? capacity.find((entry) => entry.remaining > 0)?.node
-      : null;
+    const node = active ? capacity.find((entry) => entry.remaining > 0)?.node : null;
     const phase = !active || !node ? "Pending" : "Running";
     if (node && active) {
-      const entry = capacity.find(
-        (candidate) => candidate.node.nodeUuid === node.nodeUuid,
-      );
+      const entry = capacity.find((candidate) => candidate.node.nodeUuid === node.nodeUuid);
       if (entry) entry.remaining -= 1;
     }
     return {
-      name: `trainer-${i + 1}`,
-      phase,
-      restarts: 0,
-      oomKilled: 0,
-      waitingReason:
-        phase === "Pending"
-          ? !active
-            ? "Cluster is not running"
-            : "No schedulable GPU node"
-          : "",
-      gpuCount: 1,
-      nodeUuid: node?.nodeUuid || null,
+      name: `trainer-${i + 1}`, phase, restarts: 0, oomKilled: 0,
+      waitingReason: phase === "Pending" ? (!active ? "Cluster is not running" : "No schedulable GPU node") : "",
+      gpuCount: 1, nodeUuid: node?.nodeUuid || null,
     };
   });
   const gatewayPhase = active ? "Running" : "Pending";
-  const policy = db.policies.find(
-    (item) => item.resourceUuid === r.resourceUuid,
-  );
+  const policy = db.policies.find((item) => item.resourceUuid === r.resourceUuid);
   const pvcConfigured = r.spec.defaultPvcGb > 0;
   return {
     components: ["API Server", "etcd", "Scheduler", "Controller-Manager"].map(
@@ -232,57 +201,30 @@ export function clusterView(
     nodes,
     workloads: [
       { namespace: "training", deployment: `${r.displayId}-trainer`, pods },
-      {
-        namespace: "inference",
-        deployment: `${r.displayId}-gateway`,
-        pods: [
-          {
-            name: "gateway-1",
-            phase: gatewayPhase,
-            restarts: 0,
-            oomKilled: 0,
-            waitingReason: active ? "" : "Cluster is not running",
-            gpuCount: 0,
-            nodeUuid: active ? schedulable[0]?.nodeUuid || null : null,
-          },
-        ],
-      },
+      { namespace: "inference", deployment: `${r.displayId}-gateway`, pods: [{
+        name: "gateway-1", phase: gatewayPhase, restarts: 0, oomKilled: 0,
+        waitingReason: active ? "" : "Cluster is not running", gpuCount: 0,
+        nodeUuid: active ? schedulable[0]?.nodeUuid || null : null,
+      }] },
     ],
-    scheduling:
-      active && pods.some((pod) => pod.phase === "Pending")
-        ? [
-            {
-              reason: "No schedulable GPU node",
-              count: pods.filter((pod) => pod.phase === "Pending").length,
-            },
-          ]
-        : [],
+    scheduling: active && pods.some((pod) => pod.phase === "Pending")
+      ? [{ reason: "No schedulable GPU node", count: pods.filter((pod) => pod.phase === "Pending").length }]
+      : [],
     network: {
-      cniErrors: 0,
-      serviceP99Ms: 12.4,
+      cniErrors: 0, serviceP99Ms: 12.4,
       ingressQps: r.spec.ingressEnabled ? (active ? 180 : 0) : null,
       vpcPeering: active ? "ready" : "pending",
     },
     storage: {
-      bound: pvcConfigured ? 1 : 0,
-      pending: 0,
-      pendingReason: "",
+      bound: pvcConfigured ? 1 : 0, pending: 0, pendingReason: "",
       pvCapacityGb: pvcConfigured ? r.spec.defaultPvcGb : 0,
-      provisioned: pvcConfigured,
-      csiErrors: 0,
+      provisioned: pvcConfigured, csiErrors: 0,
     },
     plugins: {
-      gpuOperator: "24.9.1",
-      devicePluginHealthy: active,
-      nfdVersion: "0.16.6",
-      driverReady: active ? count : 0,
-      driverDesired: count,
+      gpuOperator: "24.9.1", devicePluginHealthy: active,
+      nfdVersion: "0.16.6", driverReady: active ? count : 0, driverDesired: count,
     },
-    poolStatus: !r.spec.scaling
-      ? "idle"
-      : policy?.status === "paused"
-        ? "paused"
-        : "idle",
+    poolStatus: !r.spec.scaling ? "idle" : policy?.status === "paused" ? "paused" : "idle",
   };
 }
 
