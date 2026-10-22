@@ -1269,63 +1269,184 @@ button.catalog-card:disabled {
 .inference-model-groups {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  align-items: start;
+  grid-auto-rows: 1fr;
+  align-items: stretch;
   gap: 12px;
 }
 
 .inference-model-group {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  height: 148px;
   min-width: 0;
-  overflow: hidden;
-  border-color: var(--rs-border);
+  padding: 14px;
+  overflow: visible;
+  border: 1px solid var(--rs-border);
+  background: var(--rs-bg);
   transition:
-    border-color 150ms ease,
-    background-color 150ms ease,
-    box-shadow 150ms ease;
+    border-color 140ms ease,
+    background-color 140ms ease;
 }
 
 .inference-model-group:hover {
-  border-color: color-mix(in srgb, var(--rs-brand) 55%, var(--rs-border));
-  background: color-mix(in srgb, var(--rs-brand-soft) 42%, var(--rs-bg));
-  box-shadow: var(--rs-shadow-sm);
+  border-color: color-mix(in srgb, var(--rs-brand) 45%, var(--rs-border));
 }
 
-.inference-model-group[open] {
-  border-color: color-mix(in srgb, var(--rs-brand) 35%, var(--rs-border));
+.inference-model-group.selected {
+  border-color: color-mix(in srgb, var(--rs-brand) 68%, var(--rs-border));
+  background: color-mix(in srgb, var(--rs-brand-soft) 46%, var(--rs-bg));
 }
 
-.inference-model-group > summary {
+.inference-publisher-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: start;
-  gap: 6px;
-  min-height: 64px;
-  padding: 16px 20px;
-  cursor: pointer;
-  list-style-position: inside;
+  grid-template-columns: 30px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 10px;
+  min-height: 58px;
+}
+
+.inference-publisher-header img {
+  grid-column: 1;
+  grid-row: 1 / 3;
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+}
+
+.inference-publisher-header > strong {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  max-height: 2.6em;
+  overflow: hidden;
+  font-size: var(--rs-fs-sm);
+  line-height: 1.3;
   overflow-wrap: anywhere;
-  white-space: normal;
-  transition: background-color 150ms ease;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
-.inference-model-group > summary:hover {
-  background: color-mix(in srgb, var(--rs-brand-soft) 55%, var(--rs-bg));
+.inference-publisher-count {
+  grid-column: 2;
+  grid-row: 2;
+  color: var(--rs-text-secondary);
+  font-size: var(--rs-fs-xs);
+  line-height: 1.2;
 }
 
-.inference-model-group > summary::marker {
+.inference-publisher-check {
+  grid-column: 3;
+  grid-row: 1 / 3;
+  color: var(--rs-brand-strong);
+  opacity: 0;
+}
+
+.inference-model-group.selected .inference-publisher-check {
+  opacity: 1;
+}
+
+.inference-model-trigger {
+  display: flex;
+  border: 1px solid var(--rs-border);
+  background: var(--rs-bg);
+  color: var(--rs-text);
+  flex: 0 0 40px;
+  justify-content: space-between;
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  padding-inline: 10px;
+  text-align: left;
+}
+
+.inference-model-trigger-label {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inference-model-trigger-label.placeholder {
   color: var(--rs-text-secondary);
 }
 
-.inference-model-group > summary .muted {
+.inference-model-trigger:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--rs-brand) 48%, var(--rs-border));
+  background: color-mix(in srgb, var(--rs-brand-soft) 30%, var(--rs-bg));
+}
+
+.inference-model-popover {
+  z-index: 1000;
+  max-width: min(420px, calc(100vw - 24px));
+  padding: 6px;
+  overflow: hidden;
+  border-color: var(--rs-border);
+  background: var(--rs-bg);
+  color: var(--rs-text);
+  box-shadow: var(--rs-shadow-lg);
+}
+
+.inference-model-popover [cmdk-input] {
+  width: 100%;
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--rs-border);
+  border-radius: var(--rs-r-sm);
+  background: var(--rs-bg);
+  color: var(--rs-text);
+  outline: none;
+}
+
+.inference-model-popover [cmdk-input]:focus-visible {
+  border-color: var(--rs-brand);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--rs-brand) 18%, transparent);
+}
+
+.inference-model-popover [cmdk-list] {
+  max-height: min(320px, 55vh);
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.inference-model-popover [cmdk-item] {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 38px;
+  padding: 8px 9px;
+  border-radius: var(--rs-r-sm);
+  color: var(--rs-text);
+  cursor: pointer;
+}
+
+.inference-model-popover [cmdk-item][data-selected="true"] {
+  background: var(--rs-brand-soft);
+  color: var(--rs-brand-strong);
+}
+
+.inference-model-option-name {
   min-width: 0;
   overflow-wrap: anywhere;
   white-space: normal;
-  text-align: left;
-  font-size: var(--rs-fs-xs);
 }
 
-.inference-model-group > .field,
-.inference-model-group > label {
-  margin: 0 20px 20px;
+.inference-model-popover [cmdk-item] small {
+  flex: 0 0 auto;
+  color: var(--rs-text-secondary);
+  white-space: nowrap;
+}
+
+.inference-model-popover [cmdk-empty] {
+  padding: 18px 10px;
+  color: var(--rs-text-secondary);
+  text-align: center;
 }
 
 .catalog-card .price {

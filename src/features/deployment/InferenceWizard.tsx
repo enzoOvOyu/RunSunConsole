@@ -1,4 +1,6 @@
 import { StorageRows } from "./shared/StorageRows";
+import { Check, ChevronDown } from "lucide-react";
+import { Command } from "cmdk";
 import { useEffect, useMemo, useState } from "react";
 import {
   ModelPublisherLogo,
@@ -8,7 +10,12 @@ import { useQuery } from "@tanstack/react-query";
 import type { InferenceSpec } from "../../types/domain";
 import { t } from "../../i18n";
 import { post, EP } from "../../lib/api-client";
-import { Field } from "../../components/ui";
+import { Button, Field } from "../../components/ui";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "../../components/ui/popover";
 import { inferenceSchema, storageSelectionsSchema } from "../../lib/schema";
 import {
   compatiblePrecisions,
@@ -80,9 +87,8 @@ function InferenceForm({ step, pools, models }: FormContext) {
     [model, pool, spec.engine],
   );
   const [autoNotice, setAutoNotice] = useState("");
-  const [openPublisher, setOpenPublisher] = useState<
-    string | null | undefined
-  >();
+  const [openPublisher, setOpenPublisher] = useState<string | null>(null);
+  const [modelSearch, setModelSearch] = useState("");
   const memory = useQuery({
     queryKey: [
       "model-memory",
@@ -276,76 +282,104 @@ function InferenceForm({ step, pools, models }: FormContext) {
     }
     return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
   }, [chatModels]);
-  const selectedPublisher = model
-    ? publisherLabel(model.publisher || t("images.unknownPublisher"))
-    : undefined;
-  const expandedPublisher =
-    openPublisher === undefined ? selectedPublisher : openPublisher;
-
   return step === 1 ? (
     <div className="stack">
       <section className="stack">
         <strong>{t("wizard.inferenceConfigGroup")}</strong>
         <p className="muted">{t("wizard.textModelsOnly")}</p>
         <div className="inference-model-groups">
-          {modelGroups.map(([label, { publisher, items }]) => (
-            <details
-              key={label}
-              open={expandedPublisher === label}
-              className="panel inference-model-group"
-            >
-              <summary
-                className="between"
-                onClick={(event) => {
-                  event.preventDefault();
-                  setOpenPublisher(expandedPublisher === label ? null : label);
-                }}
+          {modelGroups.map(([label, { publisher, items }]) => {
+            const publisherModel = items.find(
+              (item) => item.id === spec.modelRef,
+            );
+            return (
+              <article
+                key={label}
+                className={`panel inference-model-group ${publisherModel ? "selected" : ""}`}
               >
-                <span className="inference-publisher-label">
-                  <ModelPublisherLogo publisher={publisher} size={26} />
-                  <strong>{label}</strong>
-                </span>
-                {items.some((item) => item.id === spec.modelRef) && (
-                  <span className="muted">{model?.name}</span>
-                )}
-              </summary>
-              <Field label={t("wizard.selectModel")}>
-                <select
-                  value={
-                    items.some((item) => item.id === spec.modelRef)
-                      ? spec.modelRef
-                      : ""
-                  }
-                  onChange={(event) => {
-                    const nextModel = items.find(
-                      (item) => item.id === event.target.value,
-                    );
-                    if (nextModel) {
-                      setOpenPublisher(label);
-                      setDependencies(
-                        {
-                          modelRef: nextModel.id,
-                          maxModelLen: Math.min(
-                            spec.maxModelLen,
-                            nextModel.context,
-                          ),
-                        },
-                        nextModel,
-                        compatiblePool(nextModel),
-                      );
-                    }
+                <div className="inference-publisher-header">
+                  <ModelPublisherLogo publisher={publisher} size={30} />
+                  <strong title={label}>{label}</strong>
+                  <span className="inference-publisher-count">
+                    {t("wizard.publisherModelCount", { count: items.length })}
+                  </span>
+                  <Check
+                    className="inference-publisher-check"
+                    size={16}
+                    aria-hidden="true"
+                  />
+                </div>
+                <Popover
+                  open={openPublisher === label}
+                  onOpenChange={(open) => {
+                    setOpenPublisher(open ? label : null);
+                    setModelSearch("");
                   }}
                 >
-                  <option value="">{t("wizard.selectModel")}</option>
-                  {items.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name} · {item.paramsB}B
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            </details>
-          ))}
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      className="inference-model-trigger"
+                      aria-label={`${t("wizard.selectModel")}: ${label}`}
+                      aria-expanded={openPublisher === label}
+                    >
+                      <span
+                        className={`inference-model-trigger-label ${publisherModel ? "has-value" : "placeholder"}`}
+                        title={publisherModel?.name || t("wizard.selectModel")}
+                      >
+                        {publisherModel?.name || t("wizard.selectModel")}
+                      </span>
+                      <ChevronDown size={16} aria-hidden="true" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="start"
+                    sideOffset={6}
+                    className="inference-model-popover"
+                    style={{ width: "var(--radix-popover-trigger-width)" }}
+                  >
+                    <Command shouldFilter>
+                      <Command.Input
+                        value={modelSearch}
+                        onValueChange={setModelSearch}
+                        placeholder={t("common.search")}
+                        aria-label={t("common.search")}
+                      />
+                      <Command.List>
+                        <Command.Empty>{t("images.noMatches")}</Command.Empty>
+                        {items.map((item) => (
+                          <Command.Item
+                            key={item.id}
+                            value={`${item.name} ${item.paramsB}B ${item.modelRef || item.id}`}
+                            onSelect={() => {
+                              setDependencies(
+                                {
+                                  modelRef: item.id,
+                                  maxModelLen: Math.min(
+                                    spec.maxModelLen,
+                                    item.context,
+                                  ),
+                                },
+                                item,
+                                compatiblePool(item),
+                              );
+                              setOpenPublisher(null);
+                              setModelSearch("");
+                            }}
+                          >
+                            <span className="inference-model-option-name">
+                              {item.name}
+                            </span>
+                            <small>{item.paramsB}B</small>
+                          </Command.Item>
+                        ))}
+                      </Command.List>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </article>
+            );
+          })}
         </div>
         {!selectedModel && (
           <p className="field-error">{t("wizard.textModelRequired")}</p>

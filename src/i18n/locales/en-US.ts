@@ -482,6 +482,7 @@ export default {
   "wizard.textModelsOnly":
     "Supports text and text-generating multimodal models through the chat API.",
   "wizard.selectModel": "Select a model",
+  "wizard.publisherModelCount": "{count} models",
   "wizard.textModelRequired":
     "Select a model that generates text. Image-only models cannot use this chat inference service.",
   "wizard.poolAutoChanged": "GPU model changed to a compatible option. Confirm it in the next step.",
