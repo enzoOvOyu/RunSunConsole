@@ -983,6 +983,8 @@ export default {
   "pipelines.zoomOut": "缩小",
   "pipelines.inputs": "输入 / 输出",
   "billing.period": "账期",
+  "billing.previousYear": "上一年",
+  "billing.nextYear": "下一年",
   "billing.payable": "所选账期应付",
   "billing.voucherUsed": "代金券已抵扣",
   "billing.invoices": "发票",

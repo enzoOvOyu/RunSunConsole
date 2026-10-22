@@ -1,0 +1,64 @@
+.billing-period-trigger {
+  min-width: 166px;
+  justify-content: space-between;
+  gap: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.billing-period-popover {
+  width: 272px;
+}
+
+.billing-period-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.billing-period-header strong {
+  font-size: var(--rs-fs-sm);
+  font-weight: 600;
+}
+
+.billing-period-nav {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+}
+
+.billing-period-months {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.billing-period-month {
+  min-height: 36px;
+  border: 1px solid transparent;
+  border-radius: var(--rs-r-sm);
+  background: transparent;
+  color: var(--rs-text);
+  font: inherit;
+  font-size: var(--rs-fs-sm);
+  cursor: pointer;
+}
+
+.billing-period-month:hover:not(:disabled) {
+  background: var(--rs-brand-soft);
+}
+
+.billing-period-month[aria-pressed="true"] {
+  background: var(--rs-brand);
+  color: #fff;
+}
+
+.billing-period-month:focus-visible {
+  outline: 2px solid var(--rs-focus-ring);
+  outline-offset: 1px;
+}
+
+.billing-period-month:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

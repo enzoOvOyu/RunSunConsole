@@ -5,7 +5,6 @@ import { invoicePeriodForSelection } from "../../lib/billing-period";
 import { formatResourceId } from "../../lib/ids";
 import { useData } from "../shared/hooks";
 import { t } from "../../i18n";
-import { useLocale } from "../../stores/locale";
 import { date } from "../../lib/date";
 import { money } from "../../lib/money";
 import {
@@ -20,6 +19,7 @@ import {
 } from "../../components/ui";
 import { TransactionTable } from "../resources/shared/common";
 import { BillingUsageTable } from "./BillingTables";
+import { BillingPeriodPicker } from "./BillingPeriodPicker";
 
 type BillingReport = {
   usage: Usage[];
@@ -32,7 +32,6 @@ type BillingReport = {
 };
 
 export default function BillsPage() {
-  const locale = useLocale((s) => s.locale);
   const currentPeriod = new Date().toISOString().slice(0, 7);
   const [period, setPeriod] = useUrlState("billing_period", currentPeriod);
   const report = useData<BillingReport>(
@@ -47,19 +46,14 @@ export default function BillsPage() {
         subtitle={t("pageDescription.bills")}
       />
       <div className="toolbar">
-        <label className="row">
-          {t("billing.period")}
-          <input
-            key={locale}
-            className="input"
-            type="month"
-            lang={locale}
-            aria-label={t("billing.period")}
-            max={currentPeriod}
+        <div className="row">
+          <span>{t("billing.period")}</span>
+          <BillingPeriodPicker
             value={period}
-            onChange={(event) => setPeriod(event.target.value)}
+            max={currentPeriod}
+            onChange={setPeriod}
           />
-        </label>
+        </div>
         <small>{t("common.allRegions")} · USD</small>
       </div>
       {report.isPending ? (

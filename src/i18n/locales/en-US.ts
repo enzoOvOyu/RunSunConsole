@@ -1024,6 +1024,8 @@ export default {
   "pipelines.zoomOut": "Zoom out",
   "pipelines.inputs": "Inputs / outputs",
   "billing.period": "Billing period",
+  "billing.previousYear": "Previous year",
+  "billing.nextYear": "Next year",
   "billing.payable": "Selected period due",
   "billing.voucherUsed": "Voucher credits used",
   "billing.invoices": "Invoices",
