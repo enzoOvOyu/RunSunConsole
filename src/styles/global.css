@@ -2029,6 +2029,14 @@ a:focus-visible {
   margin: 0;
 }
 
+.ticket-page {
+  font-family: var(--rs-font-sans);
+}
+
+.ticket-page :is(button, input, select, textarea) {
+  font-family: var(--rs-font-sans);
+}
+
 .ticket-toolbar {
   flex-wrap: wrap;
   align-items: center;

@@ -61,6 +61,8 @@ const categories: TicketCategory[] = [
 ];
 const priorities: TicketPriority[] = ["low", "normal", "high", "urgent"];
 const statuses: TicketStatus[] = ["open", "pending", "resolved", "closed"];
+const ticketTitlePreset = (category: TicketCategory) =>
+  t(`tickets.titlePreset.${category}`);
 const resourceKinds: Partial<Record<TicketCategory, Resource["kind"][]>> = {
   gpu_vm: ["gpu_vm"],
   gpu_baremetal: ["gpu_baremetal"],
@@ -222,18 +224,22 @@ export default function TicketsPage() {
   const quotaPreset = params.get("new") === "quota";
   const balancePreset = params.get("new") === "balance";
   const [createOpen, setCreateOpen] = useState(!!params.get("new"));
-  const [category, setCategory] = useState<TicketCategory>(
-    quotaPreset ? "quota_access" : balancePreset ? "billing" : "gpu_vm",
-  );
-  const [title, setTitle] = useState(
+  const initialCategory: TicketCategory = quotaPreset
+    ? "quota_access"
+    : balancePreset
+      ? "billing"
+      : "gpu_vm";
+  const [category, setCategory] = useState<TicketCategory>(initialCategory);
+  const [title, setTitle] = useState(() =>
     quotaPreset
       ? [t("data.ticket.quota"), params.get("metric"), params.get("region") || region]
           .filter(Boolean)
           .join(" · ")
       : balancePreset
         ? t("tickets.billingPreset")
-        : "",
+        : ticketTitlePreset(initialCategory),
   );
+  const [titleEdited, setTitleEdited] = useState(false);
   const [message, setMessage] = useState("");
   const [priority, setPriority] = useState<TicketPriority>("normal");
   const [resourceUuid, setResourceUuid] = useState("");
@@ -377,7 +383,7 @@ export default function TicketsPage() {
     },
   ];
   return (
-    <>
+    <div className="ticket-page">
       <PageHeader
         title={t("nav.tickets")}
         subtitle={t("pageDescription.tickets")}
@@ -427,6 +433,7 @@ export default function TicketsPage() {
                 onChange={(event) => {
                   const next = event.target.value as TicketCategory;
                   setCategory(next);
+                  if (!titleEdited) setTitle(ticketTitlePreset(next));
                   setResourceUuid("");
                   setContext({});
                 }}
@@ -441,7 +448,16 @@ export default function TicketsPage() {
             </Field>
           </div>
           <Field label={t("tickets.title")} error={attempted && title.trim().length < 3 ? t("tickets.titleRequired") : undefined}>
-            <input className="input" maxLength={120} value={title} onChange={(event) => setTitle(event.target.value)} aria-invalid={attempted && title.trim().length < 3} />
+            <input
+              className="input"
+              maxLength={120}
+              value={title}
+              onChange={(event) => {
+                setTitle(event.target.value);
+                setTitleEdited(true);
+              }}
+              aria-invalid={attempted && title.trim().length < 3}
+            />
           </Field>
           {requiredResource.has(category) || category === "image_driver" || category === "network_storage" ? (
             <Field label={t("tickets.relatedResource")} hint={requiredResource.has(category) ? t("tickets.resourceRequired") : t("tickets.resourceOptional")} error={attempted && requiredResource.has(category) && !resourceUuid ? t("tickets.resourceRequired") : undefined}>
@@ -536,7 +552,7 @@ export default function TicketsPage() {
           </div>
         </div>}
       </Modal>
-    </>
+    </div>
   );
 }
 
@@ -592,7 +608,7 @@ export function TicketDetail() {
     }
   };
   return (
-    <>
+    <div className="ticket-page">
       <PageHeader
         title={dt(ticket.title)}
         subtitle={`${ticket.caseNumber || ticket.id} · ${t(`tickets.category.${ticket.category}`)}`}
@@ -708,6 +724,6 @@ export function TicketDetail() {
           )}
         </div>
       </div>
-    </>
+    </div>
   );
 }

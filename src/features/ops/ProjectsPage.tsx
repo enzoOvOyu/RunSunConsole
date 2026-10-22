@@ -369,10 +369,6 @@ export function ProjectDetail() {
                   [t("project.defaultRegion"), t("common." + p.defaultRegion)],
                   [t("common.createdAt"), date(p.createdAt)],
                   [t("project.myRole"), t("common." + p.myRole)],
-                  [
-                    t("project.labels"),
-                    p.labels.length ? p.labels.join(", ") : "—",
-                  ],
                 ].map(([label, value]) => (
                   <div key={label}>
                     <dt>{label}</dt>
