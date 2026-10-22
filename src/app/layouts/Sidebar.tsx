@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import { ChevronDown } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { useAuth } from "../../stores/auth";
@@ -15,7 +15,6 @@ export function Sidebar({
 }) {
   const role = useAuth((s) => s.role);
   const { collapsedGroups, toggle } = useNav();
-  const location = useLocation();
   return (
     <>
       <aside
@@ -33,11 +32,7 @@ export function Sidebar({
         </NavLink>
         <nav className={styles.nav}>
           {buildGroups(role).map((group) => {
-            const expanded =
-              !collapsedGroups.includes(group.id) ||
-              group.items.some((item) =>
-                location.pathname.startsWith(item.path),
-              );
+            const expanded = !collapsedGroups.includes(group.id);
             const Icon = group.icon;
             return (
               <div className={styles.navGroup} key={group.id}>

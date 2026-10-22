@@ -18,6 +18,7 @@ import {
   cidrContains,
   cidrOverlaps,
   isPublicIpv4,
+  vpcNetworkType,
 } from "../../lib/network";
 import type {
   InferenceGovernance,
@@ -1470,8 +1471,7 @@ async function dispatch(request: Request) {
             !v.deletedAt &&
             v.projectId === projectId &&
             v.region === code &&
-            (!requestedKind ||
-              (v.networkType || "standard") === requestedVpcType),
+            (!requestedKind || vpcNetworkType(v) === requestedVpcType),
         )
         .map((v) => ({
           ...v,

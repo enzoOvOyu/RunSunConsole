@@ -1,5 +1,5 @@
 import { poolDisplayName } from "../../../lib/gpu-labels";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { EP, query } from "../../../lib/api-client";
 import { useData } from "../../shared/hooks";
@@ -28,6 +28,7 @@ import {
 import { t, dt } from "../../../i18n";
 import { defaultScaling, normalizeSpec } from "../../../lib/config";
 import { SCALING_METRIC_LIMITS } from "../../../lib/schema";
+import { vpcNetworkType } from "../../../lib/network";
 import { readSshKeys } from "../../../lib/ssh-keys";
 import {
   imageArchitectures,
@@ -594,17 +595,23 @@ export function NetworkFields({
       }),
     { enabled: !!projectId },
   );
+  const availableVpcs = useMemo(
+    () =>
+      (options.data?.vpcs || []).filter(
+        (vpc) => !dedicatedBaremetal || vpcNetworkType(vpc) === "baremetal",
+      ),
+    [options.data?.vpcs, dedicatedBaremetal],
+  );
   const vpcId = spec.vpc || "";
   const instanceQuantity = "quantity" in spec ? spec.quantity : 0;
-  const selected = options.data?.vpcs.find((v) => v.id === vpcId);
+  const selected = availableVpcs.find((v) => v.id === vpcId);
   const groups =
     options.data?.securityGroups.filter((g) => g.vpcId === vpcId) || [];
   useEffect(() => {
     if (!options.data) return;
     const current = form.getValues("spec");
     const vpc =
-      options.data.vpcs.find((v) => v.id === current.vpc) ||
-      options.data.vpcs[0];
+      availableVpcs.find((v) => v.id === current.vpc) || availableVpcs[0];
     if (!vpc) return;
     const subnet =
       vpc.subnets.find((s) => s.id === current.subnet) || vpc.subnets[0];
@@ -635,7 +642,7 @@ export function NetworkFields({
         },
         { shouldValidate: true },
       );
-  }, [options.data, form]);
+  }, [options.data, form, availableVpcs]);
   useEffect(() => {
     const current = form.getValues("spec");
     if (
@@ -674,7 +681,7 @@ export function NetworkFields({
             aria-label="VPC"
             value={vpcId}
             onChange={(e) => {
-              const v = options.data.vpcs.find((v) => v.id === e.target.value)!;
+              const v = availableVpcs.find((v) => v.id === e.target.value)!;
               update({
                 vpc: v.id,
                 subnet: v.subnets[0]?.id || "",
@@ -687,9 +694,14 @@ export function NetworkFields({
             }}
           >
             <option value="">{t("network.select")}</option>
-            {options.data.vpcs.map((v) => (
+            {availableVpcs.map((v) => (
               <option key={v.id} value={v.id}>
-                {dt(v.name)} · {v.cidr}
+                {t(
+                  vpcNetworkType(v) === "baremetal"
+                    ? "network.vpcTypeBaremetal"
+                    : "network.vpcTypeStandard",
+                )}{" "}
+                · {dt(v.name)} · {v.cidr}
               </option>
             ))}
           </select>

@@ -18,6 +18,7 @@ import {
   subnetCapacity,
   privateCidr,
   cidrContains,
+  vpcNetworkType,
 } from "../../lib/network";
 export class NetworkFailure extends Error {
   constructor(
@@ -54,6 +55,8 @@ export function networkAudit(
 export function ensureScope(n: NetworkState, scope: NetworkScope) {
   const regionIndex = REGIONS.indexOf(scope.region);
   const now = new Date().toISOString();
+  for (const vpc of n.vpcs)
+    if (!vpc.networkType) vpc.networkType = vpcNetworkType(vpc);
   for (const networkType of ["standard", "baremetal"] as const) {
     const vpcId =
       networkType === "standard"
@@ -185,7 +188,7 @@ export function resolveNetwork(n: NetworkState, r: Resource) {
     !vpc ||
     vpc.projectId !== r.projectId ||
     vpc.region !== r.region ||
-    (vpc.networkType || "standard") !== requiredType
+    vpcNetworkType(vpc) !== requiredType
   )
     networkFail(409, "NETWORK_SCOPE_MISMATCH");
   const alias = r.spec.subnet?.match(/^(jp|sg|us)-(default|private)$/);

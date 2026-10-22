@@ -102,3 +102,14 @@ export function evaluateSecurityGroups(
     return "allow";
   return packet.direction === "outbound" ? "allow" : "deny";
 }
+
+export function vpcNetworkType(vpc: {
+  id: string;
+  name: string;
+  networkType?: "standard" | "baremetal";
+}): "standard" | "baremetal" {
+  if (vpc.networkType) return vpc.networkType;
+  return /bare.?metal|(^|[-_])bm([-_]|$)/i.test(`${vpc.id} ${vpc.name}`)
+    ? "baremetal"
+    : "standard";
+}

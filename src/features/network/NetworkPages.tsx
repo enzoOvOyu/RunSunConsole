@@ -2,12 +2,13 @@ import { useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Plus, Network, Globe2, ShieldCheck, Cable } from "lucide-react";
 import type { Project, Usage } from "../../types/domain";
-import type { SubnetView, SecurityRule } from "../../types/network";
+import type { SubnetView, SecurityRule, Vpc } from "../../types/network";
 import { EP, post, patch, remove, query } from "../../lib/api-client";
 import { useAuth } from "../../stores/auth";
 import { useRegion } from "../../stores/region";
 import { canWrite } from "../../lib/rbac";
 import { t, dt } from "../../i18n";
+import { vpcNetworkType } from "../../lib/network";
 import { money, number, unitMoney } from "../../lib/money";
 import { date } from "../../lib/date";
 import { resourceLink } from "../../lib/ids";
@@ -231,8 +232,7 @@ function NetworkPage({ kind }: { kind: NetworkKind }) {
                         }: {
                           row: { original: NetworkRecord };
                         }) =>
-                          "networkType" in row.original &&
-                          row.original.networkType === "baremetal"
+                          vpcNetworkType(row.original as Vpc) === "baremetal"
                             ? t("network.vpcTypeBaremetal")
                             : t("network.vpcTypeStandard"),
                       },
