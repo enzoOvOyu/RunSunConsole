@@ -134,6 +134,12 @@ const tables = [
     },
   },
   {
+    table: "billing_invoices",
+    path: "invoices",
+    id: "id",
+    fields: { billing_period: "period", amount: "amount" },
+  },
+  {
     table: "billing_transactions",
     path: "transactions",
     id: "id",

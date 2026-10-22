@@ -43,6 +43,7 @@ import {
   type Role,
   type Quota,
   type Usage,
+  type Invoice,
   type ScalingPolicy,
   type StorageObject,
   type Pipeline,
@@ -70,6 +71,7 @@ import {
 import { canWrite, canManageOrg } from "../../lib/rbac";
 import { displayId, resourceLink } from "../../lib/ids";
 import { round } from "../../lib/money";
+import { invoicePeriodForSelection } from "../../lib/billing-period";
 import { compatiblePrecisions } from "../../lib/inference-precision";
 import { STORAGE_PRODUCTS } from "../../lib/storage";
 import { volumesForResource } from "../fixtures/storage";
@@ -192,6 +194,38 @@ export const quotas = (): Quota[] =>
     })),
   );
 const period = (u: Usage, p: string) => u.usageHour.startsWith(p);
+function voucherUsedInPeriod(billingPeriod: string) {
+  return round(
+    db.vouchers
+      .flatMap((voucher) => voucher.redemptions)
+      .filter((redemption) => redemption.at.startsWith(billingPeriod))
+      .reduce((sum, redemption) => sum + redemption.amount, 0),
+  );
+}
+function invoicesForSelection(selectedPeriod: string): Invoice[] {
+  const billingPeriod = invoicePeriodForSelection(selectedPeriod);
+  if (!billingPeriod) return [];
+  const existing = db.invoices.find(
+    (invoice) => invoice.period === billingPeriod,
+  );
+  if (existing) return [existing];
+  const rows = db.usage.filter((usage) => period(usage, billingPeriod));
+  if (!rows.length) return [];
+  const grossAmount = round(rows.reduce((sum, usage) => sum + usage.amount, 0));
+  const voucherUsed = voucherUsedInPeriod(billingPeriod);
+  const invoice: Invoice = {
+    id: `invoice-${billingPeriod}`,
+    period: billingPeriod,
+    issuedAt: new Date().toISOString(),
+    status: "paid",
+    grossAmount,
+    voucherUsed,
+    amount: Math.max(0, round(grossAmount - voucherUsed)),
+  };
+  db.invoices.push(invoice);
+  persist();
+  return [invoice];
+}
 function assigned(r: Resource, pool: string) {
   if (r.deletedAt || !["running", "provisioning"].includes(r.status)) return 0;
   return r.kind === "vgpu"
@@ -2817,6 +2851,33 @@ async function dispatch(request: Request) {
         )
         .sort((a, b) => b.at.localeCompare(a.at)),
     );
+  if (path === "/api/billing/report") {
+    const billingPeriod =
+      qs.get("billing_period") || new Date().toISOString().slice(0, 7);
+    const usage = db.usage
+      .filter((row) => period(row, billingPeriod))
+      .sort((a, b) => b.usageHour.localeCompare(a.usageHour));
+    const invoices = invoicesForSelection(billingPeriod);
+    const voucherUsed = voucherUsedInPeriod(billingPeriod);
+    const grossAmount = round(usage.reduce((sum, row) => sum + row.amount, 0));
+    const selectedInvoice = invoices.find(
+      (invoice) => invoice.period === billingPeriod,
+    );
+    return json({
+      usage,
+      invoices,
+      transactions: db.transactions
+        .filter((transaction) => transaction.at.startsWith(billingPeriod))
+        .sort((a, b) => b.at.localeCompare(a.at))
+        .slice(0, 100),
+      grossAmount,
+      voucherUsed: selectedInvoice?.voucherUsed ?? voucherUsed,
+      payable:
+        selectedInvoice?.amount ??
+        Math.max(0, round(grossAmount - voucherUsed)),
+      balance: db.account.creditBalance,
+    });
+  }
   if (path === "/api/billing/usage") {
     const from = qs.get("from"),
       to = qs.get("to");
@@ -2848,24 +2909,12 @@ async function dispatch(request: Request) {
         .sort((a, b) => b.at.localeCompare(a.at))
         .slice(0, 100),
     );
-  if (path === "/api/billing/invoices") {
-    const selectedPeriod = qs.get("billing_period");
-    const periods = [
-      ...new Set(db.usage.map((u) => u.usageHour.slice(0, 7))),
-    ].filter((p) => !selectedPeriod || p === selectedPeriod);
+  if (path === "/api/billing/invoices")
     return json(
-      periods.map((p) => ({
-        id: `invoice-${p}`,
-        period: p,
-        status: p === new Date().toISOString().slice(0, 7) ? "open" : "paid",
-        amount: round(
-          db.usage
-            .filter((u) => period(u, p))
-            .reduce((a, u) => a + u.amount, 0),
-        ),
-      })),
+      invoicesForSelection(
+        qs.get("billing_period") || new Date().toISOString().slice(0, 7),
+      ),
     );
-  }
   if (path === "/api/billing/vouchers")
     return json(
       db.vouchers

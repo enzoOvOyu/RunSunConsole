@@ -269,6 +269,15 @@ export interface Usage {
   amount: number;
   status: Status;
 }
+export interface Invoice {
+  id: string;
+  period: string;
+  issuedAt: string;
+  status: "paid";
+  grossAmount: number;
+  voucherUsed: number;
+  amount: number;
+}
 export interface Transaction {
   id: string;
   resourceUuid: ResourceUuid | null;

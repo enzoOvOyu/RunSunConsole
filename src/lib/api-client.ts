@@ -12,6 +12,7 @@ export const EP = {
   rates: "/api/billing/rates",
   summary: "/api/billing/summary",
   usage: "/api/billing/usage",
+  report: "/api/billing/report",
   transactions: "/api/billing/transactions",
   invoices: "/api/billing/invoices",
   vouchers: "/api/billing/vouchers",

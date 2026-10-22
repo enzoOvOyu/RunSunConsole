@@ -12,6 +12,7 @@ import type {
   Project,
   ResourceEvent,
   Usage,
+  Invoice,
   Transaction,
   Order,
   ScalingPolicy,
@@ -51,6 +52,7 @@ export interface Database {
   projects: Project[];
   events: ResourceEvent[];
   usage: Usage[];
+  invoices: Invoice[];
   transactions: Transaction[];
   orders: Order[];
   policies: ScalingPolicy[];
@@ -318,6 +320,7 @@ export function makeDatabase(): Database {
     projects: structuredClone(PROJECTS),
     events,
     usage,
+    invoices: [],
     transactions,
     orders,
     policies,
@@ -506,6 +509,7 @@ export function restoreDatabase() {
         ...model,
         favorite: savedFavorites.get(model.id) ?? model.favorite,
       }));
+      data.invoices ??= [];
       data.usageMeters ??= {};
       data.replicaRestarts ??= {};
       data.voucherPending ??= {};
@@ -546,6 +550,7 @@ export function restoreDatabase() {
         replicaRestarts: data.replicaRestarts || {},
         voucherPending: data.voucherPending || {},
         usage,
+        invoices: data.invoices || [],
       };
     }
   } catch {

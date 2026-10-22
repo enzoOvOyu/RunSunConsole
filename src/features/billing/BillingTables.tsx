@@ -1,41 +1,23 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Usage, Resource } from "../../types/domain";
-import { EP, query } from "../../lib/api-client";
+import { EP } from "../../lib/api-client";
 import { resourceLink } from "../../lib/ids";
 import { useData } from "../shared/hooks";
+import { aggregateUsage, allocateCents } from "./cost-analysis";
 import { t } from "../../i18n";
 import { money, number, unitMoney } from "../../lib/money";
-import {
-  Panel,
-  Button,
-  DataTable,
-  Modal,
-  Loading,
-  csv,
-} from "../../components/ui";
-export function aggregateUsage(rows: Usage[]) {
-  const map = new Map<string, Usage>();
-  for (const u of rows) {
-    const key = `${u.resourceUuid}-${u.unit}-${u.unitPrice}`;
-    const old = map.get(key);
-    if (old) {
-      old.amount += u.amount;
-      old.quantity += u.quantity;
-    } else map.set(key, { ...u });
-  }
-  return [...map.values()];
-}
+import { Panel, Button, DataTable, Modal, csv } from "../../components/ui";
 export function BillingUsageTable({
   usage,
   title,
   billingPeriod = new Date().toISOString().slice(0, 7),
-  region,
+  totalAmount,
 }: {
   usage: Usage[];
   title?: string;
   billingPeriod?: string;
-  region?: string | null;
+  totalAmount?: number;
 }) {
   const [id, setId] = useState("");
   const navigate = useNavigate();
@@ -43,16 +25,21 @@ export function BillingUsageTable({
     ["billing-resources"],
     EP.resources + "?size=1000&includeDeleted=true",
   );
-  const detail = useData<Usage[]>(
-    ["usage-detail", id, billingPeriod, region],
-    EP.usage +
-      query({
-        resource_id: id,
-        billing_period: billingPeriod,
-        region,
-      }),
-    { enabled: !!id },
+  const aggregated = useMemo(
+    () => aggregateUsage(usage, totalAmount),
+    [usage, totalAmount],
   );
+  const detailRows = useMemo(() => {
+    const rows = usage.filter((row) => row.resourceUuid === id);
+    const target = aggregated
+      .filter((row) => row.resourceUuid === id)
+      .reduce((sum, row) => sum + row.amount, 0);
+    const amounts = allocateCents(
+      rows.map((row) => row.amount),
+      Math.round((target + Number.EPSILON) * 100),
+    );
+    return rows.map((row, index) => ({ ...row, amount: amounts[index] }));
+  }, [usage, aggregated, id]);
   const cols = [
     { accessorKey: "displayId", header: "ID" },
     {
@@ -113,7 +100,7 @@ export function BillingUsageTable({
         }
       >
         <DataTable
-          data={aggregateUsage(usage)}
+          data={aggregated}
           columns={cols}
           onRow={(row) => setId(row.resourceUuid)}
         />
@@ -144,32 +131,26 @@ export function BillingUsageTable({
           >
             {t("nav.resources")}
           </Button>
-          {detail.isPending ? (
-            <Loading />
-          ) : (
-            <>
-              <Button
-                onClick={() =>
-                  csv(
-                    `billing-usage-${billingPeriod}-${id}.csv`,
-                    (detail.data || []).map((row) => ({
-                      ...row,
-                      billingPeriod,
-                    })) as unknown as Record<string, unknown>[],
-                  )
-                }
-              >
-                {t("common.export")}
-              </Button>
-              <DataTable
-                data={detail.data || []}
-                columns={[
-                  { accessorKey: "usageHour", header: t("common.time") },
-                  ...cols,
-                ]}
-              />
-            </>
-          )}
+          <Button
+            onClick={() =>
+              csv(
+                `billing-usage-${billingPeriod}-${id}.csv`,
+                detailRows.map((row) => ({
+                  ...row,
+                  billingPeriod,
+                })) as unknown as Record<string, unknown>[],
+              )
+            }
+          >
+            {t("common.export")}
+          </Button>
+          <DataTable
+            data={detailRows}
+            columns={[
+              { accessorKey: "usageHour", header: t("common.time") },
+              ...cols,
+            ]}
+          />
         </div>
       </Modal>
     </>
