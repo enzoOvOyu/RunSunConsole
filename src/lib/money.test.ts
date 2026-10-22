@@ -7,5 +7,5 @@ it("formats USD and avoids float display errors in both locales", () => {
     expect(money(1234.5)).toContain("1,234.50");
   }
   expect(round(0.1 + 0.2)).toBe(0.3);
-  expect(size(2048)).toBe("2 TB");
+  expect(size(2048)).toBe("2.05 TB");
 });

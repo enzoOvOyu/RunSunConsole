@@ -7,6 +7,7 @@ import { poolsFor } from "../fixtures/gpu-specs";
 import { estimate } from "../lib/derive";
 import { RATES } from "../fixtures/pricing";
 import { storageSelectionsSchema } from "../../lib/schema";
+import { clusterView } from "../lib/runtime";
 
 const server = setupServer(...handlers);
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
@@ -315,4 +316,28 @@ it("keeps regional storage allocation baselines out of tenant volume APIs", asyn
     (quota: { metric: string }) => quota.metric === "storage",
   );
   expect(after.usedValue).toBe(before.usedValue);
+});
+
+it("keeps customer file systems linked to valid projects and compute mounts", async () => {
+  const volumes = (await request("/storage/volumes")).data.filter((volume: { kind: string }) => volume.kind === "file");
+  expect(volumes.length).toBeGreaterThan(0);
+  const products = (await request("/storage/products")).data;
+  for (const volume of volumes) {
+    expect(db.projects.some((project) => project.id === volume.projectId && !project.deletedAt)).toBe(true);
+    expect(products.some((product: { kind: string; tier: string }) => product.kind === "file" && product.tier === volume.tier)).toBe(true);
+    if (!volume.resourceUuid) {
+      expect(volume.mountPath).toBe("");
+      continue;
+    }
+    const linked = db.resources.find((resource) => resource.resourceUuid === volume.resourceUuid && !resource.deletedAt);
+    expect(linked).toBeDefined();
+    expect(linked?.projectId).toBe(volume.projectId);
+    expect(linked?.region).toBe(volume.region);
+    expect(volume.mountPath).toMatch(/^\//);
+    if (linked?.kind === "vgpu" && volume.role === "pvc") {
+      const pv = clusterView(linked).storage.pvs.find((item) => item.volumeId === volume.id);
+      expect(pv?.source).toBe("file");
+      expect(clusterView(linked).storage.pvcs.some((item) => item.pvName === pv?.name && item.status === "Bound")).toBe(true);
+    }
+  }
 });

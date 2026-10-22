@@ -38,11 +38,17 @@ describe("derived business contracts", () => {
     r.status = "provisioning";
     expect(costPerHour(r, RATES)).toBe(0);
   });
-  it("scales compute while keeping control plane and PVC fixed", () => {
+  it("scales node storage with compute but keeps shared files and control plane fixed", () => {
     const r = seedResources().find((r) => r.kind === "vgpu")!;
     const e = estimate(r, RATES);
     expect(e.lines.find((l) => l.key === "control")?.scales).toBe(false);
-    expect(e.lines.find((l) => l.key === "storage")?.scales).toBe(false);
+    expect(e.lines.find((l) => l.key === "storage")?.scales).toBe(true);
+    if (r.kind === "vgpu") {
+      r.spec.storageMode = "shared_file";
+      r.spec.storageClass = "shared-fs";
+      const shared = estimate(r, RATES);
+      expect(shared.lines.find((l) => l.key === "storage")?.scales).toBe(false);
+    }
   });
   it("uses 6N/8N training and a bandwidth-limited decode bound", () => {
     const input = {
