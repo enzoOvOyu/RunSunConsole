@@ -2,7 +2,6 @@ import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { z } from "zod";
 import type { DeploymentOptions, Pool, Image, VgpuSpec } from "../../types/domain";
-import type { StorageVolume } from "../../types/storage";
 import { cidrOverlaps, cidrRange, vpcNetworkType } from "../../lib/network";
 import { EP, query } from "../../lib/api-client";
 import { storageSelectionsSchema, nodePoolSchema, vgpuSchema, isCidr } from "../../lib/schema";
@@ -19,14 +18,6 @@ import {
 
 const poolName = (pool: VgpuSpec["nodePools"][number], index: number) => pool.name || `gpu-pool-${index + 1}`;
 const selectedSubnets = (spec: VgpuSpec) => spec.subnets?.length ? spec.subnets : (spec.subnet ? [spec.subnet] : []);
-const zoneForVolume = (volume: StorageVolume) => volume.zone || `${volume.region}-a`;
-const nodeZonesFor = (spec: VgpuSpec, vpc?: DeploymentOptions["vpcs"][number]) => {
-  const subnets = selectedSubnets(spec).map((id) => vpc?.subnets.find((item) => item.id === id)).filter((item) => !!item);
-  if (!subnets.length) return new Set<string>();
-  const controlPlane = spec.controlPlaneTier === "ha" ? 3 : 1;
-  const count = spec.nodePools.reduce((sum, pool) => sum + pool.nodeCount, 0);
-  return new Set(Array.from({ length: count }, (_, index) => subnets[(controlPlane + index) % subnets.length].zone));
-};
 const suggestedCidrs = (vpcCidr: string) => {
   const candidates = ["172.20.0.0/16", "172.21.0.0/16", "172.22.0.0/16", "172.23.0.0/16", "10.240.0.0/16", "10.241.0.0/16", "10.242.0.0/16", "192.168.240.0/20", "192.168.224.0/20"];
   const available = candidates.filter((cidr) => !cidrOverlaps(cidr, vpcCidr));
@@ -41,7 +32,7 @@ const cidrProblem = (podCidr: string, serviceCidr: string, vpcCidr: string) => {
   return "";
 };
 
-function validStep(values: WizardValues, step: number, lookups?: { network?: DeploymentOptions; volumes?: StorageVolume[]; pools: Pool[]; images: Image[] }) {
+function validStep(values: WizardValues, step: number, lookups?: { network?: DeploymentOptions; pools: Pool[]; images: Image[] }) {
   const spec = values.spec as VgpuSpec;
   if (step === 0) return ["1.28", "1.29", "1.30", "1.31"].includes(spec.k8sVersion) &&
     ["standard", "ha"].includes(spec.controlPlaneTier) && (!spec.apiServerPublic || isCidr(spec.authorizedCidr));
@@ -62,27 +53,12 @@ function validStep(values: WizardValues, step: number, lookups?: { network?: Dep
   }
   if (step === 2) {
     const mode = spec.storageMode || "dynamic_block";
-    const bindings = spec.volumeBindings || [];
-    const vpc = lookups?.network?.vpcs.find((item) => item.id === spec.vpc);
-    const zones = nodeZonesFor(spec, vpc);
-    const expectedKind = mode === "shared_file" ? "file" : "block";
-    const modeValid = mode === "dynamic_block" ? !bindings.length && !spec.localPvGb && spec.storageClass !== "shared-fs" :
-      mode === "local_nvme" ? !bindings.length && !spec.defaultPvcGb && !!spec.localPvGb :
-        bindings.length > 0 && !spec.defaultPvcGb && !spec.localPvGb;
-    return modeValid && !!spec.storageClass && Number.isInteger(spec.defaultPvcGb) && spec.defaultPvcGb >= 0 &&
-      Number.isInteger(spec.localPvGb ?? 0) && (spec.localPvGb ?? 0) >= 0 &&
-      (mode !== "local_nvme" || (spec.localPvGb || 0) <= Math.min(...spec.nodePools.map((pool) => lookups?.pools.find((item) => item.code === pool.poolCode)?.localNvmeGb || 0))) &&
-      storageSelectionsSchema.safeParse(spec.storageSelections || []).success &&
-      vgpuSchema.shape.volumeBindings.safeParse(bindings).success &&
-      new Set(bindings.map((binding) => binding.volumeId)).size === bindings.length &&
-      new Set(bindings.map((binding) => binding.pvName)).size === bindings.length &&
-      new Set(bindings.map((binding) => `${binding.namespace}/${binding.pvcName}`)).size === bindings.length &&
-      bindings.every((binding) => {
-        const volume = lookups?.volumes?.find((item) => item.id === binding.volumeId);
-        return !!volume && volume.kind === expectedKind && volume.role === "custom" && !volume.resourceUuid && volume.sizeGb > 0 &&
-          volume.projectId === values.projectId && volume.region === values.region &&
-          (volume.kind === "file" || zones.has(zoneForVolume(volume)));
-      });
+    const cloud = mode === "dynamic_block" || mode === "existing_block" || mode === "shared_file";
+    return !!spec.storageClass && storageSelectionsSchema.safeParse(spec.storageSelections || []).success &&
+      (spec.volumeBindings || []).length === 0 &&
+      (cloud ? Number.isInteger(spec.defaultPvcGb) && spec.defaultPvcGb > 0 && spec.defaultPvcGb <= 32768 && !spec.localPvGb :
+        mode === "local_nvme" && spec.defaultPvcGb === 0 && Number.isInteger(spec.localPvGb) && !!spec.localPvGb &&
+        spec.localPvGb <= Math.min(...spec.nodePools.map((pool) => lookups?.pools.find((item) => item.code === pool.poolCode)?.localNvmeGb || 0)));
   }
   if (step === 3)
     return z.array(nodePoolSchema).min(1).max(5).safeParse(spec.nodePools).success &&
@@ -201,98 +177,47 @@ type ClusterStorageMode = NonNullable<VgpuSpec["storageMode"]>;
 const storageModes: ClusterStorageMode[] = ["dynamic_block", "existing_block", "local_nvme", "shared_file"];
 
 function ClusterStorage({ pools }: { pools: Pool[] }) {
-  const { spec, update, form } = useSpec<VgpuSpec>();
-  const region = form.watch("region"), projectId = form.watch("projectId");
-  const volumeQuery = useData<StorageVolume[]>(["cluster-block-volumes", region, projectId],
-    EP.storageVolumes + query({ region, project_id: projectId }), { enabled: !!projectId, poll: true, pollMs: 5000 });
-  const network = useData<DeploymentOptions>(["cluster-network-options", region, projectId],
-    EP.options + query({ region, project_id: projectId, kind: "vgpu" }), { enabled: !!projectId });
+  const { spec, update } = useSpec<VgpuSpec>();
   const mode: ClusterStorageMode = spec.storageMode || "dynamic_block";
-  const vpc = network.data?.vpcs.find((item) => item.id === spec.vpc);
-  const selectedZones = nodeZonesFor(spec, vpc);
-  const eligible = (volumeQuery.data || []).filter((volume) => volume.role === "custom" && !volume.resourceUuid &&
-    volume.projectId === projectId && volume.region === region && volume.sizeGb > 0);
-  const blockVolumes = eligible.filter((volume) => volume.kind === "block" && selectedZones.has(zoneForVolume(volume)));
-  const fileVolumes = eligible.filter((volume) => volume.kind === "file");
-  const bindings = spec.volumeBindings || [];
-  const candidates = mode === "shared_file" ? fileVolumes : blockVolumes;
-  const available = candidates.filter((volume) => !bindings.some((binding) => binding.volumeId === volume.id));
-  const maxLocal = Math.min(...spec.nodePools.map((pool) => pools.find((item) => item.code === pool.poolCode)?.localNvmeGb || 0));
   const nodes = spec.nodePools.reduce((total, pool) => total + pool.nodeCount, 0);
+  const maxLocal = Math.min(...spec.nodePools.map((pool) => pools.find((item) => item.code === pool.poolCode)?.localNvmeGb || 0));
   const physicalLocal = spec.nodePools.reduce((total, pool) => total + pool.nodeCount * (pools.find((item) => item.code === pool.poolCode)?.localNvmeGb || 0), 0);
-  const boundCapacity = bindings.reduce((total, binding) => total + ((volumeQuery.data || []).find((volume) => volume.id === binding.volumeId)?.sizeGb || 0), 0);
-  const chooseMode = (next: ClusterStorageMode) => update({ storageMode: next, defaultPvcGb: 0, volumeBindings: [],
+  const isBlock = mode === "dynamic_block" || mode === "existing_block";
+  const cloud = isBlock || mode === "shared_file";
+  const totalCapacity = isBlock ? spec.defaultPvcGb * nodes : mode === "shared_file" ? spec.defaultPvcGb : (spec.localPvGb || 0) * nodes;
+  const volumeCount = mode === "shared_file" ? 1 : nodes;
+  const chooseMode = (next: ClusterStorageMode) => update({ storageMode: next,
+    defaultPvcGb: next === "local_nvme" ? 0 : 100,
     localPvGb: next === "local_nvme" ? Math.min(100, maxLocal) : 0,
-    storageClass: spec.storageClass === "shared-fs" ? "ssd" : spec.storageClass });
-  const addBinding = () => {
-    const volume = available[0]; if (!volume) return;
-    const index = Array.from({ length: 8 }, (_, i) => i + 1).find((value) => !bindings.some((binding) => binding.pvName === `data-pv-${value}`)) || 1;
-    update({ volumeBindings: [...bindings, { volumeId: volume.id, pvName: `data-pv-${index}`, pvcName: `data-pvc-${index}`, namespace: "default" }] });
-  };
-  const relationship = mode === "dynamic_block" ? ["Pod", "PVC", "PV", t("eks.newCloudDisk")] :
-    mode === "local_nvme" ? ["Pod", "PVC", "Local PV", "NVMe", t("eks.gpuNode")] :
-      ["Pod", "PVC", "PV", mode === "shared_file" ? t("eks.existingFile") : t("eks.existingBlock")];
+    volumeBindings: [], storageClass: next === "shared_file" ? "shared-fs" : spec.storageClass === "nvme" ? "nvme" : "ssd" });
+  const relationship = mode === "local_nvme" ? ["Pod", "PVC", "Local PV", "NVMe", t("eks.gpuNode")] :
+    ["Pod", "PVC", "PV", mode === "shared_file" ? t("eks.platformFileVolume") : t("eks.platformBlockVolume")];
   return <div className="stack cluster-storage-step">
     <p>{t("eks.storageStepIntro")}</p>
     <Panel title={t("eks.clusterStoragePolicy")}>
-      <div className="form-grid">
-        <Field label={t("eks.csiState")}><strong>{t("eks.managedCsi")}</strong></Field>
-        <Field label={t("eks.defaultStorageClass")}><select value={spec.storageClass === "nvme" ? "nvme" : "ssd"} onChange={(event) => update({ storageClass: event.target.value })}>
-          <option value="ssd">SSD · {t("eks.dynamicBlock")}</option><option value="nvme">NVMe · {t("eks.dynamicBlock")}</option>
-        </select></Field>
-      </div>
+      <KeyValues items={[[t("eks.csiState"), t("eks.managedCsi")], [t("eks.defaultStorageClass"), mode === "shared_file" ? "shared-fs" : mode === "local_nvme" ? "local-nvme" : spec.storageClass]]} />
       <small>{t("eks.clusterStoragePolicyHint")}</small>
     </Panel>
     <Panel title={t("eks.chooseStorageScheme")}>
-      <div className="cluster-storage-options">
-        {storageModes.filter((item) => item !== "shared_file" || fileVolumes.length > 0 || mode === "shared_file").map((item) => <button type="button" key={item}
-          className={`cluster-storage-option ${mode === item ? "selected" : ""}`}
-          aria-pressed={mode === item} onClick={() => chooseMode(item)}>
-          <strong>{t(`eks.storageMode.${item}`)}</strong><small>{t(`eks.storageModeHint.${item}`)}</small>
-        </button>)}
-      </div>
-      {!fileVolumes.length && mode !== "shared_file" && <small>{t("eks.fileRequiresVolume")} <Link to={`/storage/file?region=${region}&project_id=${projectId}&create=1`} target="_blank" rel="noreferrer">{t("eks.openFileStorage")}</Link></small>}
+      <div className="cluster-storage-options">{storageModes.map((item) => <button type="button" key={item}
+        className={`cluster-storage-option ${mode === item ? "selected" : ""}`}
+        aria-pressed={mode === item} onClick={() => chooseMode(item)}>
+        <strong>{t(`eks.storageMode.${item}`)}</strong><small>{t(`eks.storageModeHint.${item}`)}</small>
+      </button>)}</div>
     </Panel>
-    {mode === "dynamic_block" && <Panel title={t("eks.initialPvc")}>
-      <Field label={t("eks.createInitialPvc")}><input type="checkbox" checked={spec.defaultPvcGb > 0} onChange={(event) => update({ defaultPvcGb: event.target.checked ? 100 : 0 })} /></Field>
-      {spec.defaultPvcGb > 0 && <div className="form-grid"><SpecNumber name="defaultPvcGb" label={t("eks.requestedCapacity")} min={1} max={32768} />
-        <Field label={t("eks.initialPvcUse")}><strong>{t("eks.workloadData")}</strong></Field></div>}
-      <KeyValues items={[[t("eks.accessMode"), t("eks.rwo")], [t("eks.volumeType"), spec.storageClass.toUpperCase()], [t("eks.bindingPolicy"), t("eks.immediateBinding")], [t("eks.volumeZone"), [...selectedZones][0] || "—"]]} />
-      <small>{t("eks.dynamicInitialHint")}</small>
-    </Panel>}
-    {(mode === "existing_block" || mode === "shared_file") && <Panel title={t(mode === "shared_file" ? "eks.existingFilePv" : "eks.existingBlockPv")}
-      action={available.length && bindings.length < 8 ? <Button onClick={addBinding}>{t("storage.add")}</Button> : undefined}>
-      <small>{t(mode === "shared_file" ? "eks.fileBindingHint" : "eks.blockBindingHint")}</small>
-      {volumeQuery.error && <ErrorState error={volumeQuery.error} />}
-      {!volumeQuery.isPending && !candidates.length && <div className="notice">
-        {t(mode === "shared_file" ? "eks.noEligibleFile" : "eks.noEligibleBlock")} {" "}
-        <Link to={`/storage/${mode === "shared_file" ? "file" : "block"}?region=${region}&project_id=${projectId}&create=1`} target="_blank" rel="noreferrer">{t(mode === "shared_file" ? "eks.openFileStorage" : "eks.openBlockStorage")}</Link>
-      </div>}
-      {bindings.map((binding, index) => {
-        const selectedVolume = candidates.find((volume) => volume.id === binding.volumeId);
-        const options = [...available, ...(selectedVolume ? [selectedVolume] : [])];
-        return <div key={binding.volumeId} className="cluster-storage-binding">
-          <div className="between"><strong>{t("eks.initialVolumeIndex", { index: index + 1 })}</strong>
-            <Button onClick={() => update({ volumeBindings: bindings.filter((_, i) => i !== index) })}>{t("common.delete")}</Button></div>
-          <div className="form-grid">
-            <Field label={t(mode === "shared_file" ? "eks.existingFile" : "eks.blockVolume")}><select value={binding.volumeId} onChange={(event) => update({ volumeBindings: bindings.map((item, i) => i === index ? { ...item, volumeId: event.target.value } : item) })}>
-              {options.map((volume) => <option key={volume.id} value={volume.id}>{volume.name} · {volume.sizeGb} GB{volume.kind === "block" ? ` · ${zoneForVolume(volume)}` : ""}</option>)}
-            </select></Field>
-            <Field label={t("eks.accessMode")}><strong>{t(mode === "shared_file" ? "eks.rwx" : "eks.rwo")}</strong></Field>
-            <Field label={t("eks.bindingPolicy")}><strong>{t("eks.staticBinding")}</strong></Field>
-            <Field label="PV"><input className="input" value={binding.pvName} onChange={(event) => update({ volumeBindings: bindings.map((item, i) => i === index ? { ...item, pvName: event.target.value } : item) })} /></Field>
-            <Field label="PVC"><input className="input" value={binding.pvcName} onChange={(event) => update({ volumeBindings: bindings.map((item, i) => i === index ? { ...item, pvcName: event.target.value } : item) })} /></Field>
-            <Field label={t("eks.namespace")}><input className="input" value={binding.namespace} onChange={(event) => update({ volumeBindings: bindings.map((item, i) => i === index ? { ...item, namespace: event.target.value } : item) })} /></Field>
-            <Field label={t("eks.requestedCapacity")}><strong>{selectedVolume?.sizeGb || 0} GB</strong></Field>
-          </div>
-          <small>{t(mode === "shared_file" ? "eks.fileAccessHint" : "eks.rwoHint")}</small>
-        </div>;
-      })}
+    {cloud && <Panel title={t("eks.requestedCapacity")}>
+      <div className="form-grid">
+        <SpecNumber name="defaultPvcGb" label={isBlock ? t("eks.capacityPerNode") : t("eks.sharedCapacity")} min={1} max={32768} />
+        {isBlock && <Field label={t("eks.volumeType")}><select value={spec.storageClass === "nvme" ? "nvme" : "ssd"} onChange={(event) => update({ storageClass: event.target.value })}><option value="ssd">SSD</option><option value="nvme">NVMe</option></select></Field>}
+        <Field label={t("eks.accessMode")}><strong>{t(mode === "shared_file" ? "eks.rwx" : "eks.rwo")}</strong></Field>
+      </div>
+      <KeyValues items={[[t("eks.nodeCount"), nodes], [t("eks.generatedVolumeCount"), volumeCount], [t("eks.totalProvisionedCapacity"), `${totalCapacity} GB`]]} />
+      <small>{t(isBlock ? "eks.perNodeProvisionHint" : "eks.sharedProvisionHint")}</small>
     </Panel>}
     {mode === "local_nvme" && <Panel title={t("eks.localPv")}>
       <div className="form-grid"><Field label={t("eks.localPvPerNode")} hint={`1–${maxLocal} GB`}><input className="input" type="number" min={1} max={maxLocal} value={spec.localPvGb || 0} onChange={(event) => update({ localPvGb: Number(event.target.value) })} /></Field>
         <Field label={t("eks.nodeCount")}><strong>{nodes}</strong></Field></div>
-      <KeyValues items={[[t("eks.physicalLocalCapacity"), `${physicalLocal} GB`], [t("eks.schedulableLocalCapacity"), `${nodes * (spec.localPvGb || 0)} GB`]]} />
+      <KeyValues items={[[t("eks.physicalLocalCapacity"), `${physicalLocal} GB`], [t("eks.schedulableLocalCapacity"), `${totalCapacity} GB`], [t("eks.generatedVolumeCount"), nodes]]} />
       <small className="field-error">{t("eks.localPvHint")}</small>
       {(!spec.localPvGb || spec.localPvGb > maxLocal) && <p className="field-error">{t("error.INVALID_LOCAL_PV_SIZE")}</p>}
     </Panel>}
@@ -301,11 +226,9 @@ function ClusterStorage({ pools }: { pools: Pool[] }) {
     </div><small>{t(`eks.storageRelationshipHint.${mode}`)}</small></Panel>
     <Panel title={t("eks.storageSummary")}><KeyValues items={[
       [t("eks.storageScheme"), t(`eks.storageMode.${mode}`)],
-      [t("eks.defaultStorageClass"), spec.storageClass],
-      [t("eks.initialPvc"), mode === "dynamic_block" && spec.defaultPvcGb > 0 ? `${spec.defaultPvcGb} GB` : t("eks.noInitialPvc")],
-      [t("eks.existingVolumeCapacity"), bindings.length ? `${bindings.length} · ${boundCapacity} GB` : "—"],
-      [t("eks.schedulableLocalCapacity"), mode === "local_nvme" ? `${nodes * (spec.localPvGb || 0)} GB` : "—"],
-    ]} /><small>{t("eks.notClusterTotalStorage")}</small></Panel>
+      [t("eks.nodeCount"), nodes], [t("eks.generatedVolumeCount"), volumeCount],
+      [t("eks.totalProvisionedCapacity"), `${totalCapacity} GB`],
+    ]} /><small>{t("eks.nodeCountRecalculatesStorage")}</small></Panel>
   </div>;
 }
 
@@ -378,9 +301,8 @@ function ClusterConfirm({ context }: { context: FormContext }) {
       [t("eks.subnetConfig"), selected?.subnets.filter((item) => selectedSubnets(spec).includes(item.id)).map((item) => `${item.name} (${item.zone}, ${item.cidr})`).join(" / ") || spec.subnets?.join(" / ") || "—"],
       ["CNI", spec.networkPlugin], ["Pod / Service CIDR", `${spec.podCidr} / ${spec.serviceCidr}`],
       [t("eks.storageScheme"), t(`eks.storageMode.${spec.storageMode || "dynamic_block"}`)],
-      [t("eks.initialPvc"), spec.defaultPvcGb ? `${spec.defaultPvcGb} GB` : t("eks.noInitialPvc")],
-      [t("eks.existingVolumeCapacity"), `${spec.volumeBindings?.length || 0} PV / PVC`],
-      [t("eks.localPv"), spec.localPvGb ? `${spec.localPvGb} GB / ${t("common.nodes")}` : "—"],
+      [t("eks.generatedVolumeCount"), spec.storageMode === "shared_file" ? 1 : spec.nodePools.reduce((n, pool) => n + pool.nodeCount, 0)],
+      [t("eks.totalProvisionedCapacity"), `${spec.storageMode === "local_nvme" ? (spec.localPvGb || 0) * spec.nodePools.reduce((n, pool) => n + pool.nodeCount, 0) : spec.storageMode === "shared_file" ? spec.defaultPvcGb : spec.defaultPvcGb * spec.nodePools.reduce((n, pool) => n + pool.nodeCount, 0)} GB`],
       [t("cluster.nodePool"), spec.nodePools.map((pool, index) => `${poolName(pool, index)} · ${pool.poolCode} · ${pool.nodeCount} × ${pool.gpuPerNode} GPU`).join(" / ")],
       [t("resource.gpu"), spec.nodePools.reduce((sum, pool) => sum + pool.nodeCount * pool.gpuPerNode, 0)],
     ]} /></Panel>
@@ -404,7 +326,7 @@ function ClusterAside() {
     <div className="cluster-chain-arrow">↓</div>
     <div><strong>{t("cluster.nodePool")} / Pod</strong><small>{t("eks.poolCount", { pools: spec.nodePools.length, nodes: spec.nodePools.reduce((sum, pool) => sum + pool.nodeCount, 0), gpus: gpuCount })}</small></div>
     <div className="cluster-chain-arrow">↓</div>
-    <div><strong>{t("eks.storageRelationship")}</strong><small>{t(`eks.storageMode.${spec.storageMode || "dynamic_block"}`)} · {spec.defaultPvcGb ? `${spec.defaultPvcGb} GB PVC` : t("eks.noInitialPvc")} · {spec.volumeBindings?.length || 0} PV</small></div>
+    <div><strong>{t("eks.storageRelationship")}</strong><small>{t(`eks.storageMode.${spec.storageMode || "dynamic_block"}`)} · {spec.storageMode === "local_nvme" ? spec.localPvGb : spec.defaultPvcGb} GB · {spec.storageMode === "shared_file" ? 1 : spec.nodePools.reduce((n, pool) => n + pool.nodeCount, 0)} PV</small></div>
   </div></Panel>;
 }
 

@@ -188,18 +188,31 @@ export function clusterView(
   const boundVolumes = (r.spec.volumeBindings || []).map((binding) => ({
     binding, volume: db.volumes.find((item) => item.id === binding.volumeId && !item.deletedAt),
   }));
-  const defaultVolume = r.spec.defaultPvcGb > 0 ? db.volumes.find((item) => item.resourceUuid === r.resourceUuid && item.role === "pvc" && item.id === `vol-${r.resourceUuid}-pvc` && !item.deletedAt) : undefined;
+  const generatedBlock = (r.spec.storageMode === "dynamic_block" || r.spec.storageMode === "existing_block") &&
+    db.volumes.some((item) => item.resourceUuid === r.resourceUuid && item.id.startsWith(`vol-${r.resourceUuid}-pvc-`) && !item.deletedAt);
+  const defaultVolume = r.spec.defaultPvcGb > 0 && !generatedBlock ? db.volumes.find((item) => item.resourceUuid === r.resourceUuid && item.role === "pvc" && item.id === `vol-${r.resourceUuid}-pvc` && !item.deletedAt) : undefined;
+  const generatedClaims = generatedBlock ? nodes.map((node) => {
+    const index = nodes.filter((candidate) => candidate.poolIndex === node.poolIndex).findIndex((candidate) => candidate.nodeUuid === node.nodeUuid);
+    return { node, name: `data-pool${node.poolIndex + 1}-node${index + 1}`,
+      volume: db.volumes.find((item) => item.id === `vol-${r.resourceUuid}-pvc-${node.poolIndex}-${index}` && !item.deletedAt) };
+  }) : [];
+  const localClaims = r.spec.storageMode === "local_nvme" && r.spec.localPvGb ? nodes.map((node) => {
+    const index = nodes.filter((candidate) => candidate.poolIndex === node.poolIndex).findIndex((candidate) => candidate.nodeUuid === node.nodeUuid);
+    return { node, name: `local-pool${node.poolIndex + 1}-node${index + 1}` };
+  }) : [];
   const pvcNodeLocks = new Map<string, string>();
   const workloads: ClusterView["workloads"] = (r.spec.workloads || []).map((workload) => {
     const pods = Array.from({ length: workload.replicas }, (_, index) => {
       const claimKey = `${workload.namespace}/${workload.pvcName || ""}`;
+      const claim = workload.namespace === "default" ? generatedClaims.find((item) => item.name === workload.pvcName) : undefined;
+      const localClaim = workload.namespace === "default" ? localClaims.find((item) => item.name === workload.pvcName) : undefined;
       const volume = boundVolumes.find(({ binding }) => `${binding.namespace}/${binding.pvcName}` === claimKey)?.volume ||
-        (claimKey === "default/default-pvc" ? defaultVolume : undefined);
+        (claimKey === "default/default-pvc" ? defaultVolume : claim?.volume);
       const volumeZone = volume?.zone || (volume ? `${r.region}-a` : "");
       const sharedFile = volume?.kind === "file";
       const candidates = nodes.filter((node) =>
         node.state === "ready" &&
-        (!workload.pvcName || (!!volume && (sharedFile || node.zone === volumeZone) && (sharedFile || !pvcNodeLocks.has(claimKey) || pvcNodeLocks.get(claimKey) === node.nodeUuid))) &&
+        (!workload.pvcName || ((!!volume || !!localClaim) && (localClaim || sharedFile || node.zone === volumeZone) && (!claim || node.nodeUuid === claim.node.nodeUuid) && (!localClaim || node.nodeUuid === localClaim.node.nodeUuid) && (sharedFile || !pvcNodeLocks.has(claimKey) || pvcNodeLocks.get(claimKey) === node.nodeUuid))) &&
         (!workload.nodePoolName || node.poolName === workload.nodePoolName) &&
         (!workload.gpuModel || node.gpuModel === workload.gpuModel) &&
         (!workload.selectorKey || node.labels[workload.selectorKey] === workload.selectorValue) &&
@@ -217,7 +230,7 @@ export function clusterView(
         if (workload.pvcName && !sharedFile) pvcNodeLocks.set(claimKey, node.nodeUuid);
       }
       const waitingReason = !active ? "Cluster is not running" :
-        workload.pvcName && !volume ? "PVC is not bound to an available storage volume" :
+        workload.pvcName && !volume && !localClaim ? "PVC is not bound to an available storage volume" :
         !candidates.length ? "No node matches the pool selector, taint tolerance and scheduling state" :
         !node && workload.localStorageGb ? "Insufficient local PV capacity on matching nodes" :
         !node ? "Insufficient GPU, CPU or memory on matching nodes" : "";
@@ -263,6 +276,19 @@ export function clusterView(
   if (defaultVolume) {
     pvs.push({ name: `${r.displayId}-pv`, source: defaultVolume.kind === "file" ? "file" : "block", sizeGb: defaultVolume.sizeGb, zone: defaultVolume.kind === "file" ? "—" : defaultVolume.zone || `${r.region}-a`, nodeUuid: null, status: "Bound", volumeId: defaultVolume.id });
     pvcs.push({ namespace: "default", name: "default-pvc", pvName: `${r.displayId}-pv`, sizeGb: defaultVolume.sizeGb, status: "Bound" });
+  }
+  for (const { node, name, volume } of generatedClaims) {
+    const pvName = `${r.displayId}-${name}-pv`;
+    pvs.push({ name: pvName, source: "block", sizeGb: volume?.sizeGb || r.spec.defaultPvcGb, zone: node.zone, nodeUuid: node.nodeUuid,
+      status: volume ? "Bound" : "Pending", volumeId: volume?.id || null });
+    pvcs.push({ namespace: "default", name, pvName: volume ? pvName : null, sizeGb: r.spec.defaultPvcGb, status: volume ? "Bound" : "Pending" });
+  }
+  if (r.spec.storageMode === "local_nvme" && r.spec.localPvGb) for (const node of nodes) {
+    const index = nodes.filter((candidate) => candidate.poolIndex === node.poolIndex).findIndex((candidate) => candidate.nodeUuid === node.nodeUuid);
+    const name = `local-pool${node.poolIndex + 1}-node${index + 1}`;
+    const pvName = `${r.displayId}-${name}-pv`;
+    pvs.push({ name: pvName, source: "local", sizeGb: r.spec.localPvGb, zone: node.zone, nodeUuid: node.nodeUuid, status: "Bound", volumeId: null });
+    pvcs.push({ namespace: "default", name, pvName, sizeGb: r.spec.localPvGb, status: "Bound" });
   }
   for (const { binding, volume } of boundVolumes) {
     const ready = !!volume && volume.resourceUuid === r.resourceUuid;

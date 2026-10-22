@@ -158,7 +158,7 @@ export function normalizeSpec<S extends Resource["spec"]>(spec: S): S {
       (a, p) => a + p.nodeCount * p.gpuPerNode,
       0,
     );
-    next.storageGb = next.defaultPvcGb + storageExtraGb(next.storageSelections);
+    next.storageGb = next.defaultPvcGb * (next.storageMode === "shared_file" || !next.storageMode ? 1 : next.nodePools.reduce((count, pool) => count + pool.nodeCount, 0)) + storageExtraGb(next.storageSelections);
   }
   if ("replicas" in next) next.gpuCount = next.replicas * next.gpuPerReplica;
   if (!("systemDiskGb" in next) && !("nodePools" in next)) {

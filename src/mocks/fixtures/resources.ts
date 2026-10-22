@@ -85,6 +85,7 @@ export function seedResources(): Resource[] {
     if ("nodePools" in spec) {
       spec.nodePools[0].nodeCount = count;
       spec.gpuCount = count * pool.gpusPerNode;
+      spec.storageMode = undefined; // Legacy seeded clusters keep their original single-volume allocation.
       spec.defaultPvcGb = [200, 500, 1000][i % 3];
       spec.storageGb = spec.defaultPvcGb;
       spec.controlPlaneTier = i % 2 ? "ha" : "standard";

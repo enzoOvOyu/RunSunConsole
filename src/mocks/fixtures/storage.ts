@@ -55,20 +55,17 @@ export function volumesForResource(resource: Resource): StorageVolume[] {
     }
   } else if (resource.kind === "vgpu") {
     const spec = resource.spec;
-    if (spec.defaultPvcGb > 0)
-      add(
-        "pvc",
-        `${resource.displayId}-pvc`,
-        spec.storageClass === "shared-fs" ? "file" : "block",
-        spec.storageClass === "shared-fs"
-          ? "nas_capacity"
-          : spec.storageClass === "nvme"
-            ? "essd_pl2"
-            : "essd_pl0",
-        "pvc",
-        spec.defaultPvcGb,
-        "/mnt/pvc",
-      );
+    if (spec.defaultPvcGb > 0) {
+      if (spec.storageMode === "dynamic_block" || spec.storageMode === "existing_block") {
+        spec.nodePools.forEach((pool, poolIndex) => {
+          for (let index = 0; index < pool.nodeCount; index++)
+            add(`pvc-${poolIndex}-${index}`, `${resource.displayId}-pool${poolIndex + 1}-node${index + 1}-data`, "block",
+              spec.storageClass === "nvme" ? "essd_pl2" : "essd_pl0", "pvc", spec.defaultPvcGb, `/pvc/data-pool${poolIndex + 1}-node${index + 1}`);
+        });
+      } else add("pvc", `${resource.displayId}-pvc`, spec.storageMode === "shared_file" || spec.storageClass === "shared-fs" ? "file" : "block",
+        spec.storageMode === "shared_file" || spec.storageClass === "shared-fs" ? "nas_capacity" : spec.storageClass === "nvme" ? "essd_pl2" : "essd_pl0",
+        "pvc", spec.defaultPvcGb, "/mnt/pvc");
+    }
   } else {
     const spec = resource.spec;
     const base =

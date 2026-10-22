@@ -294,7 +294,9 @@ it("keeps configured cloud storage consistent with VM disks and cluster PVCs", (
       expect(r.spec.storageGb).toBe(
         (r.spec.systemDiskGb + r.spec.dataDiskGb) * r.spec.quantity,
       );
-    if (r.kind === "vgpu") expect(r.spec.storageGb).toBe(r.spec.defaultPvcGb);
+    if (r.kind === "vgpu") expect(r.spec.storageGb).toBe(r.spec.defaultPvcGb *
+      (["dynamic_block", "existing_block"].includes(r.spec.storageMode || "")
+        ? r.spec.nodePools.reduce((count, pool) => count + pool.nodeCount, 0) : 1));
   }
 });
 

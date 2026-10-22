@@ -89,7 +89,11 @@ export function estimate(
     spec.storageGb - storageExtraGb(spec.storageSelections),
   );
   if (baseStorage > 0)
-    add("storage", "per_gb_hour", find("per_gb_hour", null), baseStorage, true);
+    add("storage", "per_gb_hour",
+      kind === "vgpu" && "nodePools" in spec && spec.storageMode === "shared_file"
+        ? storageProduct("file", "nas_capacity")!.usdGbMonth / 730
+        : find("per_gb_hour", null),
+      baseStorage, kind !== "vgpu" || ("nodePools" in spec && spec.storageMode !== "shared_file" && spec.storageMode !== "local_nvme"));
   for (const row of spec.storageSelections || []) {
     if (row.kind === "object") continue;
     const product = storageProduct(row.kind, row.tier);

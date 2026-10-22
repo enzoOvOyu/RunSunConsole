@@ -14,7 +14,6 @@ import {
   type PriceEstimate,
   type DeploymentOptions,
 } from "../../../types/domain";
-import type { StorageVolume } from "../../../types/storage";
 import { defaultSpec } from "../../../lib/config";
 import { orderSchema } from "../../../lib/schema";
 import { KIND_META, resourceLink } from "../../../lib/ids";
@@ -47,7 +46,6 @@ function normalizeServerCompute(spec: Resource["spec"]): Resource["spec"] {
 }
 interface ClusterLookups {
   network?: DeploymentOptions;
-  volumes?: StorageVolume[];
   pools: Pool[];
   images: Image[];
 }
@@ -323,13 +321,8 @@ function WizardForm({
     EP.options + query({ region: values.region, project_id: values.projectId, kind: "vgpu" }),
     { enabled: kind === "vgpu" && !!values.projectId },
   );
-  const clusterVolumes = useData<StorageVolume[]>(
-    ["cluster-block-volumes", values.region, values.projectId],
-    EP.storageVolumes + query({ region: values.region, project_id: values.projectId }),
-    { enabled: kind === "vgpu" && !!values.projectId },
-  );
   const clusterLookups: ClusterLookups = {
-    network: clusterNetwork.data, volumes: clusterVolumes.data,
+    network: clusterNetwork.data,
     pools: context.pools, images: context.images,
   };
   useEffect(() => {
