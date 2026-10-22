@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Outlet, useLocation, Navigate } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
@@ -13,6 +13,7 @@ import styles from "./layout.module.css";
 export default function ConsoleLayout() {
   const [menu, setMenu] = useState(false);
   const [command, setCommand] = useState(false);
+  const closeMenu = useCallback(() => setMenu(false), []);
   const locale = useLocale((s) => s.locale);
   const theme = useTheme((s) => s.theme);
   const role = useAuth((s) => s.role);
@@ -21,7 +22,7 @@ export default function ConsoleLayout() {
   document.documentElement.dataset.theme = theme;
   return (
     <div className={styles.shell}>
-      <Sidebar open={menu} onClose={() => setMenu(false)} />
+      <Sidebar open={menu} onClose={closeMenu} />
       <div className={styles.main}>
         <Topbar
           onSearch={() => setCommand(true)}

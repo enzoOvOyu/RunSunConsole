@@ -38,6 +38,7 @@ export function CommandPalette({
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [open, onChange]);
+  const groups = buildGroups(role);
   const select = (action: () => void) => {
     action();
     onChange(false);
@@ -58,7 +59,7 @@ export function CommandPalette({
       <Command.List>
         <Command.Empty>{t("command.empty")}</Command.Empty>
         <Command.Group heading={t("command.resources")}>
-          {resources.data?.items.map((r) => (
+          {open && resources.data?.items.map((r) => (
             <Command.Item
               key={r.resourceUuid}
               value={`${r.displayId} ${r.resourceUuid} ${r.name} ${dt(r.name)}`}
@@ -72,13 +73,13 @@ export function CommandPalette({
         {[
           {
             id: "create",
-            items: buildGroups(role)
+            items: groups
               .filter((g) => g.id === "deployment")
               .flatMap((g) => g.items),
           },
           {
             id: "navigate",
-            items: buildGroups(role)
+            items: groups
               .filter((g) => g.id !== "deployment")
               .flatMap((g) => g.items),
           },

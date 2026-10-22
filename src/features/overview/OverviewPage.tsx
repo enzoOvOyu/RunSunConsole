@@ -1,6 +1,6 @@
 import "./overview.css";
 import { poolDisplayName } from "../../lib/gpu-labels";
-import { lazy, Suspense, useState, type ReactNode } from "react";
+import { lazy, Suspense, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Cpu,
@@ -171,23 +171,7 @@ function OverviewPanel({
     </Card>
   );
 }
-export default function OverviewPage() {
-  const q = useData<Overview>(["overview"], EP.overview, { poll: true });
-  const [hidden, setHidden] = useState<string[]>(initialHidden);
-  const [custom, setCustom] = useState(false);
-  const [grouping, setGrouping] = useState("total");
-  const [expandedAlerts, setExpandedAlerts] = useState(false);
-  const [hoveredGpuRegion, setHoveredGpuRegion] = useState<Region | null>(null);
-  const [hoveredSpendKind, setHoveredSpendKind] = useState<
-    (typeof KINDS)[number] | "eip" | null
-  >(null);
-  const role = useAuth((s) => s.role);
-  const navigate = useNavigate();
-  if (q.isPending) return <Loading />;
-  if (q.error)
-    return <ErrorState error={q.error} retry={() => void q.refetch()} />;
-  const data = q.data;
-  const show = (id: string) => !hidden.includes(id);
+function buildOverviewMetrics(data: Overview) {
   const gpuByModel = Object.fromEntries(
     POOLS.map((model) => [
       model,
@@ -217,11 +201,6 @@ export default function OverviewPage() {
     (total, region) => total + gpuRegionTotals[region],
     0,
   );
-  const gpuRegionChartData = REGIONS.map((region) => ({
-    region,
-    name: t(`common.${region}`),
-    cards: gpuRegionTotals[region],
-  }));
   const gpuModels = POOLS.map((code) => ({
     code,
     name: poolDisplayName(code),
@@ -273,7 +252,6 @@ export default function OverviewPage() {
     .filter((row) => row.amount > 0)
     .sort((a, b) => b.amount - a.amount);
   const spendTotal = spendMix.reduce((total, row) => total + row.amount, 0);
-  const hoveredSpend = spendMix.find((item) => item.kind === hoveredSpendKind);
   const recentResources = data.resources
     .slice()
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
@@ -281,6 +259,36 @@ export default function OverviewPage() {
   const quotaWarnings = data.quotas.filter(
     (quota) => quota.usedValue / quota.limitValue >= 0.8,
   );
+  return { gpuRegionTotals, gpuRegionTotal, gpuModels,
+    largestGpuModel, projects, health, spendMix, spendTotal, recentResources, quotaWarnings };
+}
+
+export default function OverviewPage() {
+  const q = useData<Overview>(["overview"], EP.overview, { poll: true });
+  const metrics = useMemo(() => q.data ? buildOverviewMetrics(q.data) : null, [q.data]);
+  const [hidden, setHidden] = useState<string[]>(initialHidden);
+  const [custom, setCustom] = useState(false);
+  const [grouping, setGrouping] = useState("total");
+  const [expandedAlerts, setExpandedAlerts] = useState(false);
+  const [hoveredGpuRegion, setHoveredGpuRegion] = useState<Region | null>(null);
+  const [hoveredSpendKind, setHoveredSpendKind] = useState<
+    (typeof KINDS)[number] | "eip" | null
+  >(null);
+  const role = useAuth((s) => s.role);
+  const navigate = useNavigate();
+  if (q.isPending) return <Loading />;
+  if (q.error)
+    return <ErrorState error={q.error} retry={() => void q.refetch()} />;
+  const data = q.data;
+  const show = (id: string) => !hidden.includes(id);
+  const { gpuRegionTotals, gpuRegionTotal, gpuModels,
+    largestGpuModel, projects, health, spendMix, spendTotal, recentResources, quotaWarnings } = metrics!;
+  const gpuRegionChartData = REGIONS.map((region) => ({
+    region,
+    name: t(`common.${region}`),
+    cards: gpuRegionTotals[region],
+  }));
+  const hoveredSpend = spendMix.find((item) => item.kind === hoveredSpendKind);
   const attentionItems: ReactNode[] = [];
   if (data.balance < data.account.lowBalanceThresholdUsd) {
     attentionItems.push(

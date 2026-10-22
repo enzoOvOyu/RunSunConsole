@@ -1,12 +1,14 @@
 import { NavLink } from "react-router-dom";
+import { memo, useMemo } from "react";
 import { ChevronDown } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { useAuth } from "../../stores/auth";
 import { useNav } from "../../stores/nav";
+import { useLocale } from "../../stores/locale";
 import { buildGroups } from "./navModel";
 import { t } from "../../i18n";
 import styles from "./layout.module.css";
-export function Sidebar({
+export const Sidebar = memo(function Sidebar({
   open,
   onClose,
 }: {
@@ -14,7 +16,10 @@ export function Sidebar({
   onClose: () => void;
 }) {
   const role = useAuth((s) => s.role);
-  const { collapsedGroups, toggle } = useNav();
+  useLocale((state) => state.locale);
+  const collapsedGroups = useNav((state) => state.collapsedGroups);
+  const toggle = useNav((state) => state.toggle);
+  const groups = useMemo(() => buildGroups(role), [role]);
   return (
     <>
       <aside
@@ -31,7 +36,7 @@ export function Sidebar({
           </div>
         </NavLink>
         <nav className={styles.nav}>
-          {buildGroups(role).map((group) => {
+          {groups.map((group) => {
             const expanded = !collapsedGroups.includes(group.id);
             const Icon = group.icon;
             return (
@@ -40,8 +45,8 @@ export function Sidebar({
                   <Button asChild variant="ghost" className={styles.navLink}>
                     <NavLink
                       to={group.items[0].path}
-                      className={({ isActive }) =>
-                        isActive ? styles.active : ""
+                      className={({ isActive, isPending }) =>
+                        isActive ? styles.active : isPending ? styles.pending : ""
                       }
                       onClick={onClose}
                     >
@@ -80,8 +85,8 @@ export function Sidebar({
                               <NavLink
                                 to={item.path}
                                 onClick={onClose}
-                                className={({ isActive }) =>
-                                  isActive ? styles.active : ""
+                                className={({ isActive, isPending }) =>
+                                  isActive ? styles.active : isPending ? styles.pending : ""
                                 }
                               >
                                 <ItemIcon
@@ -121,4 +126,4 @@ export function Sidebar({
       )}
     </>
   );
-}
+});

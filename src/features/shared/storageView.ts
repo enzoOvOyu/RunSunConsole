@@ -1,0 +1,132 @@
+import type { Bucket, Kind } from "../../types/domain";
+import type { ClusterView } from "../../types/monitoring";
+import type { StorageVolume } from "../../types/storage";
+import { formatResourceId } from "../../lib/ids";
+
+export type VolumeRow = StorageVolume & {
+  resourceName: string;
+  resourceKind: Kind | null;
+};
+
+export type VolumeFilters = {
+  search: string;
+  projectId: string;
+  tier: string;
+  status: string;
+  zone: string;
+};
+
+export function selectVolumeRows(
+  volumes: VolumeRow[],
+  kind: StorageVolume["kind"],
+  filters: VolumeFilters,
+  projectName: (id: string) => string,
+) {
+  const all = volumes.filter(
+    (volume) =>
+      volume.kind === kind && volume.inventoryScope !== "regional_pool",
+  );
+  const needle = filters.search.trim().toLowerCase();
+  const visible = all.filter((volume) => {
+    const searchable = [
+      volume.name,
+      volume.id,
+      formatResourceId(kind === "block" ? "blk" : "fil", volume.id),
+      volume.resourceName,
+      volume.projectId,
+      formatResourceId("prj", volume.projectId),
+      projectName(volume.projectId),
+    ]
+      .join(" ")
+      .toLowerCase();
+    return (
+      (!needle || searchable.includes(needle)) &&
+      (!filters.projectId || volume.projectId === filters.projectId) &&
+      (!filters.tier || volume.tier === filters.tier) &&
+      (!filters.status ||
+        (filters.status === "attached"
+          ? !!volume.resourceUuid
+          : !volume.resourceUuid)) &&
+      (!filters.zone || (volume.zone || `${volume.region}-a`) === filters.zone)
+    );
+  });
+  return { all, visible };
+}
+
+export function selectFileMounts(
+  view: ClusterView | undefined,
+  volumeId: string | undefined,
+) {
+  const pv = view?.storage.pvs.find((item) => item.volumeId === volumeId);
+  const pvc = pv
+    ? view?.storage.pvcs.find((item) => item.pvName === pv.name)
+    : undefined;
+  const workloads = pvc
+    ? view?.workloads.filter(
+        (item) => item.namespace === pvc.namespace && item.pvcName === pvc.name,
+      ) || []
+    : [];
+  const pods = workloads
+    .flatMap((item) => item.pods)
+    .filter((pod) => pod.phase === "Running" && !!pod.nodeUuid);
+  const nodes = [
+    ...new Set(
+      pods
+        .map(
+          (pod) =>
+            view?.nodes.find((node) => node.nodeUuid === pod.nodeUuid)?.name,
+        )
+        .filter((name): name is string => !!name),
+    ),
+  ];
+  return { pv, pvc, workloads, pods, nodes };
+}
+
+export type BucketFilters = {
+  search: string;
+  projectId: string;
+  storageClass: string;
+  status: string;
+};
+
+export function selectBucketRows(
+  buckets: Bucket[],
+  filters: BucketFilters,
+  projectName: (id?: string) => string,
+) {
+  const needle = filters.search.trim().toLowerCase();
+  return buckets.filter((bucket) => {
+    const searchable = [
+      bucket.name,
+      bucket.id,
+      formatResourceId("obj", bucket.id),
+      bucket.projectId || "",
+      formatResourceId("prj", bucket.projectId || ""),
+      projectName(bucket.projectId),
+    ]
+      .join(" ")
+      .toLowerCase();
+    return (
+      (!needle || searchable.includes(needle)) &&
+      (!filters.projectId || bucket.projectId === filters.projectId) &&
+      (!filters.storageClass ||
+        (bucket.storageClass || "STANDARD") === filters.storageClass) &&
+      (!filters.status || bucket.status === filters.status)
+    );
+  });
+}
+
+export function bucketSummary(buckets: Bucket[]) {
+  return buckets.reduce(
+    (summary, bucket) => {
+      summary.limitGb += bucket.quotaGb;
+      summary.objectCount += bucket.objects.length;
+      summary.actualBytes += bucket.objects.reduce(
+        (bytes, object) => bytes + object.size,
+        0,
+      );
+      return summary;
+    },
+    { limitGb: 0, objectCount: 0, actualBytes: 0 },
+  );
+}

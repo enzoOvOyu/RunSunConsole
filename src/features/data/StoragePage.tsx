@@ -1,6 +1,8 @@
 import { formatResourceId } from "../../lib/ids";
 import { Link } from "react-router-dom";
 import { useUrlState } from "../shared/useUrlState";
+import { bucketSummary, selectBucketRows } from "../shared/storageView";
+import { BucketTable } from "./BucketTable";
 import { confirmAction } from "../../components/ui/ConfirmAction";
 import { useState, type DragEvent } from "react";
 import type { Bucket, StorageObject, Project, Quota } from "../../types/domain";
@@ -25,7 +27,6 @@ import {
   Progress,
   Empty,
   Loading,
-  Badge,
   ErrorState,
   Tabs,
   copy,
@@ -85,17 +86,11 @@ export default function StoragePage() {
   const bucket = overview.data?.bucket;
   const projectName = (value?: string) =>
     dt(projects.data?.find((project) => project.id === value)?.name || value || "—");
-  const bucketRows = (q.data || []).filter((bucket) => {
-    const needle = search.trim().toLowerCase();
-    const searchable = [bucket.name, bucket.id, formatResourceId("obj", bucket.id), bucket.projectId || "", formatResourceId("prj", bucket.projectId || ""), projectName(bucket.projectId)].join(" ").toLowerCase();
-    return (!needle || searchable.includes(needle)) &&
-      (!projectFilter || bucket.projectId === projectFilter) &&
-      (!classFilter || (bucket.storageClass || "STANDARD") === classFilter) &&
-      (!statusFilter || bucket.status === statusFilter);
-  });
-  const actualBytes = bucketRows.reduce((sum, item) => sum + item.objects.reduce((bytes, object) => bytes + object.size, 0), 0);
-  const bucketLimitGb = bucketRows.reduce((sum, item) => sum + item.quotaGb, 0);
-  const objectCount = bucketRows.reduce((sum, item) => sum + item.objects.length, 0);
+  const bucketRows = selectBucketRows(q.data || [],
+    { search, projectId: projectFilter, storageClass: classFilter, status: statusFilter },
+    projectName,
+  );
+  const { actualBytes, limitGb: bucketLimitGb, objectCount } = bucketSummary(bucketRows);
   const filterActive = !!(search || projectFilter || classFilter || statusFilter);
   const upload = async (files: FileList | null) => {
     if (!files || !id) return;
@@ -181,55 +176,14 @@ export default function StoragePage() {
         ) : q.error ? (
           <ErrorState error={q.error} />
         ) : bucketRows.length ? (
-          <DataTable
-            data={bucketRows}
-            onRow={(b) => {
-              setId(b.id);
+          <BucketTable
+            buckets={bucketRows}
+            projectName={projectName}
+            onDetails={(selectedBucket) => {
+              setId(selectedBucket.id);
               setPrefix("");
               setTab("objects");
             }}
-            columns={[
-              { accessorKey: "name", header: t("common.name"), cell: ({ row }) => <div className="storage-resource-cell"><strong>{row.original.name}</strong><small className="resource-id">{formatResourceId("obj", row.original.id)}</small></div> },
-              {
-                accessorKey: "region",
-                header: t("common.region"),
-                cell: ({ row }) => t("common." + row.original.region),
-              },
-              {
-                accessorKey: "projectId",
-                header: t("common.project"),
-                cell: ({ row }) => <div className="storage-project-cell"><span>{projectName(row.original.projectId)}</span><small className="resource-id">{formatResourceId("prj", row.original.projectId || "")}</small></div>,
-              },
-              {
-                accessorKey: "storageClass",
-                header: t("storage.tier"),
-                cell: ({ row }) => row.original.storageClass || "STANDARD",
-              },
-              { accessorKey: "quotaGb", header: t("storage.bucketLimit"), cell: ({ row }) => size(row.original.quotaGb) },
-              {
-                id: "count",
-                header: t("storage.objects"),
-                cell: ({ row }) => row.original.objects.length,
-              },
-              {
-                id: "capacity",
-                header: t("storage.capacity"),
-                cell: ({ row }) =>
-                  row.original.objects.length ? size(row.original.objects.reduce((a, o) => a + o.size, 0) / 1e9) : size(0),
-              },
-              {
-                accessorKey: "createdAt",
-                header: t("common.createdAt"),
-                cell: ({ row }) => date(row.original.createdAt),
-              },
-              {
-                accessorKey: "status",
-                header: t("common.status"),
-                cell: ({ row }) => <Badge status={row.original.status} label={t("common.active")} />,
-              },
-              { accessorKey: "access", header: t("storage.accessPolicy"), cell: ({ row }) => t("common." + row.original.access) },
-              { id: "operation", header: t("common.action"), cell: ({ row }) => <Button onClick={(event) => { event.stopPropagation(); setId(row.original.id); setPrefix(""); setTab("objects"); }}>{t("common.details")}</Button> },
-            ]}
           />
         ) : <Empty text={t(filterActive ? "common.noResults" : "storage.noBuckets")} />}
       </div>

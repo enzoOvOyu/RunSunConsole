@@ -104,7 +104,7 @@ export function RemoteTerminal({
           : current,
       );
     }
-  }, [adapter, authMethod, resource.status]);
+  }, [adapter, authMethod, resource.resourceUuid, resource.status]);
 
   useEffect(
     () => () => {
@@ -189,7 +189,6 @@ export function RemoteTerminal({
       osName,
       prompt,
       resource,
-      username,
     ],
   );
 

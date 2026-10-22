@@ -114,22 +114,17 @@ export function ResourceListShell<K extends Kind>({
     setPage(0);
   }, [status, q]);
   const transition = useResourceTransition((s) => s.items);
-  const items = [
-    ...(resources.data?.items || []),
-    ...(transition.filter(
-      (r) =>
-        r.kind === kind &&
-        r.region === region &&
-        !resources.data?.items.some((x) => x.resourceUuid === r.resourceUuid),
-    ) as Extract<Resource, { kind: K }>[]),
-  ];
-  const shown = items.filter((resource) =>
-    facets.every(
-      (facet) =>
-        !facetValues[facet.id] ||
-        facet.value(resource) === facetValues[facet.id],
-    ),
-  );
+  const items = useMemo(() => {
+    const fetched = resources.data?.items || [];
+    const fetchedIds = new Set(fetched.map((resource) => resource.resourceUuid));
+    const pending = transition.filter((resource) =>
+      resource.kind === kind && resource.region === region && !fetchedIds.has(resource.resourceUuid)
+    ) as Extract<Resource, { kind: K }>[];
+    return [...fetched, ...pending];
+  }, [resources.data?.items, transition, kind, region]);
+  const shown = useMemo(() => items.filter((resource) =>
+    facets.every((facet) => !facetValues[facet.id] || facet.value(resource) === facetValues[facet.id])
+  ), [items, facets, facetValues]);
   const hasFacetFilter = Object.values(facetValues).some(Boolean);
   const pageCount =
     pageSize === 0 ? 1 : Math.max(1, Math.ceil(shown.length / pageSize));
