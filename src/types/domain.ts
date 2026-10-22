@@ -569,6 +569,7 @@ export interface OperationLog {
   resourceUuid: ResourceUuid | null;
   displayId: DisplayId | string;
   resourceName: string;
+  targetHref: string;
   projectId: string;
   projectName: string;
   region: Region;

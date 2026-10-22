@@ -15,7 +15,7 @@ const vite = await createViteServer({
   server: { middlewareMode: true, hmr: false },
   appType: "custom",
 });
-const { db, makeDatabase, setPersistHook } = await vite.ssrLoadModule(
+const { db, makeDatabase, normalizeDisplayIds, setPersistHook } = await vite.ssrLoadModule(
   "/src/mocks/lib/database.ts",
 );
 let dirty = false;
@@ -79,6 +79,11 @@ async function initialize() {
       if (missing.rowCount) {
         const before = { ...loaded.state, resources: [] };
         await saveState(client, before, loaded.state, loaded.version + 1);
+        loaded.version++;
+      }
+      const beforeIds = structuredClone(loaded.state);
+      if (normalizeDisplayIds(loaded.state)) {
+        await saveState(client, beforeIds, loaded.state, loaded.version + 1);
         loaded.version++;
       }
     }

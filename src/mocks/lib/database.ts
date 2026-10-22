@@ -68,6 +68,41 @@ export interface Database {
   vouchers: Voucher[];
   account: Account;
 }
+export function normalizeDisplayIds(state: Database): boolean {
+  let changed = false;
+  for (const resource of state.resources) {
+    const expected = displayId(resource.kind, resource.resourceUuid);
+    if (resource.displayId !== expected) {
+      resource.displayId = expected;
+      changed = true;
+    }
+  }
+  for (const eip of state.network.eips) {
+    const expected = formatResourceId("eip", eip.id);
+    if (eip.displayId !== expected) {
+      eip.displayId = expected;
+      changed = true;
+    }
+  }
+  for (const row of state.usage) {
+    const expected = row.kind === "eip"
+      ? formatResourceId("eip", row.resourceUuid)
+      : displayId(row.kind, row.resourceUuid);
+    if (row.displayId !== expected) {
+      row.displayId = expected;
+      changed = true;
+    }
+  }
+  for (const ticket of state.tickets) {
+    const expected = formatResourceId("tkt", ticket.id);
+    if (ticket.caseNumber !== expected) {
+      ticket.caseNumber = expected;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 export function makeDatabase(): Database {
   const resources = seedResources();
   const network = makeNetwork(resources, structuredClone(PROJECTS));
@@ -566,7 +601,7 @@ export function restoreDatabase() {
           };
         },
       );
-      return {
+      const restored = {
         ...data,
         billingCursors: data.billingCursors || {},
         replicaRestarts: data.replicaRestarts || {},
@@ -574,6 +609,8 @@ export function restoreDatabase() {
         usage,
         invoices: data.invoices || [],
       };
+      normalizeDisplayIds(restored);
+      return restored;
     }
   } catch {
     /* Seed data remains available when stored content cannot be restored. */

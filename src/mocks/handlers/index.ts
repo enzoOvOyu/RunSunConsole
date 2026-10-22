@@ -934,6 +934,7 @@ async function dispatchNetwork(
       : null;
     return {
       ...e,
+      displayId: formatResourceId("eip", e.id),
       hourly: e.releasedAt ? 0 : ipHourly(e.region),
       boundName: boundResource?.name ||
         (e.tunnelId ? n.tunnels.find((t) => t.id === e.tunnelId)?.name : null) || null,
@@ -1063,7 +1064,7 @@ async function dispatchNetwork(
         groups: n.groups.filter((g) => g.vpcId === id && !g.deletedAt),
         interfaces: interfaces.filter((i) => i.vpcId === id),
         tunnels: n.tunnels.filter((t) => t.vpcId === id && !t.deletedAt),
-        audit: n.audit.filter((a) => a.entityId === id),
+        audit: n.audit.filter((a) => a.entityId === id || n.subnets.some((subnet) => subnet.vpcId === id && subnet.id === a.entityId)),
       });
     if (method === "PATCH") {
       v.name = named.parse(body.name);
@@ -1126,7 +1127,7 @@ async function dispatchNetwork(
           createdAt: new Date().toISOString(),
         };
         n.subnets.push(subnet);
-        networkAudit(n, s, vpc.id, "subnetCreate");
+        networkAudit(n, s, subnet.id, "subnetCreate");
         persist();
         return json(subnet, 201);
       }
@@ -1141,7 +1142,7 @@ async function dispatchNetwork(
     if (method === "DELETE") {
       if (subnetUsed(n, s.id) > 0) fail(409, "NETWORK_HAS_DEPENDENCIES");
       s.deletedAt = new Date().toISOString();
-      networkAudit(n, s, s.vpcId, "subnetDelete");
+      networkAudit(n, s, s.id, "subnetDelete");
       return done();
     }
   }
@@ -1296,7 +1297,7 @@ async function dispatchNetwork(
               (e) =>
                 (!qs.get("region") || e.region === qs.get("region")) &&
                 (!qs.get("project_id") || e.projectId === qs.get("project_id")) &&
-                (!qs.get("q") || [e.name, e.address, e.displayId, e.id]
+                (!qs.get("q") || [e.name, e.address, formatResourceId("eip", e.id), e.id]
                   .some((value) => value.toLowerCase().includes(qs.get("q")!.trim().toLowerCase()))) &&
                 (!e.releasedAt || qs.get("includeReleased") === "true"),
             )
@@ -1668,14 +1669,16 @@ async function dispatch(request: Request, settleBilling = true) {
       securityGroups: db.network.groups.filter(
         (g) => !g.deletedAt && g.projectId === projectId && g.region === code,
       ),
-      eips: db.network.eips.filter(
-        (e) =>
-          e.projectId === projectId &&
-          e.region === code &&
-          !e.releasedAt &&
-          !e.interfaceId &&
-          !e.tunnelId,
-      ),
+      eips: db.network.eips
+        .filter(
+          (e) =>
+            e.projectId === projectId &&
+            e.region === code &&
+            !e.releasedAt &&
+            !e.interfaceId &&
+            !e.tunnelId,
+        )
+        .map((e) => ({ ...e, displayId: formatResourceId("eip", e.id) })),
       k8sVersions: ["1.28", "1.29", "1.30", "1.31"],
     });
   }
@@ -1850,10 +1853,11 @@ async function dispatch(request: Request, settleBilling = true) {
   const volumeMatch = path.match(/^\/api\/storage\/volumes\/([^/]+)$/);
   if (volumeMatch) {
     const volume =
-      db.volumes.find((v) => v.id === volumeMatch[1] && !v.deletedAt) ||
+      db.volumes.find((v) => v.id === volumeMatch[1]) ||
       fail(404, "NOT_FOUND");
     if (volume.inventoryScope === "regional_pool") fail(404, "NOT_FOUND");
     if (method === "DELETE") {
+      if (volume.deletedAt) fail(410, "GONE");
       if (volume.resourceUuid || volume.role !== "custom")
         fail(409, "HAS_DEPENDENCIES");
       volume.deletedAt = new Date().toISOString();
@@ -2043,6 +2047,7 @@ async function dispatch(request: Request, settleBilling = true) {
           resourceUuid: r.resourceUuid,
           displayId: r.displayId,
           resourceName: r.name,
+          targetHref: resourceLink(r),
           projectId: r.projectId,
           projectName:
             db.projects.find((project) => project.id === r.projectId)?.name ||
@@ -2054,15 +2059,37 @@ async function dispatch(request: Request, settleBilling = true) {
       });
     });
     const network = db.network;
-    const networkEntities = [
-      ...network.vpcs.map((entity) => ({ ...entity, entityKind: "vpc" })),
-      ...network.subnets.map((entity) => ({ ...entity, entityKind: "subnet" })),
-      ...network.groups.map((entity) => ({ ...entity, entityKind: "security-group" })),
-      ...network.eips.map((entity) => ({ ...entity, entityKind: "eip" })),
-      ...network.tunnels.map((entity) => ({ ...entity, entityKind: "tunnel" })),
-    ];
+    const targetUrl = (section: string, id: string, region: Region) =>
+      `/network/${section}?drawer=${encodeURIComponent(id)}&region=${region}`;
+    const networkTargets = new Map([
+      ...network.vpcs.map((entity) => [entity.id, {
+        name: entity.name,
+        displayId: formatResourceId("vpc", entity.id, { baremetalVpc: vpcNetworkType(entity) === "baremetal" }),
+        href: targetUrl("vpcs", entity.id, entity.region),
+      }] as const),
+      ...network.subnets.map((entity) => [entity.id, {
+        name: entity.name,
+        displayId: formatResourceId("sub", entity.id),
+        href: targetUrl("vpcs", entity.vpcId, entity.region),
+      }] as const),
+      ...network.groups.map((entity) => [entity.id, {
+        name: entity.name,
+        displayId: formatResourceId("sgr", entity.id),
+        href: targetUrl("security-groups", entity.id, entity.region),
+      }] as const),
+      ...network.eips.map((entity) => [entity.id, {
+        name: entity.name,
+        displayId: formatResourceId("eip", entity.id),
+        href: targetUrl("eips", entity.id, entity.region),
+      }] as const),
+      ...network.tunnels.map((entity) => [entity.id, {
+        name: entity.name,
+        displayId: formatResourceId("tun", entity.id),
+        href: targetUrl("tunnels", entity.id, entity.region),
+      }] as const),
+    ]);
     for (const audit of network.audit) {
-      const entity = networkEntities.find((item) => item.id === audit.entityId);
+      const entity = networkTargets.get(audit.entityId);
       const action = audit.action;
       const operation = /Create|Allocate/.test(action)
         ? "create"
@@ -2081,8 +2108,9 @@ async function dispatch(request: Request, settleBilling = true) {
         completedAt: audit.at,
         elapsedSeconds: 0,
         resourceUuid: null,
-        displayId: audit.entityId,
+        displayId: entity?.displayId || formatResourceId("vpc", audit.entityId),
         resourceName: entity?.name || audit.entityId,
+        targetHref: entity?.href || targetUrl("vpcs", audit.entityId, audit.region),
         projectId: audit.projectId,
         projectName: db.projects.find((project) => project.id === audit.projectId)?.name || audit.projectId,
         region: audit.region,
@@ -2106,8 +2134,9 @@ async function dispatch(request: Request, settleBilling = true) {
         completedAt: volume.deletedAt,
         elapsedSeconds: 0,
         resourceUuid: null,
-        displayId: volume.id,
+        displayId: formatResourceId(volume.kind === "block" ? "blk" : "fil", volume.id),
         resourceName: volume.name,
+        targetHref: `/storage/${volume.kind}?drawer=${encodeURIComponent(volume.id)}&region=${volume.region}`,
         projectId: volume.projectId,
         projectName: db.projects.find((project) => project.id === volume.projectId)?.name || volume.projectId,
         region: volume.region,

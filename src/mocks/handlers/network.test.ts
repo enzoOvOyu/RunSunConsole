@@ -1,7 +1,8 @@
 import { beforeAll, afterAll, beforeEach, it, expect, vi } from "vitest";
 import { setupServer } from "msw/node";
 import { handlers } from "./index";
-import { db, makeDatabase, persist, restoreDatabase } from "../lib/database";
+import { db, makeDatabase, normalizeDisplayIds, persist, restoreDatabase } from "../lib/database";
+import { formatResourceId } from "../../lib/ids";
 import {
   checkResourceNetwork,
   interfaceCount,
@@ -720,4 +721,33 @@ it("keeps deployment and association security groups within one-to-five distinct
       )
     ).status,
   ).toBe(422);
+});
+
+it("links operation targets and upgrades legacy EIP display IDs without changing internal keys", async () => {
+  const { v, subnet } = await vpcSetup();
+  const e = await eip();
+  const stored = db.network.eips.find((item) => item.id === e.id)!;
+  stored.displayId = "eip-12345678" as typeof stored.displayId;
+  const usage = db.usage[0];
+  db.usage.push({ ...usage, id: "old-eip-usage", kind: "eip", resourceUuid: e.id, displayId: stored.displayId });
+  expect(normalizeDisplayIds(db)).toBe(true);
+  expect(stored.displayId).toBe(formatResourceId("eip", e.id));
+  expect(db.usage.find((item) => item.id === "old-eip-usage")?.displayId).toBe(stored.displayId);
+  const volume = db.volumes.find((item) => item.kind === "block" && item.inventoryScope !== "regional_pool")!;
+  volume.deletedAt = new Date().toISOString();
+  const response = await fetch("http://localhost/api/operations");
+  expect(response.status).toBe(200);
+  const operations = await response.json();
+  const subnetEvent = operations.find((item: { actionName: string }) => item.actionName === "subnetCreate");
+  expect(subnetEvent.displayId).toBe(formatResourceId("sub", subnet.id));
+  expect(subnetEvent.targetHref).toBe(`/network/vpcs?drawer=${v.id}&region=jp`);
+  const eipEvent = operations.find((item: { actionName: string }) => item.actionName === "eipAllocate");
+  expect(eipEvent.displayId).toBe(formatResourceId("eip", e.id));
+  expect(eipEvent.targetHref).toBe(`/network/eips?drawer=${e.id}&region=jp`);
+  const volumeEvent = operations.find((item: { actionName: string }) => item.actionName === "volumeDelete");
+  expect(volumeEvent.displayId).toBe(formatResourceId("blk", volume.id));
+  expect(volumeEvent.targetHref).toBe(`/storage/block?drawer=${volume.id}&region=${volume.region}`);
+  const detail = await fetch(`http://localhost/api/storage/volumes/${volume.id}`);
+  expect(detail.status).toBe(200);
+  expect((await detail.json()).deletedAt).toBe(volume.deletedAt);
 });

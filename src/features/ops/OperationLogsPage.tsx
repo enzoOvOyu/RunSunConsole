@@ -4,7 +4,7 @@ import { ClipboardList, Search } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { OperationLog } from "../../types/domain";
 import { EP } from "../../lib/api-client";
-import { formatResourceId, resourceLink } from "../../lib/ids";
+import { formatResourceId } from "../../lib/ids";
 import { date } from "../../lib/date";
 import { t, dt } from "../../i18n";
 import { useRegion } from "../../stores/region";
@@ -39,6 +39,7 @@ export default function OperationLogsPage() {
   const rows = (query.data || []).filter((item) => {
     const matchesSearch = [
       item.eventId,
+      formatResourceId("log", item.eventId),
       item.actor,
       item.displayId,
       item.resourceName,
@@ -82,11 +83,7 @@ export default function OperationLogsPage() {
             <small className="resource-id">{item.displayId}</small>
           </>
         );
-        return item.resourceUuid && item.kind ? (
-          <Link to={resourceLink({ kind: item.kind, resourceUuid: item.resourceUuid, region: item.region })}>
-            {content}
-          </Link>
-        ) : content;
+        return item.targetHref ? <Link to={item.targetHref}>{content}</Link> : content;
       },
     },
     {
@@ -169,11 +166,11 @@ export default function OperationLogsPage() {
             <section className="panel">
               <h3>{t("operation.eventMetadata")}</h3>
               <dl className="kv">
-                <div><dt>{t("operation.eventId")}</dt><dd className="resource-id">{selected.eventId}</dd></div>
+                <div><dt>{t("operation.eventId")}</dt><dd className="resource-id">{formatResourceId("log", selected.eventId)}</dd></div>
                 <div><dt>{t("operation.actor")}</dt><dd>{selected.actor}</dd></div>
                 <div><dt>{t("operation.eventTime")}</dt><dd>{date(selected.startedAt)}</dd></div>
                 <div><dt>{t("operation.result")}</dt><dd><Badge status={selected.status === "failed" ? "error" : selected.status === "processing" ? "provisioning" : "running"} label={t(`operation.status.${selected.status}`)} /></dd></div>
-                <div><dt>{t("operation.target")}</dt><dd>{dt(selected.resourceName)} · {selected.displayId}</dd></div>
+                <div><dt>{t("operation.target")}</dt><dd><Link to={selected.targetHref}>{dt(selected.resourceName)} · {selected.displayId}</Link></dd></div>
                 <div><dt>{t("common.project")}</dt><dd>{dt(selected.projectName)} · {formatResourceId("prj", selected.projectId)}</dd></div>
                 <div><dt>{t("operation.region")}</dt><dd>{t(`common.${selected.region}`)}</dd></div>
                 <div><dt>{t("operation.source")}</dt><dd>{selected.eventSource}</dd></div>
@@ -191,7 +188,7 @@ export default function OperationLogsPage() {
             )}
             <section className="panel">
               <h3>{t("operation.relatedEvents")}</h3>
-              <ul>{selected.relatedEventIds.map((id) => <li className="resource-id" key={id}>{id}</li>)}</ul>
+              <ul>{selected.relatedEventIds.map((id) => <li className="resource-id" key={id}>{formatResourceId("log", id)}</li>)}</ul>
             </section>
           </div>
         )}

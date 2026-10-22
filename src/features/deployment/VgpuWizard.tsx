@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { DeploymentOptions, Pool, Image, VgpuSpec } from "../../types/domain";
 import { cidrContains, cidrOverlaps, cidrRange, ipv4String, privateCidr, subnetCapacity, suggestedClusterCidrs, vpcNetworkType } from "../../lib/network";
 import { EP, post, query } from "../../lib/api-client";
+import { formatResourceId } from "../../lib/ids";
 import { storageSelectionsSchema, nodePoolSchema, vgpuSchema, isCidr } from "../../lib/schema";
 import { imageSupportsArchitecture, imageSupportsPool } from "./shared/image-compat";
 import { t } from "../../i18n";
@@ -213,7 +214,7 @@ function ClusterNetwork() {
       <Field label={t("eks.existingVpc")}><select value={selected?.id || ""} onChange={(event) => {
         const next = vpcs.find((vpc) => vpc.id === event.target.value);
         if (next) switchVpc(next);
-      }}><option value="">{t("network.select")}</option>{vpcs.map((vpc) => <option key={vpc.id} value={vpc.id}>{vpc.name} · {vpc.id} · {vpc.cidr}</option>)}</select></Field>
+      }}><option value="">{t("network.select")}</option>{vpcs.map((vpc) => <option key={vpc.id} value={vpc.id}>{vpc.name} · {formatResourceId("vpc", vpc.id)} · {vpc.cidr}</option>)}</select></Field>
       {selected && <KeyValues items={[["VPC CIDR", selected.cidr], [t("eks.availableZones"), new Set(selected.subnets.map((subnet) => subnet.zone)).size], [t("eks.subnetCount"), selected.subnets.length]]} />}
       {layoutInvalid && <p className="field-error">{t("eks.vpcSubnetConflict")}</p>}
       {selected && !selected.subnets.length && <p className="field-error">{t("eks.noVpcSubnets")} <Link to={`/network/vpcs?region=${region}&project_id=${projectId}&drawer=${selected.id}`} target="_blank" rel="noreferrer">{t("eks.manageVpcSubnets")}</Link></p>}
@@ -232,7 +233,7 @@ function ClusterNetwork() {
               const next = event.target.checked ? [...ids, subnet.id] : ids.filter((id) => id !== subnet.id);
               update({ subnets: next, subnet: next[0] || "", volumeBindings: [] });
             }} />
-            <span><strong>{subnet.name}</strong><small>{subnet.id}</small></span>
+            <span><strong>{subnet.name}</strong><small>{formatResourceId("sub", subnet.id)}</small></span>
             <span><strong>{subnet.zone}</strong><small>{subnet.cidr}</small></span>
             <span><strong>{t("eks.privateNodeSubnet")}</strong><small>{t("eks.fiveReservedIps", { total: subnetCapacity(subnet.cidr) })}</small></span>
             <span><strong>{t("network.availableIp", { count: subnet.availableIps })}</strong><small>{index >= 0 ? t("eks.requiredIpInSubnet", { count: demand }) : t("eks.notSelected")}</small></span>
@@ -248,7 +249,7 @@ function ClusterNetwork() {
     <Panel title={t("eks.kubernetesNetworkTitle")}>
       <div className="form-grid">
         <Field label="CNI"><select value={spec.networkPlugin} onChange={(event) => update({ networkPlugin: event.target.value })}><option value="cilium">Cilium · Overlay</option><option value="calico">Calico · Overlay</option></select></Field>
-        <Field label={t("field.securityGroups")}><select value={spec.securityGroups?.[0] || ""} onChange={(event) => update({ securityGroups: event.target.value ? [event.target.value] : [] })}><option value="">{t("network.select")}</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name} · {group.id}</option>)}</select></Field>
+        <Field label={t("field.securityGroups")}><select value={spec.securityGroups?.[0] || ""} onChange={(event) => update({ securityGroups: event.target.value ? [event.target.value] : [] })}><option value="">{t("network.select")}</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name} · {formatResourceId("sgr", group.id)}</option>)}</select></Field>
         <Field label={t("eks.podCidr")}><input className="input" value={spec.podCidr || ""} onChange={(event) => update({ podCidr: event.target.value })} />{cidrError === "eks.invalidPodCidr" || cidrError === "eks.podVpcOverlap" || cidrError === "eks.podServiceOverlap" ? <small className="field-error">{t(cidrError)}</small> : null}</Field>
         <Field label={t("eks.serviceCidr")}><input className="input" value={spec.serviceCidr || ""} onChange={(event) => update({ serviceCidr: event.target.value })} />{cidrError === "eks.invalidServiceCidr" || cidrError === "eks.serviceVpcOverlap" || cidrError === "eks.podServiceOverlap" ? <small className="field-error">{t(cidrError)}</small> : null}</Field>
       </div>
@@ -416,9 +417,9 @@ function ClusterAddons() {
           <small>{t(ingress ? "eks.entryIngressHint" : "eks.entryInternalHint")}</small>
         </button>)}
       </div>
-      <KeyValues items={[["VPC", vpc ? `${vpc.name} · ${vpc.id}` : spec.vpc],
+      <KeyValues items={[["VPC", vpc ? `${vpc.name} · ${formatResourceId("vpc", vpc.id)}` : spec.vpc ? formatResourceId("vpc", spec.vpc) : "—"],
         [t("eks.subnetConfig"), subnetNames.join(" / ") || "—"],
-        [t("field.securityGroups"), spec.securityGroups?.join(" / ") || "—"]]} />
+        [t("field.securityGroups"), spec.securityGroups?.map((id) => formatResourceId("sgr", id)).join(" / ") || "—"]]} />
       {spec.ingressEnabled ? <div className="stack">
         <KeyValues items={[[t("eks.ingressController"), "NGINX · " + t("eks.platformManagedMock")],
           [t("eks.ingressResource"), t("eks.ingressCreatedAfterCluster")]]} />
@@ -450,7 +451,7 @@ function ClusterConfirm({ context }: { context: FormContext }) {
       [t("eks.managedServiceTier"), spec.controlPlaneTier.toUpperCase()],
       [t("eks.endpointAccess"), t(spec.apiServerPublic ? "eks.publicAndPrivateEndpoint" : "eks.privateEndpoint")],
       [t("eks.authorizedNetworks"), spec.apiServerPublic ? spec.authorizedCidr : t("eks.selectedVpcNetwork")],
-      ["VPC", `${selected?.name || spec.vpc} · ${selected?.cidr || ""}`],
+      ["VPC", `${selected?.name || (spec.vpc ? formatResourceId("vpc", spec.vpc) : "—")} · ${selected?.cidr || ""}`],
       [t("eks.subnetConfig"), selected?.subnets.filter((item) => selectedSubnets(spec).includes(item.id)).map((item) => `${item.name} (${item.zone}, ${item.cidr})`).join(" / ") || spec.subnets?.join(" / ") || "—"],
       ["CNI", spec.networkPlugin], ["Pod / Service CIDR", `${spec.podCidr} / ${spec.serviceCidr}`],
       [t("eks.storageScheme"), t(`eks.storageMode.${spec.storageMode || "dynamic_block"}`)],

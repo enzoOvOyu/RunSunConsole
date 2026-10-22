@@ -254,6 +254,7 @@ export default function VolumePage() {
           <ErrorState error={detail.error} />
         ) : v && v.kind === kind ? (
           <div className="stack">
+            {v.deletedAt && <p className="notice">{t("resource.history")}</p>}
             <Panel title={t("storage.volumeDetails")}>
               <KeyValues
                 items={[
@@ -327,7 +328,7 @@ export default function VolumePage() {
               {linkedResource?.kind === "vgpu" && <small>{t("storage.fileNodePoolHint")}</small>}
               {v.resourceUuid && v.resourceKind && <Link to={resourceLink({ kind: v.resourceKind, resourceUuid: v.resourceUuid, region: v.region })}>{t("storage.viewResource")}</Link>}
             </Panel>}
-            {v.role === "custom" && !v.resourceUuid && (
+            {!v.deletedAt && v.role === "custom" && !v.resourceUuid && (
               <Panel title={t("storage.useVolume")}>
                 <div className="stack">
                   <Field label={t("nav.resources")}>
@@ -391,7 +392,7 @@ export default function VolumePage() {
                 </div>
               </Panel>
             )}
-            {v.resourceUuid && (v.role === "custom" || (v.kind === "file" && v.role === "pvc" && v.resourceKind === "vgpu")) && (
+            {!v.deletedAt && v.resourceUuid && (v.role === "custom" || (v.kind === "file" && v.role === "pvc" && v.resourceKind === "vgpu")) && (
               <Button
                 disabled={!canWrite(role) || busy}
                 onClick={async () => {
@@ -404,7 +405,7 @@ export default function VolumePage() {
                 {t("storage.detach")}
               </Button>
             )}
-            <Panel title={t("storage.lifecycleSummary")}>
+            {!v.deletedAt && <Panel title={t("storage.lifecycleSummary")}>
               <KeyValues
                 items={[
                   [
@@ -446,7 +447,7 @@ export default function VolumePage() {
               >
                 {t("common.delete")}
               </Button>
-            </Panel>
+            </Panel>}
           </div>
         ) : null}
       </Modal>
