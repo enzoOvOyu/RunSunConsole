@@ -46,6 +46,7 @@ import {
   type Quota,
   type Usage,
   type Invoice,
+  type OperationLog,
   type ScalingPolicy,
   type StorageObject,
   type Pipeline,
@@ -1950,7 +1951,7 @@ async function dispatch(request: Request, settleBilling = true) {
     );
   if (path === "/api/operations") {
     const now = Date.now();
-    const operations = db.resources.flatMap((r) => {
+    const operations: OperationLog[] = db.resources.flatMap((r) => {
       const history = db.events.filter(
         (event) => event.resourceUuid === r.resourceUuid,
       );
@@ -1977,11 +1978,17 @@ async function dispatch(request: Request, settleBilling = true) {
             : createStatus === "failed"
               ? failedEvent?.at || r.stoppedAt || expectedReadyAt
               : r.runningSince || readyEvent?.at || expectedReadyAt;
-      const rows = [
+      const rows: {
+        id: string;
+        operation: OperationLog["operation"];
+        status: OperationLog["status"];
+        startedAt: string;
+        completedAt: string | null;
+      }[] = [
         {
           id: `create-${r.resourceUuid}`,
           operation: "create",
-          status: createStatus,
+          status: createStatus as OperationLog["status"],
           startedAt: r.createdAt,
           completedAt: createCompletedAt,
         },
@@ -2013,6 +2020,26 @@ async function dispatch(request: Request, settleBilling = true) {
           : now;
         return {
           ...operation,
+          eventId:
+            operation.operation === "delete"
+              ? deletedEvent?.id || operation.id
+              : operation.operation === "create"
+                ? failedEvent?.id || readyEvent?.id || history[0]?.id || operation.id
+                : history.find((event) => event.id === operation.id.replace(`${operation.operation}-`, ""))?.id || operation.id,
+          eventSource: "runsun.compute",
+          actionName: operation.operation,
+          actor:
+            (operation.operation === "delete"
+              ? deletedEvent?.actor
+              : operation.operation === "create"
+                ? failedEvent?.actor || readyEvent?.actor || history[0]?.actor
+                : history.find((event) => event.id === operation.id.replace(`${operation.operation}-`, ""))?.actor) || "enzoOvOyu",
+          requestParameters:
+            operation.operation === "create"
+              ? { name: r.name, kind: r.kind, region: r.region, projectId: r.projectId, spec: r.spec }
+              : { resourceUuid: r.resourceUuid, displayId: r.displayId },
+          errorDetails: createStatus === "failed" && operation.operation === "create" ? failedEvent?.reason || null : null,
+          relatedEventIds: history.map((event) => event.id),
           resourceUuid: r.resourceUuid,
           displayId: r.displayId,
           resourceName: r.name,
@@ -2026,9 +2053,71 @@ async function dispatch(request: Request, settleBilling = true) {
         };
       });
     });
-    return json(
-      operations.sort((a, b) => b.startedAt.localeCompare(a.startedAt)),
-    );
+    const network = db.network;
+    const networkEntities = [
+      ...network.vpcs.map((entity) => ({ ...entity, entityKind: "vpc" })),
+      ...network.subnets.map((entity) => ({ ...entity, entityKind: "subnet" })),
+      ...network.groups.map((entity) => ({ ...entity, entityKind: "security-group" })),
+      ...network.eips.map((entity) => ({ ...entity, entityKind: "eip" })),
+      ...network.tunnels.map((entity) => ({ ...entity, entityKind: "tunnel" })),
+    ];
+    for (const audit of network.audit) {
+      const entity = networkEntities.find((item) => item.id === audit.entityId);
+      const action = audit.action;
+      const operation = /Create|Allocate/.test(action)
+        ? "create"
+        : /Delete|Release/.test(action)
+          ? "delete"
+          : "update";
+      operations.push({
+        id: `network-${audit.id}`,
+        eventId: audit.id,
+        eventSource: "runsun.network",
+        actionName: action,
+        actor: audit.actor,
+        operation,
+        status: "succeeded",
+        startedAt: audit.at,
+        completedAt: audit.at,
+        elapsedSeconds: 0,
+        resourceUuid: null,
+        displayId: audit.entityId,
+        resourceName: entity?.name || audit.entityId,
+        projectId: audit.projectId,
+        projectName: db.projects.find((project) => project.id === audit.projectId)?.name || audit.projectId,
+        region: audit.region,
+        kind: null,
+        requestParameters: { entityId: audit.entityId, action, region: audit.region, projectId: audit.projectId },
+        errorDetails: null,
+        relatedEventIds: [audit.id],
+      });
+    }
+    for (const volume of db.volumes) {
+      if (!volume.deletedAt) continue;
+      operations.push({
+        id: `volume-delete-${volume.id}`,
+        eventId: `evt-${volume.id}`,
+        eventSource: "runsun.storage",
+        actionName: "volumeDelete",
+        actor: "enzoOvOyu",
+        operation: "delete",
+        status: "succeeded",
+        startedAt: volume.deletedAt,
+        completedAt: volume.deletedAt,
+        elapsedSeconds: 0,
+        resourceUuid: null,
+        displayId: volume.id,
+        resourceName: volume.name,
+        projectId: volume.projectId,
+        projectName: db.projects.find((project) => project.id === volume.projectId)?.name || volume.projectId,
+        region: volume.region,
+        kind: null,
+        requestParameters: { volumeId: volume.id, name: volume.name, kind: volume.kind, sizeGb: volume.sizeGb, zone: volume.zone },
+        errorDetails: null,
+        relatedEventIds: [`evt-${volume.id}`],
+      });
+    }
+    return json(operations.sort((a, b) => b.startedAt.localeCompare(a.startedAt)));
   }
   if (path === "/api/notifications") {
     const items: {

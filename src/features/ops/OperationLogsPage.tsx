@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { ClipboardList, Pause, Play, Plus, Trash2 } from "lucide-react";
+import { ClipboardList, Search } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { OperationLog } from "../../types/domain";
 import { EP } from "../../lib/api-client";
@@ -12,28 +12,41 @@ import { useData } from "../shared/hooks";
 import { RegionFilter } from "../shared/RegionFilter";
 import {
   Badge,
+  Button,
   DataTable,
   ErrorState,
   Loading,
+  Modal,
   PageHeader,
 } from "../../components/ui";
+
+const operationTypes = ["create", "delete", "start", "stop", "update"] as const;
+const operationLabel = (row: OperationLog) => {
+  const eventKey = `operation.event.${row.actionName}`;
+  const translated = t(eventKey);
+  return translated === eventKey ? t(`operation.${row.operation}`) : translated;
+};
 
 export default function OperationLogsPage() {
   const region = useRegion((state) => state.region);
   const [operation, setOperation] = useState("");
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<OperationLog | null>(null);
   const query = useData<OperationLog[]>(["operations"], EP.operations, {
     poll: true,
   });
   const rows = (query.data || []).filter((item) => {
     const matchesSearch = [
-      formatResourceId("log", item.id),
+      item.eventId,
+      item.actor,
       item.displayId,
       item.resourceName,
       item.projectName,
-      formatResourceId("prj", item.projectId),
-    ].some((value) => dt(value).toLowerCase().includes(search.toLowerCase()));
+      item.projectId,
+      item.eventSource,
+      item.actionName,
+    ].some((value) => dt(value).toLowerCase().includes(search.trim().toLowerCase()));
     return (
       item.region === region &&
       (!operation || item.operation === operation) &&
@@ -43,55 +56,38 @@ export default function OperationLogsPage() {
   });
   const columns: ColumnDef<OperationLog>[] = [
     {
-      accessorKey: "id",
-      header: "ID",
-      cell: ({ row }) => (
-        <span className="resource-id">
-          {formatResourceId("log", row.original.id)}
-        </span>
-      ),
+      accessorKey: "actor",
+      header: t("operation.actor"),
+      cell: ({ row }) => <span className="resource-id">{row.original.actor}</span>,
     },
     {
-      accessorKey: "operation",
+      accessorKey: "startedAt",
+      header: t("operation.eventTime"),
+      cell: ({ row }) => date(row.original.startedAt),
+    },
+    {
+      accessorKey: "actionName",
       header: t("operation.action"),
+      cell: ({ row }) => <strong>{operationLabel(row.original)}</strong>,
+    },
+    {
+      accessorKey: "resourceName",
+      header: t("operation.target"),
       cell: ({ row }) => {
-        const Icon =
-          row.original.operation === "create"
-            ? Plus
-            : row.original.operation === "delete"
-              ? Trash2
-              : row.original.operation === "start"
-                ? Play
-                : Pause;
-        return (
-          <span className="row">
-            <Icon size={15} aria-hidden="true" />
-            {t(`operation.${row.original.operation}`)}
-          </span>
+        const item = row.original;
+        const content = (
+          <>
+            <strong>{dt(item.resourceName)}</strong>
+            <br />
+            <small className="resource-id">{item.displayId}</small>
+          </>
         );
+        return item.resourceUuid && item.kind ? (
+          <Link to={resourceLink({ kind: item.kind, resourceUuid: item.resourceUuid, region: item.region })}>
+            {content}
+          </Link>
+        ) : content;
       },
-    },
-    {
-      accessorKey: "displayId",
-      header: t("operation.resource"),
-      cell: ({ row }) => (
-        <Link
-          to={resourceLink({
-            kind: row.original.kind,
-            resourceUuid: row.original.resourceUuid,
-            region: row.original.region,
-          })}
-        >
-          <strong>{row.original.displayId}</strong>
-          <br />
-          <small>{dt(row.original.resourceName)}</small>
-        </Link>
-      ),
-    },
-    {
-      accessorKey: "kind",
-      header: t("common.type"),
-      cell: ({ row }) => t(`common.${row.original.kind}`),
     },
     {
       accessorKey: "projectName",
@@ -100,36 +96,36 @@ export default function OperationLogsPage() {
         <span>
           {dt(row.original.projectName)}
           <br />
-          <small className="resource-id">
-            {formatResourceId("prj", row.original.projectId)}
-          </small>
+          <small className="resource-id">{formatResourceId("prj", row.original.projectId)}</small>
         </span>
       ),
     },
     {
+      accessorKey: "region",
+      header: t("operation.region"),
+      cell: ({ row }) => t(`common.${row.original.region}`),
+    },
+    {
       accessorKey: "status",
-      header: t("common.status"),
+      header: t("operation.result"),
       cell: ({ row }) => {
         const state = row.original.status;
-        const badgeStatus =
-          state === "processing"
-            ? "provisioning"
-            : state === "failed"
-              ? "error"
-              : state === "canceled"
-                ? "stopped"
-                : "running";
-        return (
-          <Badge status={badgeStatus} label={t(`operation.status.${state}`)} />
-        );
+        const badgeStatus = state === "processing" ? "provisioning" : state === "failed" ? "error" : state === "canceled" ? "stopped" : "running";
+        return <Badge status={badgeStatus} label={t(`operation.status.${state}`)} />;
       },
     },
     {
-      accessorKey: "startedAt",
-      header: t("operation.startedAt"),
-      cell: ({ row }) => date(row.original.startedAt),
+      id: "details",
+      header: t("operation.eventId"),
+      cell: ({ row }) => (
+        <Button variant="ghost" className="resource-id" onClick={() => setSelected(row.original)}>
+          <Search size={14} aria-hidden="true" />
+          {formatResourceId("log", row.original.eventId)}
+        </Button>
+      ),
     },
   ];
+
   return (
     <>
       <PageHeader
@@ -139,51 +135,67 @@ export default function OperationLogsPage() {
       />
       <div className="toolbar">
         <RegionFilter />
-        <select
-          aria-label={t("operation.action")}
-          value={operation}
-          onChange={(event) => setOperation(event.target.value)}
-        >
+        <select aria-label={t("operation.action")} value={operation} onChange={(event) => setOperation(event.target.value)}>
           <option value="">{t("common.all")}</option>
-          <option value="create">{t("operation.create")}</option>
-          <option value="delete">{t("operation.delete")}</option>
-          <option value="start">{t("operation.start")}</option>
-          <option value="stop">{t("operation.stop")}</option>
+          {operationTypes.map((value) => <option key={value} value={value}>{t(`operation.${value}`)}</option>)}
         </select>
-        <select
-          aria-label={t("common.status")}
-          value={status}
-          onChange={(event) => setStatus(event.target.value)}
-        >
+        <select aria-label={t("operation.result")} value={status} onChange={(event) => setStatus(event.target.value)}>
           <option value="">{t("common.all")}</option>
-          {(["processing", "succeeded", "failed", "canceled"] as const).map(
-            (value) => (
-              <option key={value} value={value}>
-                {t(`operation.status.${value}`)}
-              </option>
-            ),
-          )}
+          {(["processing", "succeeded", "failed", "canceled"] as const).map((value) => (
+            <option key={value} value={value}>{t(`operation.status.${value}`)}</option>
+          ))}
         </select>
         <input
           className="input search"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder={t("common.search")}
+          placeholder={t("operation.searchPlaceholder")}
         />
       </div>
       <div className="panel">
-        {query.isPending ? (
-          <Loading />
-        ) : query.error ? (
-          <ErrorState error={query.error} />
-        ) : (
-          <DataTable
-            data={rows}
-            columns={columns}
-            empty={t("operation.empty")}
-          />
+        {query.isPending ? <Loading /> : query.error ? <ErrorState error={query.error} /> : (
+          <DataTable data={rows} columns={columns} empty={t("operation.empty")} />
         )}
       </div>
+      <Modal
+        open={!!selected}
+        onClose={() => setSelected(null)}
+        drawer
+        title={selected ? operationLabel(selected) : t("operation.details")}
+        description={selected ? `${selected.eventSource} · ${date(selected.startedAt)}` : undefined}
+      >
+        {selected && (
+          <div className="stack">
+            <section className="panel">
+              <h3>{t("operation.eventMetadata")}</h3>
+              <dl className="kv">
+                <div><dt>{t("operation.eventId")}</dt><dd className="resource-id">{selected.eventId}</dd></div>
+                <div><dt>{t("operation.actor")}</dt><dd>{selected.actor}</dd></div>
+                <div><dt>{t("operation.eventTime")}</dt><dd>{date(selected.startedAt)}</dd></div>
+                <div><dt>{t("operation.result")}</dt><dd><Badge status={selected.status === "failed" ? "error" : selected.status === "processing" ? "provisioning" : "running"} label={t(`operation.status.${selected.status}`)} /></dd></div>
+                <div><dt>{t("operation.target")}</dt><dd>{dt(selected.resourceName)} · {selected.displayId}</dd></div>
+                <div><dt>{t("common.project")}</dt><dd>{dt(selected.projectName)} · {formatResourceId("prj", selected.projectId)}</dd></div>
+                <div><dt>{t("operation.region")}</dt><dd>{t(`common.${selected.region}`)}</dd></div>
+                <div><dt>{t("operation.source")}</dt><dd>{selected.eventSource}</dd></div>
+              </dl>
+            </section>
+            <section className="panel">
+              <h3>{t("operation.requestParameters")}</h3>
+              <pre>{JSON.stringify(selected.requestParameters, null, 2)}</pre>
+            </section>
+            {selected.errorDetails && (
+              <section className="panel">
+                <h3>{t("operation.errorDetails")}</h3>
+                <p>{dt(selected.errorDetails)}</p>
+              </section>
+            )}
+            <section className="panel">
+              <h3>{t("operation.relatedEvents")}</h3>
+              <ul>{selected.relatedEventIds.map((id) => <li className="resource-id" key={id}>{id}</li>)}</ul>
+            </section>
+          </div>
+        )}
+      </Modal>
     </>
   );
 }

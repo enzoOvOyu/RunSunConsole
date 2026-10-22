@@ -557,18 +557,25 @@ export interface Order {
 }
 export interface OperationLog {
   id: string;
-  operation: "create" | "delete" | "start" | "stop";
+  eventId: string;
+  eventSource: string;
+  actionName: string;
+  actor: string;
+  operation: "create" | "delete" | "start" | "stop" | "update";
   status: "processing" | "succeeded" | "failed" | "canceled";
   startedAt: string;
   completedAt: string | null;
   elapsedSeconds: number;
-  resourceUuid: ResourceUuid;
-  displayId: DisplayId;
+  resourceUuid: ResourceUuid | null;
+  displayId: DisplayId | string;
   resourceName: string;
   projectId: string;
   projectName: string;
   region: Region;
-  kind: Kind;
+  kind: Kind | null;
+  requestParameters: Record<string, unknown>;
+  errorDetails: string | null;
+  relatedEventIds: string[];
 }
 export interface MetricPoint {
   at: string;
