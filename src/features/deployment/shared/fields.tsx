@@ -37,6 +37,7 @@ import { defaultScaling, normalizeSpec } from "../../../lib/config";
 import { formatResourceId } from "../../../lib/ids";
 import { SCALING_METRIC_LIMITS } from "../../../lib/schema";
 import { vpcNetworkType } from "../../../lib/network";
+import { NetworkEditor } from "../../network/NetworkEditor";
 import { readSshKeys } from "../../../lib/ssh-keys";
 import {
   imageArchitectures,
@@ -56,6 +57,7 @@ export interface WizardValues {
   spec: Resource["spec"];
   agree: boolean;
   password: string;
+  allocatedEip?: { id: string; displayId: string };
 }
 export interface FormContext {
   kind: Kind;
@@ -597,6 +599,8 @@ export function NetworkFields({
   const { form, spec, update } = useSpec();
   const region = form.watch("region"),
     projectId = form.watch("projectId");
+  const [allocatingEip, setAllocatingEip] = useState(false);
+  const projects = useData<Project[]>(["projects"], EP.projects, { enabled: allocatingEip });
   const options = useData<DeploymentOptions>(
     ["deployment-network", region, projectId, dedicatedBaremetal],
     EP.options +
@@ -827,17 +831,41 @@ export function NetworkFields({
                       <option value="">{t("network.eipNew")}</option>
                       {options.data.eips.map((e) => (
                         <option key={e.id} value={e.id}>
-                          {e.address} · {e.name}
+                          {e.address} · {dt(e.name)} · {e.displayId}
                         </option>
                       ))}
                     </select>
+                    {!options.data.eips.length && (
+                      <small className="muted">{t("network.noAvailableEip")}</small>
+                    )}
                   </Field>
+                )}
+                {spec.quantity === 1 && (spec.scaling?.max_size || 1) <= 1 && (
+                  <Button type="button" onClick={() => setAllocatingEip(true)}>
+                    {t("network.allocate")}
+                  </Button>
                 )}
               </>
             )}
           </div>
         )}
       </div>
+      {allocatingEip && (projects.isPending ? <Loading /> : projects.error ? <ErrorState error={projects.error} /> : (
+        <NetworkEditor
+          key={`${projectId}-${region}`}
+          kind="eips"
+          state={{ action: "create" }}
+          region={region}
+          projectId={projectId}
+          projects={(projects.data || []).filter((project) => project.id === projectId && !project.deletedAt)}
+          onAllocated={(eip) => {
+            form.setValue("allocatedEip", eip);
+            update({ publicIp: true, eipId: eip.id });
+            void options.refetch();
+          }}
+          onClose={() => setAllocatingEip(false)}
+        />
+      ))}
     </div>
   );
 }

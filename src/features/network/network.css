@@ -67,3 +67,26 @@
     margin-left: 0;
   }
 }
+
+.network-eip-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--rs-border);
+  border-radius: var(--rs-r-md);
+  background: var(--rs-bg);
+}
+
+.network-eip-hero > div:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.network-eip-hero strong {
+  font-size: var(--rs-fs-lg);
+  overflow-wrap: anywhere;
+}

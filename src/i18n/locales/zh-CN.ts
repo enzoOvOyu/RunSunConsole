@@ -467,6 +467,8 @@ export default {
   "wizard.license": "NVIDIA License 余量：{count}",
   "wizard.inferenceConfigGroup": "模型与算力配置",
   "wizard.textModelsOnly": "支持文本及可生成文本的多模态模型；当前服务使用聊天接口。",
+  "wizard.eipReleasedAfterFailure": "实例创建失败，刚分配且未绑定的公网 IP 已自动释放。",
+  "wizard.eipCleanupFailed": "实例创建未完成；请到弹性公网 IP 页面核对刚分配地址的绑定与计费状态。",
   "wizard.selectModel": "选择模型",
   "wizard.textModelRequired":
     "请选择可生成文本的模型；纯图像模型不能用于此聊天推理服务。",
@@ -1438,9 +1440,13 @@ export default {
   "network.associateHint":
     "关联操作作用于所选虚机资源组内的全部设备。每个资源组保留 1–5 个同 VPC 安全组。",
   "network.noEligible": "没有符合项目、区域及绑定条件的虚机设备。",
-  "network.allocate": "分配公网 IP",
+  "network.allocate": "分配弹性公网 IP",
   "network.includeReleased": "包含已释放地址",
   "network.resultCount": "共 {count} 项",
+  "network.bindingFilter": "绑定状态",
+  "network.noAvailableEip": "当前项目及区域没有空闲公网 IP，可自动分配或先分配一个地址。",
+  "network.eipNameError": "名称须为 2–63 个字符。",
+  "network.eipBandwidthError": "带宽上限须为 1–1000 Mbps 的整数。",
   "network.binding": "绑定对象",
   "network.bound": "已绑定",
   "network.unbound": "未绑定",
@@ -1469,7 +1475,9 @@ export default {
   "network.detach": "移除关联",
   "network.release": "释放公网 IP",
   "network.releaseHint":
-    "仅可释放未绑定地址。释放后停止计费，地址无法恢复。历史账单保留。",
+    "仅可释放未绑定地址。释放后停止计费，原 IP 会被回收，重新分配无法保证获得相同地址；历史账单保留。",
+  "network.eipReleaseBlocked": "此地址已绑定虚机。释放前须先解绑；解绑会中断该虚机的公网访问，地址会继续计费直至释放。",
+  "network.eipTunnelReleaseBlocked": "此地址是隧道网关。须先处理关联隧道才能释放；释放后原 IP 可能被重新分配。",
   "network.releaseInput": "输入 {id} 确认释放",
   "network.basic": "基本信息",
   "network.gateway": "网关公网地址",
@@ -1542,7 +1550,7 @@ export default {
   "network.selectSecurityGroups": "选择安全组",
   "network.availableIp": "剩余 {count} 个地址",
   "network.eipIndependent":
-    "公网 IP 独立保留并计费；解绑或删除虚机不会释放 EIP。",
+    "手动分配的公网 IP 会立即独立计费；自动分配在实例提交成功时绑定。解绑或删除虚机不会释放 EIP。",
   "network.eipChoice": "公网地址分配方式",
   "network.eipNew": "自动分配新地址",
   "quota.network": "网络资源配额",

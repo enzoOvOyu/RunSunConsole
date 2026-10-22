@@ -275,6 +275,22 @@ it("enforces one EIP per VM interface, retains allocation across unbind/stop, an
       .status,
   ).toBe(410);
 });
+it("finds EIPs by name, address or display ID and links the bound VM", async () => {
+  const address = await eip();
+  for (const value of [address.name, address.address, address.displayId]) {
+    const result = await request(`/eips?region=jp&project_id=${address.projectId}&q=${encodeURIComponent(value)}`);
+    expect(result.data.some((item: { id: string }) => item.id === address.id)).toBe(true);
+  }
+  const nic = db.network.interfaces.find((item) =>
+    item.kind === "gpu_vm" && item.projectId === address.projectId &&
+    item.region === address.region &&
+    !db.network.eips.some((ip) => ip.interfaceId === item.id));
+  expect(nic).toBeTruthy();
+  const bound = await request(`/eips/${address.id}/bind`, "POST", { interfaceId: nic!.id });
+  expect(bound.status).toBe(200);
+  expect(bound.data.boundHref).toContain(nic!.resourceUuid);
+  expect(bound.data.boundName).toBe(db.resources.find((item) => item.resourceUuid === nic!.resourceUuid)?.name);
+});
 it("bills idle EIPs independently and never duplicates new compute IP meters", async () => {
   const e = await eip();
   const now = Date.now();

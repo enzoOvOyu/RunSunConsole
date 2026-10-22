@@ -56,6 +56,7 @@ function NetworkPage({ kind }: { kind: NetworkKind }) {
   const writable = canWrite(role);
   const projectId = params.get("project_id") || "";
   const search = params.get("q") || "";
+  const bindingFilter = params.get("binding") || "all";
   const releasedParam = params.get("includeReleased") === "true";
   const [includeReleased, setIncludeReleased] = useState(releasedParam);
   useEffect(() => setIncludeReleased(releasedParam), [releasedParam]);
@@ -92,9 +93,17 @@ function NetworkPage({ kind }: { kind: NetworkKind }) {
       { replace: true },
     );
   const Icon = icons[kind];
-  const items = [...(q.data || [])].sort((a, b) =>
-    b.createdAt.localeCompare(a.createdAt),
-  );
+  const items = [...(q.data || [])]
+    .filter((item) => {
+      if (kind !== "eips" || bindingFilter === "all") return true;
+      if (!("interfaceId" in item)) return false;
+      if (bindingFilter === "released") return !!item.releasedAt;
+      if (item.releasedAt) return false;
+      return bindingFilter === "bound"
+        ? !!(item.interfaceId || item.tunnelId)
+        : !item.interfaceId && !item.tunnelId;
+    })
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   return (
     <>
       <PageHeader
@@ -144,6 +153,28 @@ function NetworkPage({ kind }: { kind: NetworkKind }) {
           value={search}
           onChange={(e) => update("q", e.target.value)}
         />
+        {kind === "eips" && (
+          <select
+            aria-label={t("network.bindingFilter")}
+            value={bindingFilter}
+            onChange={(e) => {
+              const binding = e.target.value;
+              setParams((old) => {
+                const next = new URLSearchParams(old);
+                if (binding === "all") next.delete("binding");
+                else next.set("binding", binding);
+                if (binding === "released") next.set("includeReleased", "true");
+                next.delete("drawer");
+                return next;
+              }, { replace: true });
+            }}
+          >
+            <option value="all">{t("common.all")}</option>
+            <option value="available">{t("network.unbound")}</option>
+            <option value="bound">{t("network.bound")}</option>
+            <option value="released">{t("common.released")}</option>
+          </select>
+        )}
         {kind === "eips" && (
           <label className="check">
             <input
@@ -278,11 +309,17 @@ function NetworkPage({ kind }: { kind: NetworkKind }) {
                         {
                           id: "binding",
                           header: t("network.binding"),
-                          cell: ({
-                            row,
-                          }: {
-                            row: { original: NetworkRecord };
-                          }) => row.original.boundName || t("network.unbound"),
+                          cell: ({ row }: { row: { original: NetworkRecord } }) =>
+                            row.original.boundHref ? (
+                              <Link onClick={(event) => event.stopPropagation()} to={row.original.boundHref}>
+                                {dt(row.original.boundName || "")}
+                              </Link>
+                            ) : t("network.unbound"),
+                        },
+                        {
+                          id: "region",
+                          header: t("common.region"),
+                          cell: ({ row }: { row: { original: NetworkRecord } }) => t(`common.${row.original.region}`),
                         },
                         {
                           id: "rate",
@@ -537,6 +574,20 @@ function NetworkDrawer({
         ) : (
           d && (
             <div className="stack">
+              {kind === "eips" && "address" in d && (
+                <div className="network-eip-hero">
+                  <div>
+                    <small>{t("network.eip")}</small>
+                    <strong className="mono">{d.address}</strong>
+                    <span>{dt(d.name)} · {networkDisplayId(kind, d)}</span>
+                  </div>
+                  <div className="row">
+                    <NetworkStatus item={d} />
+                    <CopyButton value={d.address} />
+                    <CopyButton value={networkDisplayId(kind, d)} />
+                  </div>
+                </div>
+              )}
               {dead ? (
                 <p className="notice">{t("resource.history")}</p>
               ) : (
@@ -639,6 +690,9 @@ function NetworkDrawer({
                   </Button>
                 </div>
               )}
+              {kind === "eips" && "interfaceId" in d && (d.interfaceId || d.tunnelId) && (
+                <p className="notice">{t(d.tunnelId ? "network.eipTunnelReleaseBlocked" : "network.eipReleaseBlocked")}</p>
+              )}
               <Tabs
                 items={tabs.map((id) => ({
                   id,
@@ -698,8 +752,8 @@ function NetworkDrawer({
                               ] as [string, string],
                               [
                                 t("network.binding"),
-                                d.boundName || t("network.unbound"),
-                              ] as [string, string],
+                                d.boundHref ? <Link to={d.boundHref}>{dt(d.boundName || "")}</Link> : t("network.unbound"),
+                              ] as [string, React.ReactNode],
                               ...(d.tunnelId
                                 ? [
                                     [

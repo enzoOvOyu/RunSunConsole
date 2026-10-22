@@ -110,7 +110,7 @@ export interface DeploymentNetworkOptions {
 export type VpcView = Vpc & { subnetCount: number; interfaceCount: number };
 export type SubnetView = Subnet & { usedIps: number; availableIps: number };
 export type SecurityGroupView = SecurityGroup & { interfaceCount: number };
-export type EipView = ElasticIp & { boundName: string | null; hourly: number };
+export type EipView = ElasticIp & { boundName: string | null; boundHref: string | null; hourly: number };
 export const NETWORK_QUOTA_METRICS = [
   "vpc",
   "subnet",

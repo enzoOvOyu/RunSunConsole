@@ -481,6 +481,8 @@ export default {
   "wizard.inferenceConfigGroup": "Model and compute configuration",
   "wizard.textModelsOnly":
     "Supports text and text-generating multimodal models through the chat API.",
+  "wizard.eipReleasedAfterFailure": "Instance creation failed. The newly allocated, unbound EIP was released.",
+  "wizard.eipCleanupFailed": "Instance creation did not complete. Check the newly allocated EIP's binding and billing status in Network Management.",
   "wizard.selectModel": "Select a model",
   "wizard.textModelRequired":
     "Select a model that generates text. Image-only models cannot use this chat inference service.",
@@ -1514,9 +1516,13 @@ export default {
     "Association applies to every device in the selected VM resource group. Each group retains 1–5 security groups in the same VPC.",
   "network.noEligible":
     "No VM devices meet the project, region and binding requirements.",
-  "network.allocate": "Allocate EIP",
+  "network.allocate": "Allocate Elastic IP",
   "network.includeReleased": "Include released addresses",
   "network.resultCount": "{count} items",
+  "network.bindingFilter": "Binding status",
+  "network.noAvailableEip": "No idle EIP in this project and region. Allocate one here or use automatic allocation.",
+  "network.eipNameError": "Name must contain 2–63 characters.",
+  "network.eipBandwidthError": "Bandwidth must be an integer from 1 to 1000 Mbps.",
   "network.binding": "Bound resource",
   "network.bound": "Bound",
   "network.unbound": "Unbound",
@@ -1549,7 +1555,9 @@ export default {
   "network.detach": "Detach",
   "network.release": "Release EIP",
   "network.releaseHint":
-    "Only an unbound address can be released. Charging stops and the address cannot be restored. Historical bills remain.",
+    "Only unbound addresses can be released. Billing stops on release. The IP returns to the pool and cannot be guaranteed on reallocation; historical charges remain.",
+  "network.eipReleaseBlocked": "This EIP is bound to a VM. Unbind it before release; public access will stop, and billing continues until release.",
+  "network.eipTunnelReleaseBlocked": "This EIP is a tunnel gateway. Resolve the linked tunnel before release; the IP may be reassigned afterward.",
   "network.releaseInput": "Enter {id} to confirm release",
   "network.basic": "Basic information",
   "network.gateway": "Gateway public IP",
@@ -1628,7 +1636,7 @@ export default {
   "network.selectSecurityGroups": "Select security groups",
   "network.availableIp": "{count} addresses available",
   "network.eipIndependent":
-    "Public IPs are retained and billed independently. Unbinding or deleting the VM does not release an EIP.",
+    "A manually allocated EIP starts billing immediately. Automatic allocation binds on successful instance creation. Unbinding or deleting a VM does not release the EIP.",
   "network.eipChoice": "Public IP allocation",
   "network.eipNew": "Allocate a new address",
   "quota.network": "Network resource quotas",

@@ -18,7 +18,7 @@ import { defaultSpec } from "../../../lib/config";
 import { orderSchema } from "../../../lib/schema";
 import { KIND_META, resourceLink } from "../../../lib/ids";
 import { clientUuid } from "../../../lib/uuid";
-import { EP, post, query } from "../../../lib/api-client";
+import { EP, post, query, remove } from "../../../lib/api-client";
 import { useRegion } from "../../../stores/region";
 import { useAuth } from "../../../stores/auth";
 import { canWrite } from "../../../lib/rbac";
@@ -450,6 +450,17 @@ function WizardForm({
         ),
       "wizard.created",
     );
+    const allocatedEip = values.allocatedEip;
+    if (!response && kind === "gpu_vm" && allocatedEip && allocatedEip.id === values.spec.eipId) {
+      try {
+        await remove(`${EP.network}/eips/${allocatedEip.id}?confirm=${encodeURIComponent(allocatedEip.displayId)}`);
+        form.setValue("allocatedEip", undefined);
+        form.setValue("spec.eipId", undefined);
+        toast(t("wizard.eipReleasedAfterFailure"));
+      } catch {
+        toast(t("wizard.eipCleanupFailed"), true);
+      }
+    }
     if (response) {
       submittedRef.current = true;
       setSubmitted(true);

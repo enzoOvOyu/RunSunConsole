@@ -923,15 +923,23 @@ async function dispatchNetwork(
         v.projectId === s.projectId &&
         v.region === s.region,
     ) || fail(409, "NETWORK_SCOPE_MISMATCH");
-  const eipView = (e: ElasticIp) => ({
-    ...e,
-    hourly: e.releasedAt ? 0 : ipHourly(e.region),
-    boundName: e.interfaceId
-      ? n.interfaces.find((i) => i.id === e.interfaceId)?.name || null
-      : e.tunnelId
-        ? n.tunnels.find((t) => t.id === e.tunnelId)?.name || null
-        : null,
-  });
+  const eipView = (e: ElasticIp) => {
+    const nic = e.interfaceId
+      ? n.interfaces.find((i) => i.id === e.interfaceId)
+      : null;
+    const boundResource = nic
+      ? db.resources.find((r) => r.resourceUuid === nic.resourceUuid)
+      : null;
+    return {
+      ...e,
+      hourly: e.releasedAt ? 0 : ipHourly(e.region),
+      boundName: boundResource?.name ||
+        (e.tunnelId ? n.tunnels.find((t) => t.id === e.tunnelId)?.name : null) || null,
+      boundHref: boundResource
+        ? resourceLink(boundResource)
+        : e.tunnelId ? `/network/tunnels?drawer=${e.tunnelId}` : null,
+    };
+  };
   const interfaces = n.interfaces.filter((i) => !i.releasedAt);
   if (kind === "quotas" && method === "GET") {
     const links = {
@@ -1284,7 +1292,10 @@ async function dispatchNetwork(
           n.eips
             .filter(
               (e) =>
-                matches(e) &&
+                (!qs.get("region") || e.region === qs.get("region")) &&
+                (!qs.get("project_id") || e.projectId === qs.get("project_id")) &&
+                (!qs.get("q") || [e.name, e.address, e.displayId, e.id]
+                  .some((value) => value.toLowerCase().includes(qs.get("q")!.trim().toLowerCase()))) &&
                 (!e.releasedAt || qs.get("includeReleased") === "true"),
             )
             .map(eipView),
@@ -1322,7 +1333,11 @@ async function dispatchNetwork(
         r.kind !== "gpu_vm" ||
         !["running", "stopped"].includes(r.status) ||
         r.region !== e.region ||
-        r.projectId !== e.projectId
+        r.projectId !== e.projectId ||
+        nic.region !== e.region ||
+        nic.projectId !== e.projectId ||
+        !n.vpcs.some((v) => v.id === nic.vpcId && !v.deletedAt && v.region === e.region && v.projectId === e.projectId) ||
+        !n.subnets.some((subnet) => subnet.id === nic.subnetId && !subnet.deletedAt && subnet.vpcId === nic.vpcId)
       )
         fail(409, "NETWORK_SCOPE_MISMATCH");
       if (n.eips.some((x) => !x.releasedAt && x.interfaceId === nic.id))
@@ -2678,7 +2693,15 @@ async function dispatch(request: Request, settleBilling = true) {
       orderUuid: crypto.randomUUID(),
     } as Resource;
     precheck(r);
-    syncResourceNetwork(db.network, r);
+    const networkBeforeCreate = r.kind === "gpu_vm" && r.spec.publicIp
+      ? structuredClone(db.network)
+      : null;
+    try {
+      syncResourceNetwork(db.network, r);
+    } catch (error) {
+      if (networkBeforeCreate) db.network = networkBeforeCreate;
+      throw error;
+    }
     db.resources.push(r);
     if (r.kind === "vgpu") for (const binding of r.spec.volumeBindings || []) {
       const volume = db.volumes.find((item) => item.id === binding.volumeId)!;

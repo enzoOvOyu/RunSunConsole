@@ -23,6 +23,7 @@ export function NetworkEditor({
   projectId,
   projects,
   onClose,
+  onAllocated,
 }: {
   kind: NetworkKind;
   state: EditorState;
@@ -30,6 +31,7 @@ export function NetworkEditor({
   projectId: string;
   projects: Project[];
   onClose: () => void;
+  onAllocated?: (eip: { id: string; displayId: string }) => void;
 }) {
   const item = state.item;
   const action = state.action;
@@ -50,6 +52,7 @@ export function NetworkEditor({
   const [zone, setZone] = useState(`${region}-a`);
   const [eipId, setEipId] = useState("");
   const [binding, setBinding] = useState("");
+  const [validationError, setValidationError] = useState<{ name?: string; bandwidth?: string }>({});
   const [bandwidth, setBandwidth] = useState(
     item && "bandwidthMbps" in item ? item.bandwidthMbps : 100,
   );
@@ -136,6 +139,17 @@ export function NetworkEditor({
     </Field>
   );
   const submit = async () => {
+    setValidationError({});
+    if (["create", "edit"].includes(action) && kind === "eips") {
+      if (name.trim().length < 2 || name.trim().length > 63) {
+        setValidationError({ name: t("network.eipNameError") });
+        return;
+      }
+      if (!Number.isInteger(bandwidth) || bandwidth < 1 || bandwidth > 1000) {
+        setValidationError({ bandwidth: t("network.eipBandwidthError") });
+        return;
+      }
+    }
     let path = apiPath;
     let body: Record<string, unknown> = {
       projectId: project,
@@ -177,10 +191,11 @@ export function NetworkEditor({
       };
     edit = !!edit;
     const result = await run(() =>
-      edit ? patch<object>(path, body) : post<object>(path, body),
+      edit ? patch<{ id: string; displayId: string }>(path, body) : post<{ id: string; displayId: string }>(path, body),
     );
     if (result) {
       setPsk("");
+      if (kind === "eips" && action === "create") onAllocated?.(result);
       onClose();
     }
   };
@@ -203,8 +218,8 @@ export function NetworkEditor({
     <Modal
       open
       onClose={onClose}
-      title={t(`network.action.${action}`)}
-      description={action === "psk" ? t("network.pskHint") : undefined}
+      title={kind === "eips" && action === "create" ? t("network.allocate") : t(`network.action.${action}`)}
+      description={kind === "eips" && action === "create" ? t("network.eipIndependent") : action === "psk" ? t("network.pskHint") : undefined}
     >
       <form
         className="stack network-form"
@@ -236,8 +251,12 @@ export function NetworkEditor({
                 </Field>
               </div>
             )}
-            {["create", "edit", "subnet"].includes(action) &&
-              input(t("common.name"), name, setName)}
+            {["create", "edit", "subnet"].includes(action) && (
+              <>
+                {input(t("common.name"), name, setName)}
+                {kind === "eips" && validationError.name && <small className="field-error">{validationError.name}</small>}
+              </>
+            )}
             {action === "subnet" && (
               <>
                 {input(
@@ -302,9 +321,12 @@ export function NetworkEditor({
                   type="number"
                   min={1}
                   max={1000}
+                  step={1}
+                  required
                   value={bandwidth}
                   onChange={(e) => setBandwidth(Number(e.target.value))}
                 />
+                {validationError.bandwidth && <small className="field-error">{validationError.bandwidth}</small>}
               </Field>
             )}
             {["create", "edit"].includes(action) &&

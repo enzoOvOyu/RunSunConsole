@@ -21,6 +21,7 @@ export type NetworkRecord = (Vpc | SecurityGroup | ElasticIp | IpsecTunnel) & {
   subnetCount?: number;
   interfaceCount?: number;
   boundName?: string | null;
+  boundHref?: string | null;
   hourly?: number;
   gatewayIp?: string | null;
 };
