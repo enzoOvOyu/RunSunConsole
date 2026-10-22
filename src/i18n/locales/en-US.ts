@@ -833,6 +833,10 @@ export default {
   "storage.item": "Storage item {count}",
   "storage.formHint":
     "Add multiple types and sizes. Block and file capacity is billed when allocated; object storage is tracked by actual use.",
+  "storage.searchVolumes": "Search volume, ID, project or attached resource…",
+  "storage.allTiers": "All tiers",
+  "storage.allStatuses": "All statuses",
+  "storage.allZones": "All zones",
   "storage.tier": "Tier",
   "storage.bucketName": "Bucket name",
   "storage.quotaGb": "Quota GB",

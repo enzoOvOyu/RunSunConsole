@@ -1,5 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { StorageProduct, StorageVolume } from "../../types/storage";
 import type { Kind, Project, Quota, Resource } from "../../types/domain";
 import { EP, post, query, remove } from "../../lib/api-client";
@@ -38,6 +39,10 @@ export default function VolumePage() {
   const role = useAuth((s) => s.role);
   const activeProject = useAuth((s) => s.project);
   const [search, setSearch] = useState("");
+  const [projectFilter, setProjectFilter] = useState("");
+  const [tierFilter, setTierFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [zoneFilter, setZoneFilter] = useState("");
   const [newOpen, setNewOpen] = useState(false);
   const [name, setName] = useState("");
   const [projectId, setProjectId] = useState(activeProject);
@@ -79,6 +84,7 @@ export default function VolumePage() {
     EP.quotas + query({ region }),
   );
   const { run, busy } = useAction();
+  const queryClient = useQueryClient();
   const plans = (products.data || []).filter(
     (product) => product.kind === kind,
   );
@@ -87,13 +93,30 @@ export default function VolumePage() {
   const capacity = quotas.data
     ?.find((quota) => quota.metric === "storage")
     ?.storageBreakdown?.find((item) => item.kind === kind);
-  const rows = (list.data || []).filter(
-    (volume) =>
-      volume.kind === kind &&
-      `${volume.name} ${volume.resourceName}`
-        .toLowerCase()
-        .includes(search.toLowerCase()),
-  );
+  const availableProjects = (projects.data || []).filter((project) => !project.deletedAt);
+  const selectedProjectId = availableProjects.some((project) => project.id === projectId)
+    ? projectId
+    : availableProjects.find((project) => project.id === activeProject)?.id ||
+      availableProjects.find((project) => project.isDefault)?.id ||
+      availableProjects[0]?.id || "";
+  const projectName = (value: string) =>
+    dt(projects.data?.find((project) => project.id === value)?.name || value);
+  const kindRows = (list.data || []).filter((volume) => volume.kind === kind);
+  const rows = kindRows.filter((volume) => {
+    const needle = search.trim().toLowerCase();
+    const searchable = [
+      volume.name, volume.id,
+      formatResourceId(volume.kind === "block" ? "blk" : "fil", volume.id),
+      volume.resourceName, volume.projectId,
+      formatResourceId("prj", volume.projectId), projectName(volume.projectId),
+    ].join(" ").toLowerCase();
+    return (!needle || searchable.includes(needle)) &&
+      (!projectFilter || volume.projectId === projectFilter) &&
+      (!tierFilter || volume.tier === tierFilter) &&
+      (!statusFilter || (statusFilter === "attached" ? !!volume.resourceUuid : !volume.resourceUuid)) &&
+      (!zoneFilter || (volume.zone || `${volume.region}-a`) === zoneFilter);
+  });
+  const filterActive = !!(search || projectFilter || tierFilter || statusFilter || zoneFilter);
   const v = detail.data;
   const attachable = (resources.data?.items || []).filter(
     (resource) =>
@@ -103,10 +126,8 @@ export default function VolumePage() {
         ? resource.kind === "gpu_vm"
         : ["gpu_vm", "inference", "vgpu"].includes(resource.kind)),
   );
-  const projectName = (value: string) =>
-    dt(projects.data?.find((project) => project.id === value)?.name || value);
   const openCreate = () => {
-    setProjectId(activeProject);
+    setProjectId(selectedProjectId);
     setTier(plans[0]?.tier || "");
     setSizeGb(plans[0]?.minGb || 100);
     setName("");
@@ -135,7 +156,7 @@ export default function VolumePage() {
           title={t("storage.volumeList")}
           className="resource-summary-card"
         >
-          <div className="resource-summary-value">{rows.length}</div>
+          <div className="resource-summary-value">{kindRows.length}</div>
           <small>{t("storage.kind." + kind)}</small>
         </Panel>
         <Panel
@@ -169,14 +190,33 @@ export default function VolumePage() {
           )}
         </Panel>
       </div>
-      <div className="toolbar">
+      <div className="toolbar storage-volume-filters">
         <RegionFilter />
-        <input
-          className="input search"
-          placeholder={t("common.search")}
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
+        <input className="input search" aria-label={t("common.search")}
+          placeholder={t("storage.searchVolumes")} value={search}
+          onChange={(event) => setSearch(event.target.value)} />
+        <select aria-label={t("common.project")} value={projectFilter}
+          onChange={(event) => setProjectFilter(event.target.value)}>
+          <option value="">{t("common.allProjects")}</option>
+          {availableProjects.map((project) => <option key={project.id} value={project.id}>{dt(project.name)} · {formatResourceId("prj", project.id)}</option>)}
+        </select>
+        <select aria-label={t("storage.tier")} value={tierFilter}
+          onChange={(event) => setTierFilter(event.target.value)}>
+          <option value="">{t("storage.allTiers")}</option>
+          {plans.map((plan) => <option key={plan.tier} value={plan.tier}>{plan.tier}</option>)}
+        </select>
+        <select aria-label={t("common.status")} value={statusFilter}
+          onChange={(event) => setStatusFilter(event.target.value)}>
+          <option value="">{t("storage.allStatuses")}</option>
+          <option value="free">{t("storage.available")}</option>
+          <option value="attached">{t("storage.inUse")}</option>
+        </select>
+        {kind === "block" && <select aria-label={t("eks.availableZones")} value={zoneFilter}
+          onChange={(event) => setZoneFilter(event.target.value)}>
+          <option value="">{t("storage.allZones")}</option>
+          {["a", "b"].map((suffix) => <option key={suffix} value={`${region}-${suffix}`}>{region.toUpperCase()}-{suffix.toUpperCase()}</option>)}
+        </select>}
+        {filterActive && <Button onClick={() => { setSearch(""); setProjectFilter(""); setTierFilter(""); setStatusFilter(""); setZoneFilter(""); }}>{t("common.reset")}</Button>}
       </div>
       <Panel title={t("storage.volumeList")}>
         {list.isPending ? (
@@ -204,7 +244,7 @@ export default function VolumePage() {
               {
                 accessorKey: "projectId",
                 header: t("common.project"),
-                cell: ({ row }) => projectName(row.original.projectId),
+                cell: ({ row }) => <div className="storage-project-cell"><span>{projectName(row.original.projectId)}</span><small className="resource-id">{formatResourceId("prj", row.original.projectId)}</small></div>,
               },
               {
                 accessorKey: "resourceName",
@@ -220,7 +260,7 @@ export default function VolumePage() {
             ]}
           />
         ) : (
-          <Empty text={t("storage.noVolumes")} />
+          <Empty text={t(filterActive ? "common.noResults" : "storage.noVolumes")} />
         )}
       </Panel>
       <Modal
@@ -248,7 +288,7 @@ export default function VolumePage() {
                   ...(kind === "block" ? [[t("eks.availableZones"), v.zone || `${v.region}-a`] as [string, string]] : []),
                   [t("storage.sizeGb"), `${v.sizeGb.toLocaleString()} GB`],
                   [t("common.region"), t(`common.${v.region}`)],
-                  [t("common.project"), projectName(v.projectId)],
+                  [t("common.project"), `${projectName(v.projectId)} · ${formatResourceId("prj", v.projectId)}`],
                   [
                     t("storage.source"),
                     t(
@@ -431,16 +471,14 @@ export default function VolumePage() {
           <div className="form-grid">
             <Field label={t("common.project")}>
               <select
-                value={projectId}
+                value={selectedProjectId}
                 onChange={(event) => setProjectId(event.target.value)}
               >
-                {projects.data
-                  ?.filter((project) => !project.deletedAt)
-                  .map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {dt(project.name)}
-                    </option>
-                  ))}
+                {availableProjects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {dt(project.name)} · {formatResourceId("prj", project.id)}
+                  </option>
+                ))}
               </select>
             </Field>
             <Field label={t("common.region")}>
@@ -511,7 +549,7 @@ export default function VolumePage() {
               !canWrite(role) ||
               busy ||
               !selectedPlan ||
-              !projectId ||
+              !selectedProjectId ||
               name.trim().length < 3 ||
               name.trim().length > 63 ||
               sizeGb < selectedPlan.minGb ||
@@ -527,13 +565,17 @@ export default function VolumePage() {
                     kind,
                     tier: selectedPlan?.tier,
                     sizeGb,
-                    projectId,
+                    projectId: selectedProjectId,
                     region,
                     zone: kind === "block" ? zone : undefined,
                   }),
                 "success.created",
               );
               if (created) {
+                const row: VolumeRow = { ...created, resourceName: "", resourceKind: null };
+                queryClient.setQueryData(["storage-volume", created.id], row);
+                queryClient.setQueryData<VolumeRow[]>(["storage-volumes", region], (current) =>
+                  current ? [row, ...current.filter((item) => item.id !== row.id)] : [row]);
                 setNewOpen(false);
                 setId(created.id);
               }

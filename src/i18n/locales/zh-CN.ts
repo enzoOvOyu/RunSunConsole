@@ -799,6 +799,10 @@ export default {
   "storage.item": "存储项 {count}",
   "storage.formHint":
     "可添加多行不同规格；块和文件按分配容量计费，对象按实际用量统计。",
+  "storage.searchVolumes": "搜索卷名、卷 ID、项目或关联资源…",
+  "storage.allTiers": "全部规格",
+  "storage.allStatuses": "全部状态",
+  "storage.allZones": "全部可用区",
   "storage.tier": "规格",
   "storage.bucketName": "存储桶名称",
   "storage.quotaGb": "容量上限 GB",
