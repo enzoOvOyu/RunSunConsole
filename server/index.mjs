@@ -107,16 +107,13 @@ async function dispatch(request) {
       loadObjectStore(db.objectContent || []);
       return response;
     }
-    const changed =
-      dirty ||
-      (request.method !== "GET" &&
-        JSON.stringify(before) !== JSON.stringify(db));
+    const changed = dirty || JSON.stringify(before) !== JSON.stringify(db);
     if (changed) await saveState(client, before, db, loadedVersion + 1);
     const derivedResponse = await deriveResponse(client, request, response);
     await client.query("COMMIT");
     if (changed) {
       loadedVersion++;
-      if (request.method !== "GET" && new URL(request.url).pathname !== "/api/deployment-orders/estimate") {
+      if (new URL(request.url).pathname !== "/api/deployment-orders/estimate") {
         const version = loadedVersion;
         setTimeout(() => broadcast(version), 100);
       }

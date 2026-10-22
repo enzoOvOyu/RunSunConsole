@@ -1,7 +1,12 @@
 import { useUrlState } from "../shared/useUrlState";
 import { confirmAction } from "../../components/ui/ConfirmAction";
 import { useState, lazy, Suspense } from "react";
-import { useNavigate, useParams, Link, useSearchParams } from "react-router-dom";
+import {
+  useNavigate,
+  useParams,
+  Link,
+  useSearchParams,
+} from "react-router-dom";
 import { Folder, Plus } from "lucide-react";
 import {
   KINDS,
@@ -159,6 +164,13 @@ export default function ProjectsPage() {
     </>
   );
 }
+const isAllocatedResource = (resource: Resource) =>
+  resource.status === "running" || resource.status === "provisioning";
+
+function allocatedGpuCount(resource: Resource) {
+  return isAllocatedResource(resource) ? resource.spec.gpuCount : 0;
+}
+
 function ProjectCard({ project: p }: { project: Project }) {
   const q = useData<ProjectSummary>(
     ["project-summary", p.id],
@@ -190,7 +202,9 @@ function ProjectCard({ project: p }: { project: Project }) {
         </div>
       </div>
       <div>
-        <small>{t("common.mtd")}</small>
+        <small>
+          {t("common.mtd")} · {t("common.allRegions")}
+        </small>
         <div>{q.data ? money(q.data.monthCost) : "—"}</div>
       </div>
       <div>
@@ -230,7 +244,7 @@ export function ProjectDetail() {
       total: items.length,
       running: items.filter((resource) => resource.status === "running").length,
       gpuCount: items.reduce(
-        (sum, resource) => sum + resource.spec.gpuCount,
+        (sum, resource) => sum + allocatedGpuCount(resource),
         0,
       ),
     };
@@ -243,7 +257,7 @@ export function ProjectDetail() {
       region,
       total: items.length,
       gpuCount: items.reduce(
-        (sum, resource) => sum + resource.spec.gpuCount,
+        (sum, resource) => sum + allocatedGpuCount(resource),
         0,
       ),
     };
@@ -287,7 +301,10 @@ export function ProjectDetail() {
           <div className="grid project-detail-stats">
             {[
               [t("overview.allocated"), number(p.gpuTotal)],
-              [t("common.mtd"), money(p.monthCost)],
+              [
+                `${t("common.mtd")} · ${t("common.allRegions")}`,
+                money(p.monthCost),
+              ],
               [t("project.resources"), number(p.resourceItems.length)],
               [t("project.members"), number(p.members.length)],
             ].map(([label, value]) => (
@@ -389,7 +406,7 @@ export function ProjectDetail() {
               {
                 accessorKey: "gpuCount",
                 header: "GPU",
-                cell: ({ row }) => number(row.original.spec.gpuCount),
+                cell: ({ row }) => number(allocatedGpuCount(row.original)),
               },
               {
                 accessorKey: "kind",
@@ -527,10 +544,16 @@ export function ProjectDetail() {
         </Panel>
       ) : tab === "cost" ? (
         <div className="stack">
-          <Panel title={t("common.mtd")}>
+          <Panel
+            title={`${t("common.mtd")} · ${t("common.allRegions")}`}
+            hint={t("project.costUsageBasis")}
+          >
             <strong className="stat-value">{money(p.monthCost)}</strong>
           </Panel>
-          <Panel title={t("overview.trend")} hint={t("project.costTrendScope")}>
+          <Panel
+            title={t("overview.trend")}
+            hint={`${t("project.costTrendScope")} · ${t("common.allRegions")}`}
+          >
             <Suspense fallback={<Loading />}>
               <TrendChart data={p.costTrend7d} />
             </Suspense>

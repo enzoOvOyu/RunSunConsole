@@ -608,6 +608,8 @@ export default {
   "project.sharedQuotas": "Shared regional quotas",
   "project.sharedQuotasScope":
     "Organization quotas shared across projects in each region, not reserved for this project.",
+  "project.costUsageBasis":
+    "Billed usage accrued this month across all regions.",
   "project.costTrendScope":
     "Usage charges for this project over the last 7 days · USD",
   "project.settings": "Project settings",
