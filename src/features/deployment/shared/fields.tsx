@@ -489,6 +489,7 @@ export function ImageCards({
   architecture,
   gpuModel,
   osFamily,
+  excludeWindows = false,
 }: {
   images: Image[];
   os?: boolean;
@@ -496,6 +497,7 @@ export function ImageCards({
   architecture?: "x86_64" | "aarch64";
   gpuModel?: Pool["code"];
   osFamily?: string;
+  excludeWindows?: boolean;
 }) {
   const { spec, update } = useSpec();
   const field = runtime ? "runtimeImageRef" : "imageRef";
@@ -506,6 +508,7 @@ export function ImageCards({
   const compatible = images.filter(
     (image) =>
       image.type === (runtime ? "container" : os ? "os" : image.type) &&
+      (!excludeWindows || image.type !== "os" || image.osFamily !== "Windows Server") &&
       (!architecture || imageSupportsArchitecture(image, architecture)) &&
       (!gpuModel || imageSupportsPool(image, gpuModel)) &&
       (!runtime || !osFamily || imageCompatibleWithOs(image, osFamily)),
@@ -916,6 +919,8 @@ export function Review({ hideSpec = false }: { hideSpec?: boolean } = {}) {
           ...(hideSpec ? [] : Object.entries(spec)
             .filter(
               ([key, value]) =>
+                (!("machineType" in spec) || key !== "migPartition") &&
+                (!("modelRef" in spec) || key !== "ports") &&
                 (!("nodePools" in spec) || key !== "workloads") &&
                 (!("gpuPerInstance" in spec) ||
                 (key !== "env" &&

@@ -1,4 +1,5 @@
 import { StorageRows } from "./shared/StorageRows";
+import { useEffect } from "react";
 import { gpuModelDisplayName } from "../../lib/gpu-labels";
 import {
   imageCompatibleWithOs,
@@ -73,6 +74,18 @@ function ServerForm({ step, pools, images }: FormContext) {
   const selected = form.watch("nodePool");
   const selectedPool = pools.find((pool) => pool.code === selected);
   const password = form.watch("password") || "";
+  useEffect(() => {
+    if (!images.length || !selectedPool) return;
+    const current = images.find((image) => image.id === spec.imageRef);
+    const isEligible = (image: (typeof images)[number]) =>
+      image.type === "os" &&
+      image.osFamily !== "Windows Server" &&
+      imageSupportsPool(image, selectedPool.code) &&
+      imageSupportsArchitecture(image, selectedPool.cpuArchitecture);
+    if (current && isEligible(current)) return;
+    const fallback = images.find(isEligible);
+    if (fallback) update({ imageRef: fallback.id, runtimeImageRef: "" });
+  }, [images, selectedPool, spec.imageRef, update]);
   return step === 1 ? (
     <div className="stack">
       <PoolCards
@@ -82,6 +95,7 @@ function ServerForm({ step, pools, images }: FormContext) {
         onSelect={(p) => {
           form.setValue("nodePool", p.code);
           const fits = (image: (typeof images)[number]) =>
+            (image.type !== "os" || image.osFamily !== "Windows Server") &&
             imageSupportsPool(image, p.code) &&
             imageSupportsArchitecture(image, p.cpuArchitecture);
           const baseImage = images.find((image) => image.id === spec.imageRef);
@@ -163,6 +177,7 @@ function ServerForm({ step, pools, images }: FormContext) {
         os
         architecture={selectedPool?.cpuArchitecture}
         gpuModel={selectedPool?.code}
+        excludeWindows
       />
       <ImageCards
         images={images}

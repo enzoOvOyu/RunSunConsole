@@ -151,18 +151,6 @@ export function ResourceDrawer() {
                     {t("common.retry")}
                   </Button>
                 )}
-                {r.kind !== "inference" && (
-                  <Button
-                    disabled={!allowed}
-                    onClick={() =>
-                      navigate(
-                        `/workbench/notebooks?resource=${r.resourceUuid}`,
-                      )
-                    }
-                  >
-                    {t("resource.createNotebook")}
-                  </Button>
-                )}
                 {r.kind === "gpu_vm" && (
                   <>
                     <Button

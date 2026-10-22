@@ -22,7 +22,6 @@ import {
   EventsPanel,
   BillingPanel,
   ScalingReadonly,
-  Associations,
 } from "../shared/common";
 export function BaremetalDetail({
   resource: r,
@@ -50,7 +49,6 @@ export function BaremetalDetail({
           "events",
           "billing",
           "scaling",
-          "associations",
         ].map((id) => ({
           id,
           label: t(id === "scaling" ? "resource.scaling" : `tab.${id}`),
@@ -152,9 +150,7 @@ export function BaremetalDetail({
         <BillingPanel resource={r} />
       ) : tab === "scaling" ? (
         <ScalingReadonly resource={r} />
-      ) : (
-        <Associations resource={r} />
-      )}
+      ) : null}
     </>
   );
 }

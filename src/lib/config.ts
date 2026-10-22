@@ -33,7 +33,7 @@ export function defaultSpec(kind: Kind, pool: Pool): Resource["spec"] {
     publicIp: false,
     scaling: null,
     env: {},
-    ports: [22, 8888],
+    ...(kind === "inference" ? {} : { ports: [22, 8888] }),
   };
   if (kind === "gpu_vm")
     return {

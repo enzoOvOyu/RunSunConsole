@@ -11,7 +11,6 @@ import {
   Gauge,
   ChartNoAxesCombined,
   Ticket,
-  NotebookPen,
   Container,
   AppWindow,
   Scaling,
@@ -54,7 +53,6 @@ const itemIcons: Record<string, typeof LayoutDashboard> = {
   quotas: Gauge,
   cost: ChartNoAxesCombined,
   tickets: Ticket,
-  notebooks: NotebookPen,
   images: Container,
   apps: AppWindow,
   scaling: Scaling,
@@ -119,7 +117,7 @@ export function buildGroups(role: Role): NavGroup[] {
       {
         id: "workbench",
         icon: Terminal,
-        items: ["notebooks", "images", "apps", "scaling", "ssh-keys"],
+        items: ["images", "apps", "scaling", "ssh-keys"],
       },
       {
         id: "storage",

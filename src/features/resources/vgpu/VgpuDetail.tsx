@@ -16,7 +16,6 @@ import {
   EventsPanel,
   BillingPanel,
   ScalingReadonly,
-  Associations,
   Kubeconfig,
 } from "../shared/common";
 const TopologyView = lazy(() => import("../../../components/ops/TopologyView"));
@@ -45,7 +44,6 @@ export function VgpuDetail({ resource: r }: { resource: ResourceOf<"vgpu"> }) {
           "events",
           "billing",
           "scaling",
-          "associations",
         ].map((id) => ({
           id,
           label: t(id === "scaling" ? "resource.scaling" : `tab.${id}`),
@@ -110,9 +108,7 @@ export function VgpuDetail({ resource: r }: { resource: ResourceOf<"vgpu"> }) {
         <BillingPanel resource={r} />
       ) : tab === "scaling" ? (
         <ScalingReadonly resource={r} />
-      ) : (
-        <Associations resource={r} />
-      )}
+      ) : null}
     </>
   );
 }

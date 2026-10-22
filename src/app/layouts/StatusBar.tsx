@@ -17,7 +17,6 @@ export function StatusBar() {
       "/ops/quotas",
       "/billing/cost",
       "/ops/tickets",
-      "/workbench/notebooks",
       "/workbench/scaling",
       "/storage/block",
       "/storage/file",

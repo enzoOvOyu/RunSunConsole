@@ -14,7 +14,6 @@ import {
   EventsPanel,
   BillingPanel,
   ScalingReadonly,
-  Associations,
 } from "../shared/common";
 export function ServerDetail({
   resource: r,
@@ -44,7 +43,6 @@ export function ServerDetail({
     "events",
     "billing",
     "scaling",
-    "associations",
   ];
   return (
     <>
@@ -112,9 +110,7 @@ export function ServerDetail({
         <BillingPanel resource={r} />
       ) : tab === "scaling" ? (
         <ScalingReadonly resource={r} />
-      ) : (
-        <Associations resource={r} />
-      )}
+      ) : null}
     </>
   );
 }

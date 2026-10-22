@@ -10,7 +10,6 @@ import type {
   Order,
   ScalingPolicy,
   ScalingEvent,
-  Notebook,
 } from "../../../types/domain";
 import { t, dt } from "../../../i18n";
 import { useLocale } from "../../../stores/locale";
@@ -563,35 +562,6 @@ export function ScalingReadonly({ resource: r }: { resource: Resource }) {
         />
       </Panel>
     </div>
-  );
-}
-export function Associations({ resource: r }: { resource: Resource }) {
-  const n = useData<Notebook[]>(
-    ["notebooks-related", r.resourceUuid],
-    EP.notebooks,
-  );
-  return (
-    <Panel title={t("resource.related")}>
-      <DataTable
-        data={(n.data || []).filter((n) => n.resourceUuid === r.resourceUuid)}
-        columns={[
-          {
-            accessorKey: "name",
-            header: t("common.name"),
-            cell: ({ row }) => dt(row.original.name),
-          },
-          { accessorKey: "ide", header: "IDE" },
-          {
-            accessorKey: "status",
-            header: t("common.status"),
-            cell: ({ row }) => <Badge status={row.original.status} />,
-          },
-        ]}
-      />
-      <Link to={`/workbench/notebooks?resource=${r.resourceUuid}`}>
-        {t("resource.createNotebook")}
-      </Link>
-    </Panel>
   );
 }
 export function AccessPanel({

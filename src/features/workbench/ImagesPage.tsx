@@ -63,6 +63,9 @@ export default function ImagesPage() {
   const [imageArchitecture, setImageArchitecture] = useState("");
   const models = useData<Model[]>(["models"], EP.models);
   const images = useData<Image[]>(["images"], EP.images);
+  const catalogImages = (images.data || []).filter(
+    (item) => item.osFamily !== "Windows Server",
+  );
   const { run, busy } = useAction();
   const role = useAuth((s) => s.role);
   const navigate = useNavigate();
@@ -366,7 +369,7 @@ export default function ImagesPage() {
               <option value="aarch64">aarch64</option>
             </select>
           </div>
-          {images.data?.filter(
+          {catalogImages.filter(
             (item) =>
               item.type === imageKind &&
               (!imageArchitecture ||
@@ -376,7 +379,7 @@ export default function ImagesPage() {
               item.name.toLowerCase().includes(search.toLowerCase()),
           ).length ? (
             <div className="grid grid-3">
-              {images.data
+              {catalogImages
                 .filter(
                   (item) =>
                     item.type === imageKind &&

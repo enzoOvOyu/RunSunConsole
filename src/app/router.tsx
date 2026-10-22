@@ -164,14 +164,6 @@ export const router = createBrowserRouter([
         }),
       },
       {
-        path: "workbench/notebooks",
-        lazy: async () => ({
-          Component: withLocale(
-            (await import("../features/workbench/NotebooksPage")).default,
-          ),
-        }),
-      },
-      {
         path: "workbench/images",
         lazy: async () => ({
           Component: withLocale(
