@@ -2,7 +2,6 @@ import type {
   Resource,
   Project,
   ResourceUuid,
-  DisplayId,
 } from "../../types/domain";
 import { REGIONS } from "../../types/domain";
 import type {
@@ -12,6 +11,7 @@ import type {
   ElasticIp,
   SecurityRule,
 } from "../../types/network";
+import { formatResourceId } from "../../lib/ids";
 import {
   cidrRange,
   ipv4String,
@@ -302,7 +302,7 @@ export function allocateEip(
     ...scope,
     id,
     kind: "eip",
-    displayId: `eip-${id.slice(-8)}` as DisplayId,
+    displayId: formatResourceId("eip", id),
     name,
     address: `${serial < 250 ? "198.51.100" : "203.0.113"}.${(serial % 250) + 1}`,
     bandwidthMbps,

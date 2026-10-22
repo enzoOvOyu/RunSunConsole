@@ -11,7 +11,7 @@ import { t, dt } from "../../i18n";
 import { vpcNetworkType } from "../../lib/network";
 import { money, number, unitMoney } from "../../lib/money";
 import { date } from "../../lib/date";
-import { resourceLink } from "../../lib/ids";
+import { formatResourceId, resourceLink } from "../../lib/ids";
 import { useData, useAction } from "../shared/hooks";
 import { RegionFilter } from "../shared/RegionFilter";
 import { confirmAction } from "../../components/ui/ConfirmAction";
@@ -200,9 +200,7 @@ function NetworkPage({ kind }: { kind: NetworkKind }) {
                         {dt(row.original.name)}
                       </button>
                       <small className="mono">
-                        {"displayId" in row.original
-                          ? row.original.displayId
-                          : row.original.id}
+                        {networkDisplayId(kind, row.original)}
                       </small>
                     </div>
                   ),
@@ -418,6 +416,16 @@ function NetworkPage({ kind }: { kind: NetworkKind }) {
     </>
   );
 }
+function networkDisplayId(kind: NetworkKind, item: NetworkRecord): string {
+  if (kind === "vpcs")
+    return formatResourceId("vpc", item.id, {
+      baremetalVpc: vpcNetworkType(item as Vpc) === "baremetal",
+    });
+  if (kind === "eips") return formatResourceId("eip", item.id);
+  if (kind === "security-groups") return formatResourceId("sgr", item.id);
+  return formatResourceId("tun", item.id);
+}
+
 function NetworkStatus({ item }: { item: NetworkRecord }) {
   const released =
     ("releasedAt" in item && !!item.releasedAt) || !!item.deletedAt;
@@ -639,8 +647,8 @@ function NetworkDrawer({
                         [
                           "ID",
                           <span className="mono">
-                            {d.id}
-                            <CopyButton value={d.id} />
+                            {networkDisplayId(kind, d)}
+                            <CopyButton value={networkDisplayId(kind, d)} />
                           </span>,
                         ],
                         [t("common.region"), t(`common.${d.region}`)],
@@ -653,7 +661,9 @@ function NetworkDrawer({
                               [
                                 t("network.vpc"),
                                 <Link to={`/network/vpcs?drawer=${d.vpcId}`}>
-                                  {d.vpcId}
+                                  {formatResourceId("vpc", d.vpcId, {
+                                    baremetalVpc: /(^|[-_])bm([-_]|$)/i.test(d.vpcId),
+                                  })}
                                 </Link>,
                               ] as [string, React.ReactNode],
                             ]

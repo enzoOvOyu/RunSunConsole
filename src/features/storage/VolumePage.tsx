@@ -3,7 +3,7 @@ import { useState } from "react";
 import type { StorageProduct, StorageVolume } from "../../types/storage";
 import type { Kind, Project, Quota, Resource } from "../../types/domain";
 import { EP, post, query, remove } from "../../lib/api-client";
-import { resourceLink } from "../../lib/ids";
+import { formatResourceId, resourceLink } from "../../lib/ids";
 import { useRegion } from "../../stores/region";
 import { useAuth } from "../../stores/auth";
 import { canWrite } from "../../lib/rbac";
@@ -235,7 +235,10 @@ export default function VolumePage() {
             <Panel title={t("storage.volumeDetails")}>
               <KeyValues
                 items={[
-                  ["ID", v.id],
+                  [
+                    "ID",
+                    formatResourceId(v.kind === "block" ? "blk" : "fil", v.id),
+                  ],
                   [t("common.name"), v.name],
                   [t("common.type"), t(`storage.kind.${v.kind}`)],
                   [t("storage.tier"), v.tier],

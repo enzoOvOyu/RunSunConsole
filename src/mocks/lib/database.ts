@@ -41,6 +41,7 @@ import { RATES } from "../fixtures/pricing";
 import { estimate, meteringLines, provisioningSeconds } from "./derive";
 import { round } from "../../lib/money";
 import { defaultScaling, normalizeSpec } from "../../lib/config";
+import { displayId, formatResourceId } from "../../lib/ids";
 export interface Database {
   network: NetworkState;
   usageMeters: Record<string, { quantity: number; amount: number }>;
@@ -411,8 +412,17 @@ export function restoreDatabase() {
         r.region = "jp";
       }
       data.resources = data.resources.map(
-        (r) => ({ ...r, spec: migrateLegacyImageSpec(normalizeSpec(r.spec)) }) as Resource,
+        (r) => ({
+          ...r,
+          displayId: displayId(r.kind, r.resourceUuid),
+          spec: migrateLegacyImageSpec(normalizeSpec(r.spec)),
+        }) as Resource,
       );
+      if (data.network?.eips)
+        data.network.eips = data.network.eips.map((eip) => ({
+          ...eip,
+          displayId: formatResourceId("eip", eip.id),
+        }));
       for (const order of data.orders)
         order.requested_spec = migrateLegacyImageSpec(normalizeSpec(order.requested_spec));
       for (const notebook of data.notebooks) {

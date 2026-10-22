@@ -1,3 +1,4 @@
+import { formatResourceId } from "../../lib/ids";
 import { Link } from "react-router-dom";
 import { useUrlState } from "../shared/useUrlState";
 import { confirmAction } from "../../components/ui/ConfirmAction";
@@ -263,7 +264,7 @@ export default function StoragePage() {
             <Panel title={t("storage.bucketDetails")}>
               <KeyValues
                 items={[
-                  ["ID", bucket.id],
+                  ["ID", formatResourceId("obj", bucket.id)],
                   [t("common.name"), bucket.name],
                   [t("common.region"), t("common." + bucket.region)],
                   [t("storage.tier"), bucket.storageClass || "STANDARD"],
