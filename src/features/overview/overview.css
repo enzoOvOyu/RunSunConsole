@@ -312,11 +312,17 @@
 }
 
 .overview-distribution-region {
+  --region-x: 0px;
+  --region-y: 0px;
+  --region-tilt: 0deg;
+
+  position: relative;
   min-width: 0;
   overflow: hidden;
   border-color: var(--rs-border);
   background: var(--rs-surface);
   box-shadow: none;
+  transform: translate(var(--region-x), var(--region-y)) rotate(var(--region-tilt));
 }
 
 .overview-distribution-region > [data-slot="card-header"] {
@@ -342,8 +348,14 @@
   border: 1px solid var(--rs-border);
   border-radius: var(--rs-r-md);
   background: var(--rs-bg);
-  font-size: 22px;
   line-height: 1;
+}
+
+.overview-distribution-flag img {
+  display: block;
+  width: auto;
+  height: 22px;
+  border-radius: 2px;
 }
 
 .overview-distribution-region-heading [data-slot="card-title"] {
@@ -881,6 +893,24 @@
     transform 150ms ease;
 }
 
+.overview-distribution-region:nth-child(1) {
+  --region-x: -1px;
+  --region-y: -2px;
+  --region-tilt: -0.45deg;
+}
+
+.overview-distribution-region:nth-child(2) {
+  --region-x: 1px;
+  --region-y: 2px;
+  --region-tilt: 0.35deg;
+}
+
+.overview-distribution-region:nth-child(3) {
+  --region-x: 0px;
+  --region-y: -1px;
+  --region-tilt: -0.2deg;
+}
+
 .overview-panel:hover,
 .overview-stat-card:hover,
 .overview-distribution-region:hover,
@@ -889,5 +919,8 @@
   border-color: color-mix(in srgb, var(--rs-brand) 42%, var(--rs-border));
   background-color: color-mix(in srgb, var(--rs-brand-soft) 28%, var(--rs-bg));
   box-shadow: var(--rs-shadow-sm);
-  transform: translateY(-1px);
+  transform: translate(
+    var(--region-x, 0),
+    calc(var(--region-y, 0) - 2px)
+  ) rotate(var(--region-tilt, 0deg));
 }

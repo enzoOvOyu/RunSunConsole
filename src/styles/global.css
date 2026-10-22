@@ -2063,6 +2063,31 @@ a:focus-visible {
   color: var(--rs-text-muted);
 }
 
+.ticket-case-id {
+  color: var(--rs-text-secondary);
+  font-family: var(--rs-font-sans);
+  font-size: var(--rs-fs-sm);
+  font-weight: 500;
+  line-height: var(--rs-lh-sm);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+.ticket-table-title-text {
+  color: var(--rs-text);
+  font-family: var(--rs-font-sans);
+  font-size: var(--rs-fs-base);
+  font-weight: 500;
+  line-height: var(--rs-lh-base);
+}
+
+.ticket-detail-title {
+  font-family: var(--rs-font-sans);
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+}
+
 .ticket-form-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;

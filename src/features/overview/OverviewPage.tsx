@@ -873,7 +873,13 @@ export default function OverviewPage() {
                         role="img"
                         aria-label={t(`common.${region}`)}
                       >
-                        {{ jp: "🇯🇵", sg: "🇸🇬", us: "🇺🇸" }[region]}
+                        <img
+                          src={`/flags/${region}.svg`}
+                          alt=""
+                          aria-hidden="true"
+                          width="29"
+                          height="22"
+                        />
                       </span>
                       <div>
                         <CardTitle>{t("common." + region)}</CardTitle>

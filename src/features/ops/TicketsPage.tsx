@@ -332,12 +332,12 @@ export default function TicketsPage() {
     {
       accessorKey: "caseNumber",
       header: t("tickets.caseId"),
-      cell: ({ row }) => <strong className="mono">{row.original.caseNumber || row.original.id}</strong>,
+      cell: ({ row }) => <span className="ticket-case-id">{row.original.caseNumber || row.original.id}</span>,
     },
     {
       accessorKey: "title",
       header: t("tickets.title"),
-      cell: ({ row }) => <strong>{dt(row.original.title)}</strong>,
+      cell: ({ row }) => <span className="ticket-table-title-text">{dt(row.original.title)}</span>,
     },
     {
       accessorKey: "resourceUuid",
@@ -529,7 +529,7 @@ export default function TicketsPage() {
         onClose={closePreview}
         drawer
         small
-        title={preview ? <span className="row">{preview.caseNumber || preview.id} {statusBadge(preview.status)}</span> : t("tickets.caseDetails")}
+        title={preview ? <span className="row"><span className="ticket-case-id">{preview.caseNumber || preview.id}</span> {statusBadge(preview.status)}</span> : t("tickets.caseDetails")}
         description={preview ? dt(preview.title) : undefined}
       >
         {preview && <div className="stack">
@@ -610,7 +610,7 @@ export function TicketDetail() {
   return (
     <div className="ticket-page">
       <PageHeader
-        title={dt(ticket.title)}
+        title={<span className="ticket-detail-title">{dt(ticket.title)}</span>}
         subtitle={`${ticket.caseNumber || ticket.id} · ${t(`tickets.category.${ticket.category}`)}`}
         actions={<Link to="/ops/tickets">{t("tickets.backToList")}</Link>}
       />
@@ -667,7 +667,7 @@ export function TicketDetail() {
               {priorityBadge(ticket.priority)}
             </div>
             <dl className="ticket-detail-fields">
-              <div><dt>{t("tickets.caseId")}</dt><dd className="mono">{ticket.caseNumber || ticket.id}</dd></div>
+              <div><dt>{t("tickets.caseId")}</dt><dd className="ticket-case-id">{ticket.caseNumber || ticket.id}</dd></div>
               <div><dt>{t("tickets.category")}</dt><dd>{t(`tickets.category.${ticket.category}`)}</dd></div>
               <div><dt>{t("tickets.createdAt")}</dt><dd>{date(ticket.createdAt)}</dd></div>
               <div><dt>{t("tickets.updatedAt")}</dt><dd>{date(ticket.updatedAt || ticket.createdAt)}</dd></div>
