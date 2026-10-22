@@ -4,11 +4,12 @@ import { MODELS } from "./content";
 import { GPU_SPECS } from "./gpu-specs";
 import { modelMemory } from "../lib/derive";
 import { compatiblePrecisions } from "../../lib/inference-precision";
+import { publisherLabel } from "../../components/ModelPublisherLogo";
 
 it("imports all supplied models with researched public metadata and mock deployment settings", () => {
   expect(CATALOG_MODELS).toHaveLength(50);
   expect(new Set(CATALOG_MODELS.map((model) => model.modelRef)).size).toBe(50);
-  expect(new Set(MODELS.map((model) => model.id)).size).toBe(54);
+  expect(new Set(MODELS.map((model) => model.id)).size).toBe(53);
   expect(
     CATALOG_MODELS.every(
       (model) =>
@@ -20,6 +21,10 @@ it("imports all supplied models with researched public metadata and mock deploym
         !!model.sourceUrl,
     ),
   ).toBe(true);
+  expect(
+    CATALOG_MODELS.every((model) => (model.activeParamsB || 0) > 0),
+  ).toBe(true);
+  expect(MODELS.some((model) => model.name === "FLUX.1 schnell")).toBe(false);
   expect(
     CATALOG_MODELS.find((model) => model.modelRef === "Qwen/Qwen3.8-2.4T-A95B"),
   ).toMatchObject({
@@ -53,6 +58,12 @@ it("imports all supplied models with researched public metadata and mock deploym
     modality: "multimodal",
     activeParamsB: 41,
   });
+});
+
+it("resolves Z.ai and Meta publisher aliases to their branded names", () => {
+  expect(publisherLabel("zai-org")).toBe("Z.ai");
+  expect(publisherLabel("Meta")).toBe("Meta");
+  expect(publisherLabel("meta-llama")).toBe("Meta");
 });
 
 it("pins NVIDIA and Meta catalog entries ahead of the default model list", () => {

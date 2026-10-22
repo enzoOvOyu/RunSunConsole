@@ -2838,13 +2838,6 @@ async function dispatch(request: Request, settleBilling = true) {
         imageRef: "pytorch-cu130",
         kind: "gpu_vm",
       },
-      {
-        id: "vision",
-        name: "Image Generation",
-        description: "FLUX.1 · ComfyUI",
-        modelRef: "flux",
-        kind: "inference",
-      },
     ]);
   if (path === "/api/workbench/notebooks") {
     if (method === "GET")

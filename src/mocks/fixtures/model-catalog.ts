@@ -56,6 +56,40 @@ const entries = [
   ["CohereLabs/c4ai-command-a-03-2025", "约 111B", "CA"],
 ] as const;
 
+const ACTIVE_PARAMS_B: Record<string, number> = {
+  "zai-org/GLM-5.3": 40,
+  "deepseek-ai/DeepSeek-V4-Pro-0813": 49,
+  "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16": 55,
+  "LGAI-EXAONE/K-EXAONE-2.0-750B-A37B": 37,
+  "XiaomiMiMo/MiMo-V2.6-Pro-RL": 42,
+  "zai-org/GLM-5.2": 40,
+  "deepseek-ai/DeepSeek-V4.1-Flash-1017": 16,
+  "Qwen/Qwen3-Coder-480B-A35B-Instruct": 35,
+  "CohereLabs/command-a-plus-05-2026-bf16": 25,
+  "LGAI-EXAONE/K-EXAONE-236B-A23B": 23,
+  "deepseek-ai/DeepSeek-V3.2": 37,
+  "zai-org/GLM-4.7": 32,
+  "meta-llama/Llama-4-Maverick-17B-128E-Instruct": 17,
+  "deepseek-ai/DeepSeek-R1-0528": 37,
+  "Qwen/Qwen3-VL-235B-A22B-Thinking": 22,
+  "deepseek-ai/DeepSeek-V4-Flash-0731": 13,
+  "MiniMaxAI/MiniMax-M2.7": 10,
+  "baidu/ERNIE-4.5-VL-424B-A47B-PT": 47,
+  "baidu/ERNIE-4.5-300B-A47B-PT": 47,
+  "nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16": 9,
+  "mistralai/Devstral-2-123B-Instruct-2512": 123,
+  "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16": 12,
+  "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16": 12,
+  "CohereLabs/c4ai-command-a-03-2025": 111,
+};
+
+const DENSE_MODELS = new Set([
+  "NousResearch/Hermes-4-405B",
+  "meta-llama/Llama-3.1-405B-Instruct",
+  "mistralai/Devstral-2-123B-Instruct-2512",
+  "CohereLabs/c4ai-command-a-03-2025",
+]);
+
 const featured = [
   "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16",
   "meta-models/Muse-Spark-Open-816B-A42B",
@@ -84,13 +118,18 @@ export const CATALOG_MODELS: Model[] = entries.map(
       publisher,
       countryCode,
       paramsB: toBillions(total),
-      activeParamsB: active ? toBillions(active) : undefined,
       parameterEstimate: total.startsWith("约"),
       quantizations: ["bf16", "fp8", "fp4"],
       layers,
       kvHeads,
       headDim,
       ...MODEL_RESEARCH[modelRef],
+      activeParamsB:
+        MODEL_RESEARCH[modelRef]?.activeParamsB ??
+        (active
+          ? toBillions(active)
+          : ACTIVE_PARAMS_B[modelRef] ??
+            (DENSE_MODELS.has(modelRef) ? toBillions(total) : undefined)),
       sourceUrl: `https://huggingface.co/${modelRef}`,
       favorite: false,
       featuredRank:

@@ -121,7 +121,6 @@ export default function ImagesPage() {
             <strong>{number(readyCount)}</strong>
             <span>{t("images.deployableCount")}</span>
           </div>
-          <p>{t("images.catalogNotice")}</p>
         </div>
       )}
       <div className="toolbar model-catalog-filters">
@@ -313,17 +312,18 @@ export default function ImagesPage() {
                   </Button>
                   <Button
                     variant="primary"
-                    disabled={!canWrite(role) || item.modality !== "text"}
-                    title={
-                      item.modality === "text"
-                        ? undefined
-                        : t("images.textOnlyServing")
-                    }
+                    disabled={!canWrite(role)}
                     onClick={() =>
-                      navigate("/deployment/inference?model=" + item.id)
+                      navigate(
+                        item.modality === "text"
+                          ? "/deployment/inference?model=" + item.id
+                          : "/deployment/server",
+                      )
                     }
                   >
-                    {t("images.deploy")}
+                    {item.modality === "text"
+                      ? t("common.inference")
+                      : t("common.gpu_vm")}
                   </Button>
                 </div>
               </article>
@@ -515,23 +515,21 @@ export default function ImagesPage() {
             )}
             <p className="model-catalog-note">{t("images.billingNote")}</p>
             <div className="row">
+              {model.modality === "text" && (
+                <Button
+                  variant="primary"
+                  disabled={!canWrite(role)}
+                  onClick={() =>
+                    navigate("/deployment/inference?model=" + model.id)
+                  }
+                >
+                  {t("common.inference")}
+                </Button>
+              )}
               <Button
-                variant="primary"
-                disabled={!canWrite(role) || model.modality !== "text"}
-                title={
-                  model.modality === "text"
-                    ? undefined
-                    : t("images.textOnlyServing")
-                }
-                onClick={() =>
-                  navigate("/deployment/inference?model=" + model.id)
-                }
-              >
-                {t("common.inference")}
-              </Button>
-              <Button
+                variant={model.modality === "text" ? "ghost" : "primary"}
                 disabled={!canWrite(role)}
-                onClick={() => navigate("/deployment/server?model=" + model.id)}
+                onClick={() => navigate("/deployment/server")}
               >
                 {t("common.gpu_vm")}
               </Button>

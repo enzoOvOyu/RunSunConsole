@@ -775,8 +775,6 @@ export default {
   "images.context": "Context window",
   "images.catalogCount": "Catalog models",
   "images.deployableCount": "Deployable",
-  "images.catalogNotice":
-    "Model details were checked against official model cards. This is a mock deployment flow; memory and regional capacity are checked during creation, and restricted weights require access.",
   "images.searchPlaceholder": "Search models, publishers, or model IDs",
   "images.publisher": "Publisher",
   "images.allPublishers": "All publishers",

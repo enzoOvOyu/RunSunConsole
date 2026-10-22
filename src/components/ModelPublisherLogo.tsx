@@ -1,15 +1,17 @@
 import type { CSSProperties } from "react";
 
-const publisherMeta: Record<string, { name: string; asset: string }> = {
+const publisherMeta: Record<string, { name: string; asset: string; file?: string }> = {
   qwen: { name: "Qwen", asset: "qwen" },
   moonshotai: { name: "Moonshot AI", asset: "moonshotai" },
-  "zai-org": { name: "Z.ai", asset: "zai-org" },
+  zaiorg: { name: "Z.ai", asset: "zai-org", file: "zai-org.svg" },
+  meta: { name: "Meta", asset: "meta" },
   deepseekai: { name: "DeepSeek", asset: "deepseek-ai" },
   deepseek: { name: "DeepSeek", asset: "deepseek-ai" },
   metamodels: { name: "Meta", asset: "meta" },
   metamod: { name: "Meta", asset: "meta" },
   metam: { name: "Meta", asset: "meta" },
   metalama: { name: "Meta", asset: "meta" },
+  metallama: { name: "Meta", asset: "meta" },
   mistralai: { name: "Mistral AI", asset: "mistralai" },
   nvidia: { name: "NVIDIA", asset: "nvidia" },
   lgaiexaone: { name: "LG AI Research", asset: "lgai-exaone" },
@@ -49,7 +51,7 @@ export function ModelPublisherLogo({
   return (
     <img
       className={className}
-      src={`/model-providers/${meta.asset}.png`}
+      src={`/model-providers/${meta.file || `${meta.asset}.png`}`}
       alt=""
       aria-hidden="true"
       loading="lazy"

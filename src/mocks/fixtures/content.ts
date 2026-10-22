@@ -57,20 +57,6 @@ export const MODELS: Model[] = [
     context: 131072,
     favorite: true,
   },
-  {
-    id: "flux",
-    publisher: "Black Forest Labs",
-    name: "FLUX.1 schnell",
-    paramsB: 12,
-    quantizations: ["bf16", "fp8"],
-    license: "Apache-2.0",
-    modality: "image",
-    layers: 19,
-    kvHeads: 8,
-    headDim: 128,
-    context: 4096,
-    favorite: false,
-  },
   ...CATALOG_MODELS,
 ];
 const x86Pools: Image["supportedGpuModels"] = ["H100_SXM", "H200_NVL", "B200_NVL72", "B300"];

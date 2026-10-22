@@ -742,8 +742,6 @@ export default {
   "images.context": "上下文窗口",
   "images.catalogCount": "目录模型",
   "images.deployableCount": "可部署",
-  "images.catalogNotice":
-    "模型资料已按官方模型卡核对。当前为模拟部署流程；创建时校验显存与区域资源，受限模型还需获取权重访问权限。",
   "images.searchPlaceholder": "搜索模型、发布方或模型 ID",
   "images.publisher": "发布方",
   "images.allPublishers": "全部发布方",
