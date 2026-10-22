@@ -494,6 +494,7 @@ export default {
   "wizard.memoryShortfall":
     "显存不足 {shortfall} GB：部署需要 {required} GB，当前容量 {capacity} GB。",
   "wizard.memoryError": "显存不足，请增加张量并行卡数或降低量化精度",
+  "wizard.runtimeImage": "运行时镜像",
   "wizard.review": "请确认配置与费用后创建资源",
   "wizard.leave": "离开将保留草稿，确定继续？",
   "wizard.created": "下单成功，正在准备资源",

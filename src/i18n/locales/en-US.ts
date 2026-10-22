@@ -510,6 +510,7 @@ export default {
     "VRAM is short by {shortfall} GB: deployment needs {required} GB, current capacity is {capacity} GB.",
   "wizard.memoryError":
     "Insufficient VRAM. Increase tensor parallel GPUs or use a smaller precision.",
+  "wizard.runtimeImage": "Runtime image",
   "wizard.review": "Review configuration and cost before creating",
   "wizard.leave": "Your draft will be saved. Leave this wizard?",
   "wizard.created": "Order accepted. Provisioning resource.",
