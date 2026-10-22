@@ -289,13 +289,6 @@ export default function OverviewPage() {
       </Link>,
     );
   }
-  if (data.month > data.account.budget) {
-    attentionItems.push(
-      <Link key="over-budget" className="notice warning" to="/billing/cost">
-        {t("billing.overBudget")}
-      </Link>,
-    );
-  }
   for (const alert of data.alerts) {
     attentionItems.push(
       <Link
@@ -875,8 +868,12 @@ export default function OverviewPage() {
                 <Card className="overview-distribution-region" key={region}>
                   <CardHeader>
                     <div className="overview-distribution-region-heading">
-                      <span className="overview-distribution-code">
-                        {region.toUpperCase()}
+                      <span
+                        className="overview-distribution-flag"
+                        role="img"
+                        aria-label={t(`common.${region}`)}
+                      >
+                        {{ jp: "🇯🇵", sg: "🇸🇬", us: "🇺🇸" }[region]}
                       </span>
                       <div>
                         <CardTitle>{t("common." + region)}</CardTitle>
@@ -1032,7 +1029,9 @@ export default function OverviewPage() {
           >
             <Suspense fallback={<Loading />}>
               <TrendChart
-                data={data.trend}
+                data={data.trend.filter(
+                  (row) => new Date(String(row.date)).getTime() <= Date.now(),
+                )}
                 keys={
                   grouping === "kind"
                     ? [...KINDS, "eip"]

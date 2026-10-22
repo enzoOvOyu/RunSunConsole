@@ -1,5 +1,6 @@
 import { StorageRows } from "./shared/StorageRows";
 import { useEffect, useMemo, useState } from "react";
+import { ModelPublisherLogo, publisherLabel } from "../../components/ModelPublisherLogo";
 import { useQuery } from "@tanstack/react-query";
 import type { InferenceSpec } from "../../types/domain";
 import { t } from "../../i18n";
@@ -250,7 +251,10 @@ function InferenceForm({ step, pools, models }: FormContext) {
               className="panel inference-model-group"
             >
               <summary className="between">
-                <strong>{publisher}</strong>
+                <span className="inference-publisher-label">
+                  <ModelPublisherLogo publisher={publisher} size={26} />
+                  <strong>{publisherLabel(publisher)}</strong>
+                </span>
                 <span className="muted">
                   {items.length} ·{" "}
                   {items.some((item) => item.id === spec.modelRef)

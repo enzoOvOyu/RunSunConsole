@@ -1940,16 +1940,6 @@ async function dispatch(request: Request, settleBilling = true) {
         href: role === "member" ? "/ops/tickets?new=balance" : "/billing/bills",
         read: false,
       });
-    if (
-      summary(null, new Date().toISOString().slice(0, 7)).month >
-      db.account.budget
-    )
-      items.push({
-        id: "budget",
-        messageKey: "billing.overBudget",
-        href: role === "member" ? "/ops/tickets?new=budget" : "/billing/cost",
-        read: false,
-      });
     return json(items);
   }
   if (path === "/api/resources" && method === "GET") {

@@ -22,7 +22,7 @@ export function Sidebar({
         aria-label={t("nav.resources")}
       >
         <NavLink className={styles.brand} to="/overview" onClick={onClose}>
-          <img src="/favicon.svg" alt="" />
+          <img src="https://runsuncloud.com/images/favicon.ico" alt="" />
           <div>
             <strong>RunSun</strong>
             <div>

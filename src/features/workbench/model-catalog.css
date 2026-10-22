@@ -147,3 +147,34 @@
   overflow: hidden;
   min-height: 42px;
 }
+
+.model-catalog-icon {
+  width: 46px;
+  height: 46px;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  overflow: hidden;
+}
+
+.model-publisher-logo {
+  display: block;
+  flex: 0 0 auto;
+  object-fit: contain;
+  border-radius: 5px;
+}
+
+.model-detail-publisher,
+.inference-publisher-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.model-detail-publisher img,
+.inference-publisher-label img {
+  display: block;
+  flex: 0 0 auto;
+  object-fit: contain;
+  border-radius: 5px;
+}

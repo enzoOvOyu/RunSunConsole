@@ -1,7 +1,8 @@
 import { useUrlState } from "../shared/useUrlState";
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Star, Box, Brain } from "lucide-react";
+import { Star, Box } from "lucide-react";
+import { ModelPublisherLogo, publisherLabel } from "../../components/ModelPublisherLogo";
 import { poolDisplayName } from "../../lib/gpu-labels";
 import type { Image, Model } from "../../types/domain";
 import { useAuth } from "../../stores/auth";
@@ -39,10 +40,7 @@ function contextLabel(value: number) {
 
 function publisherName(model: Model) {
   const publisher = model.publisher || "";
-  if (publisher === "meta-models" || publisher === "meta-llama") return "Meta";
-  if (publisher === "nvidia") return "NVIDIA";
-  if (publisher === "Qwen") return "Qwen";
-  return publisher || t("images.verified");
+  return publisher ? publisherLabel(publisher) : t("images.verified");
 }
 
 export default function ImagesPage() {
@@ -223,7 +221,11 @@ export default function ImagesPage() {
                 <div className="between model-catalog-card-top">
                   <div className="row">
                     <span className="model-catalog-icon">
-                      <Brain size={20} />
+                      <ModelPublisherLogo
+                        publisher={item.publisher || ""}
+                        size={26}
+                        className="model-publisher-logo"
+                      />
                     </span>
                     <span className="model-catalog-publisher">
                       {publisherName(item)}
@@ -434,6 +436,10 @@ export default function ImagesPage() {
       >
         {model ? (
           <div className="stack">
+            <div className="model-detail-publisher">
+              <ModelPublisherLogo publisher={model.publisher || ""} size={32} />
+              <strong>{publisherName(model)}</strong>
+            </div>
             <p className="model-catalog-description">
               {t(
                 model.modelRef

@@ -242,6 +242,13 @@
   display: none;
 }
 
+.topbarBrand {
+  display: block;
+  width: 112px;
+  max-height: 34px;
+  object-fit: contain;
+}
+
 @media (width <= 1280px) {
   .sidebar {
     display: none;
@@ -258,6 +265,10 @@
 
   .topbar .menuButton {
     display: inline-flex;
+  }
+
+  .topbarBrand {
+    display: none;
   }
 
   .mobileBrand {
