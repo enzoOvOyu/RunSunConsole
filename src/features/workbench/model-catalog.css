@@ -178,3 +178,10 @@
   object-fit: contain;
   border-radius: 5px;
 }
+
+.catalog-os-logo {
+  display: block;
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+}

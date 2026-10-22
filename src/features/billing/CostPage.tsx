@@ -3,6 +3,7 @@ import { useMemo, useState, lazy, Suspense, Fragment } from "react";
 import type { Usage, Project } from "../../types/domain";
 import { EP, query } from "../../lib/api-client";
 import { useRegion } from "../../stores/region";
+import { useLocale } from "../../stores/locale";
 import { useData } from "../shared/hooks";
 import { RegionFilter } from "../shared/RegionFilter";
 import { t, dt } from "../../i18n";
@@ -13,6 +14,7 @@ import { analyzeCostUsage } from "./cost-analysis";
 const TrendChart = lazy(() => import("../../components/charts/TrendChart"));
 export default function CostPage() {
   const region = useRegion((s) => s.region);
+  const locale = useLocale((s) => s.locale);
   const [period, setPeriod] = useUrlState(
     "billing_period",
     new Date().toISOString().slice(0, 7),
@@ -40,8 +42,11 @@ export default function CostPage() {
         <label className="row">
           {t("billing.period")}
           <input
+            key={locale}
             className="input"
             type="month"
+            lang={locale}
+            aria-label={t("billing.period")}
             value={period}
             onChange={(e) => setPeriod(e.target.value)}
           />

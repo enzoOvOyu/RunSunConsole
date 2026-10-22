@@ -29,9 +29,10 @@ export function analyzeCostUsage(
     year && month >= 1 && month <= 12
       ? new Date(Date.UTC(year, month, 0)).getUTCDate()
       : 0;
+  const todayIso = new Date().toISOString().slice(0, 10);
   const dates = Array.from({ length: days }, (_, index) =>
     new Date(Date.UTC(year, month - 1, index + 1)).toISOString().slice(0, 10),
-  );
+  ).filter((date) => date <= todayIso);
   const daily = new Map<string, number>();
   const groups = new Map<
     string,
@@ -40,7 +41,11 @@ export function analyzeCostUsage(
   const resourceIds = new Set<string>();
   let total = 0;
   for (const row of usage) {
-    if (!row.usageHour.startsWith(billingPeriod)) continue;
+    if (
+      !row.usageHour.startsWith(billingPeriod) ||
+      row.usageHour.slice(0, 10) > todayIso
+    )
+      continue;
     total += row.amount;
     const day = row.usageHour.slice(0, 10);
     daily.set(day, (daily.get(day) || 0) + row.amount);

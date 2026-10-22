@@ -66,19 +66,18 @@ it("resolves Z.ai and Meta publisher aliases to their branded names", () => {
   expect(publisherLabel("meta-llama")).toBe("Meta");
 });
 
-it("pins NVIDIA and Meta catalog entries ahead of the default model list", () => {
+it("orders the default featured models by the requested vendor sequence", () => {
   const featured = CATALOG_MODELS.filter((model) => model.featuredRank).sort(
     (left, right) => (left.featuredRank || 0) - (right.featuredRank || 0),
   );
-  expect(featured).toHaveLength(7);
+  expect(featured).toHaveLength(6);
   expect(featured.map((model) => model.publisher)).toEqual([
     "nvidia",
     "meta-models",
-    "nvidia",
-    "meta-llama",
-    "nvidia",
-    "meta-llama",
-    "nvidia",
+    "mistralai",
+    "moonshotai",
+    "deepseek-ai",
+    "Qwen",
   ]);
   expect(featured[0].modelRef).toBe(
     "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16",

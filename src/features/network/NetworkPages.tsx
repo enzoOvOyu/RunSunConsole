@@ -244,12 +244,22 @@ function NetworkPage({ kind }: { kind: NetworkKind }) {
                 {
                   id: "scope",
                   header: t("common.project"),
-                  cell: ({ row }) =>
-                    dt(
-                      projects.data?.find(
-                        (p) => p.id === row.original.projectId,
-                      )?.name || formatResourceId("prj", row.original.projectId),
-                    ),
+                  cell: ({ row }) => {
+                    const project = projects.data?.find(
+                      (p) => p.id === row.original.projectId,
+                    );
+                    const projectName = dt(
+                      project?.name || formatResourceId("prj", row.original.projectId),
+                    );
+                    return kind === "eips" ? (
+                      <div className="eip-project-cell">
+                        <span>{projectName}</span>
+                        <small className="mono">
+                          {formatResourceId("prj", row.original.projectId)}
+                        </small>
+                      </div>
+                    ) : projectName;
+                  },
                 },
                 ...(kind === "vpcs"
                   ? [

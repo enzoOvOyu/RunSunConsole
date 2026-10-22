@@ -67,11 +67,6 @@ export function Topbar({
         <span className={styles.breadcrumb}>{item?.label()}</span>
       </div>
       <div className={styles.topRight}>
-        <img
-          className={styles.topbarBrand}
-          src="/logo.png"
-          alt="RunSun Cloud"
-        />
         <Button
           variant="ghost"
           className="icon-btn"

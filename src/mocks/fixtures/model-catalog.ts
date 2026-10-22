@@ -93,11 +93,10 @@ const DENSE_MODELS = new Set([
 const featured = [
   "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16",
   "meta-models/Muse-Spark-Open-816B-A42B",
-  "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16",
-  "meta-llama/Llama-4-Maverick-17B-128E-Instruct",
-  "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16",
-  "meta-llama/Llama-3.1-405B-Instruct",
-  "nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16",
+  "mistralai/Mistral-Large-3-675B-Instruct-2512",
+  "moonshotai/Kimi-K3",
+  "deepseek-ai/DeepSeek-V4-Pro-0813",
+  "Qwen/Qwen3.8-2.4T-A95B",
 ];
 
 function toBillions(value: string) {

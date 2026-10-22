@@ -42,6 +42,12 @@ function contextLabel(value: number) {
     : `${number(value / 1024, 1)}K`;
 }
 
+const operatingSystemLogos: Record<string, string> = {
+  Ubuntu: "/os-logos/ubuntu.svg",
+  "Rocky Linux": "/os-logos/rockylinux.svg",
+  Debian: "/os-logos/debian.svg",
+};
+
 function publisherName(model: Model) {
   const publisher = model.publisher || "";
   return publisher ? publisherLabel(publisher) : t("images.verified");
@@ -391,7 +397,18 @@ export default function ImagesPage() {
                 )
                 .map((item) => (
                   <article className="catalog-card" key={item.id}>
-                    <Box size={26} color="var(--rs-brand)" />
+                    {item.type === "os" &&
+                    operatingSystemLogos[item.osFamily] ? (
+                      <img
+                        className="catalog-os-logo"
+                        src={operatingSystemLogos[item.osFamily]}
+                        alt={item.osFamily}
+                        width={26}
+                        height={26}
+                      />
+                    ) : (
+                      <Box size={26} color="var(--rs-brand)" />
+                    )}
                     <strong>{item.name}</strong>
                     <small>
                       {item.architectures.join(" / ")} · {t("images.gpuDriver")}{" "}

@@ -90,3 +90,9 @@
   font-size: var(--rs-fs-lg);
   overflow-wrap: anywhere;
 }
+
+.eip-project-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
