@@ -643,17 +643,18 @@ function settleEips() {
     }
   }
 }
-function tick() {
+function tick(settleBilling = true) {
   let lifecycleChanged = false;
   if (db.account.creditBalance >= 0) db.account.depletedAt = null;
   else db.account.depletedAt ??= new Date().toISOString();
 
   for (const r of live()) {
-    settle(r);
+    if (settleBilling) settle(r);
     if (db.account.depletedAt) {
       const start = new Date(db.account.depletedAt).getTime();
       const age = Date.now() - start;
       if (age >= 86400000 && r.status === "running") {
+        if (!settleBilling) settle(r);
         r.status = "stopped";
         r.runningSince = null;
         r.stoppedAt = new Date(start + 86400000).toISOString();
@@ -662,6 +663,7 @@ function tick() {
         lifecycleChanged = true;
       }
       if (age >= 8 * 86400000) {
+        if (!settleBilling) settle(r);
         releaseResourceNetwork(db.network, r.resourceUuid);
         r.deletedAt = new Date(start + 8 * 86400000).toISOString();
         r.status = "terminating";
@@ -692,7 +694,7 @@ function tick() {
       }
     }
   }
-  settleEips();
+  if (settleBilling) settleEips();
   if (lifecycleChanged) persist();
 }
 function summary(
@@ -714,14 +716,33 @@ function summary(
       (!resourceId || u.resourceUuid === resourceId) &&
       (!projectId || u.projectId === projectId),
   );
-  const month = round(usage.reduce((a, u) => a + u.amount, 0));
-  const today = round(
-    usage
-      .filter((u) =>
-        u.usageHour.startsWith(new Date().toISOString().slice(0, 10)),
-      )
-      .reduce((a, u) => a + u.amount, 0),
-  );
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const daily = new Map<
+    string,
+    {
+      amount: number;
+      kinds: Record<string, number>;
+      projects: Record<string, number>;
+    }
+  >();
+  let monthAmount = 0;
+  let todayAmount = 0;
+  for (const row of usage) {
+    monthAmount += row.amount;
+    const day = row.usageHour.slice(0, 10);
+    if (day === todayKey) todayAmount += row.amount;
+    let entry = daily.get(day);
+    if (!entry) {
+      entry = { amount: 0, kinds: {}, projects: {} };
+      daily.set(day, entry);
+    }
+    entry.amount += row.amount;
+    entry.kinds[row.kind] = (entry.kinds[row.kind] || 0) + row.amount;
+    entry.projects[row.projectId] =
+      (entry.projects[row.projectId] || 0) + row.amount;
+  }
+  const month = round(monthAmount);
+  const today = round(todayAmount);
   const hourly =
     rs.reduce((a, r) => a + costPerHour(r, RATES), 0) +
     db.network.eips
@@ -743,36 +764,22 @@ function summary(
       .toISOString()
       .slice(0, 10),
   );
-  const trend = dates.map((day) => ({
-    date: day,
-    amount: round(
-      usage
-        .filter((u) => u.usageHour.startsWith(day))
-        .reduce((a, u) => a + u.amount, 0),
-    ),
-    ...Object.fromEntries(
-      [...KINDS, "eip"].map((kind) => [
-        kind,
-        round(
-          usage
-            .filter((u) => u.usageHour.startsWith(day) && u.kind === kind)
-            .reduce((a, u) => a + u.amount, 0),
-        ),
-      ]),
-    ),
-    ...Object.fromEntries(
-      db.projects.map((project) => [
-        project.id,
-        round(
-          usage
-            .filter(
-              (u) => u.usageHour.startsWith(day) && u.projectId === project.id,
-            )
-            .reduce((n, u) => n + u.amount, 0),
-        ),
-      ]),
-    ),
-  }));
+  const trend = dates.map((day) => {
+    const entry = daily.get(day);
+    return {
+      date: day,
+      amount: round(entry?.amount || 0),
+      ...Object.fromEntries(
+        [...KINDS, "eip"].map((kind) => [kind, round(entry?.kinds[kind] || 0)]),
+      ),
+      ...Object.fromEntries(
+        db.projects.map((project) => [
+          project.id,
+          round(entry?.projects[project.id] || 0),
+        ]),
+      ),
+    };
+  });
   return {
     month,
     payable: Math.max(
@@ -1465,7 +1472,7 @@ async function dispatchNetwork(
   fail(404, "NOT_FOUND");
 }
 
-async function dispatch(request: Request) {
+async function dispatch(request: Request, settleBilling = true) {
   const url = new URL(request.url);
   const path = url.pathname;
   const method = request.method;
@@ -1486,7 +1493,7 @@ async function dispatch(request: Request) {
   const region = qs.get("region");
   if (region && !REGIONS.includes(region as Region))
     fail(422, "VALIDATION_ERROR");
-  tick();
+  tick(settleBilling);
   if (path.startsWith("/api/network/"))
     return dispatchNetwork(path, method, qs, body, role);
   if (path === "/api/deployment-options") {
@@ -3381,13 +3388,13 @@ async function dispatch(request: Request) {
 }
 export async function handleMockRequest(
   request: Request,
-  options: { delayMs?: number } = {},
+  options: { delayMs?: number; settleBilling?: boolean } = {},
 ): Promise<Response> {
   const delayMs =
     options.delayMs ?? (import.meta.env.MODE === "test" ? 0 : 100);
   if (delayMs > 0) await delay(delayMs);
   try {
-    return await dispatch(request);
+    return await dispatch(request, options.settleBilling ?? true);
   } catch (error) {
     if (error instanceof Failure || error instanceof NetworkFailure)
       return HttpResponse.json(

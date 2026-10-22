@@ -35,6 +35,7 @@ const { objectStoreSnapshot, loadObjectStore } = await vite.ssrLoadModule(
 );
 await migrate();
 let loadedVersion = -1;
+let lastMeteredAt = 0;
 const listeners = new Set();
 
 async function initialize() {
@@ -99,7 +100,13 @@ async function dispatch(request) {
     db.objectContent = objectStoreSnapshot();
     before = structuredClone(db);
     dirty = false;
-    const response = await handleMockRequest(request, { delayMs: 0 });
+    const settleBilling =
+      request.method !== "GET" || Date.now() - lastMeteredAt >= 10_000;
+    const response = await handleMockRequest(request, {
+      delayMs: 0,
+      settleBilling,
+    });
+    if (settleBilling && response.status < 400) lastMeteredAt = Date.now();
     db.objectContent = objectStoreSnapshot();
     if (response.status >= 400) {
       await client.query("ROLLBACK");
@@ -113,7 +120,12 @@ async function dispatch(request) {
     await client.query("COMMIT");
     if (changed) {
       loadedVersion++;
-      if (new URL(request.url).pathname !== "/api/deployment-orders/estimate") {
+      // Metering advances during reads; broadcasting those writes would make
+      // each cache refresh trigger another refresh without a user action.
+      if (
+        (request.method !== "GET" || dirty) &&
+        new URL(request.url).pathname !== "/api/deployment-orders/estimate"
+      ) {
         const version = loadedVersion;
         setTimeout(() => broadcast(version), 100);
       }

@@ -18,7 +18,10 @@ export function Realtime() {
           if (useConnection.getState().mode !== "stream")
             void client.invalidateQueries();
         },
-        Number(import.meta.env.VITE_POLL_INTERVAL_MS || 3000),
+        Math.max(
+          30_000,
+          Number(import.meta.env.VITE_POLL_INTERVAL_MS || 10_000),
+        ),
       );
       return () => {
         clearInterval(fallback);

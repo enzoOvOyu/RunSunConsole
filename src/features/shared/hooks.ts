@@ -5,7 +5,7 @@ import { api } from "../../lib/api-client";
 import { toast } from "../../components/ui";
 import { errorText, t } from "../../i18n";
 export const pollInterval = Number(
-  import.meta.env.VITE_POLL_INTERVAL_MS || 3000,
+  import.meta.env.VITE_POLL_INTERVAL_MS || 10000,
 );
 export function useData<T>(
   key: readonly unknown[],
