@@ -22,7 +22,7 @@ let dirty = false;
 setPersistHook(() => {
   dirty = true;
 });
-const { quotaUse } = await vite.ssrLoadModule("/src/mocks/lib/derive.ts");
+const { quotaUse, provisioningSeconds } = await vite.ssrLoadModule("/src/mocks/lib/derive.ts");
 setResourceAllocationDeriver((resource) => {
   const active = { ...resource, status: "running", deletedAt: null };
   return { vcpu: quotaUse(active, "vcpu"), memory: quotaUse(active, "memory") };
@@ -37,6 +37,30 @@ await migrate();
 let loadedVersion = -1;
 let lastMeteredAt = 0;
 const listeners = new Set();
+let provisioningTimer;
+
+function scheduleProvisioning() {
+  clearTimeout(provisioningTimer);
+  const deadlines = db.resources
+    .filter((resource) => !resource.deletedAt && resource.status === "provisioning")
+    .map(
+      (resource) =>
+        Date.parse(resource.provisioningSince || resource.createdAt) +
+        provisioningSeconds(resource, db.models) * 1000,
+    )
+    .filter(Number.isFinite);
+  if (!deadlines.length) return;
+  const delay = Math.max(1000, Math.min(...deadlines) - Date.now());
+  provisioningTimer = setTimeout(async () => {
+    try {
+      await dispatch(new Request("http://localhost/api/account"));
+    } catch (error) {
+      console.error("Provisioning refresh failed", error);
+    } finally {
+      scheduleProvisioning();
+    }
+  }, delay);
+}
 
 async function initialize() {
   const client = await pool.connect();
@@ -70,6 +94,7 @@ async function initialize() {
   }
 }
 await initialize();
+scheduleProvisioning();
 
 function broadcast(version) {
   for (const response of listeners) {
@@ -141,6 +166,7 @@ async function dispatch(request) {
     return Response.json({ code: "INTERNAL" }, { status: 500 });
   } finally {
     client.release();
+    if (request.method !== "GET") scheduleProvisioning();
   }
 }
 

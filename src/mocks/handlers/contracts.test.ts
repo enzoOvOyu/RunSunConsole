@@ -585,3 +585,73 @@ it("targets Kubernetes node scheduling operations and records recoverable events
   expect((await request(`/resources/${cluster.resourceUuid}/cordon`, "POST", {})).status).toBe(422);
   expect((await request(`/resources/${cluster.resourceUuid}/upgrade`, "POST", { version: "1.31" })).status).toBe(404);
 });
+
+it("advances each resource kind from provisioning at its configured deadline", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  try {
+    const startedAt = new Date("2026-10-22T00:00:00.000Z");
+    for (const [kind, seconds] of [
+      ["gpu_vm", 30],
+      ["gpu_baremetal", 180],
+      ["vgpu", 120],
+      ["inference", 60],
+    ] as const) {
+      vi.setSystemTime(startedAt);
+      Object.assign(db, makeDatabase());
+      const resource = db.resources.find(
+        (item) => item.kind === kind && item.status === "running",
+      );
+      expect(resource).toBeDefined();
+      if (!resource) continue;
+      db.resources = [resource];
+      resource.status = "provisioning";
+      resource.createdAt = startedAt.toISOString();
+      resource.provisioningSince = startedAt.toISOString();
+      resource.runningSince = null;
+      db.billingCursors[resource.resourceUuid] = startedAt.getTime();
+      vi.setSystemTime(new Date(startedAt.getTime() + seconds * 1000 - 1));
+      await request("/account");
+      expect(resource.status).toBe("provisioning");
+      vi.setSystemTime(new Date(startedAt.getTime() + seconds * 1000));
+      await request("/account");
+      expect(resource.status).toBe("running");
+      expect(resource.runningSince).toBe(new Date().toISOString());
+      expect(
+        db.events.some(
+          (event) =>
+            event.resourceUuid === resource.resourceUuid &&
+            event.before === "provisioning" &&
+            event.after === "running",
+        ),
+      ).toBe(true);
+    }
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("accepts all four resource types as orders with matching initial state", async () => {
+  for (const kind of ["gpu_vm", "gpu_baremetal", "vgpu", "inference"] as const) {
+    Object.assign(db, makeDatabase());
+    const template = db.resources.find(
+      (item) =>
+        item.kind === kind && item.status === "running",
+    );
+    expect(template).toBeDefined();
+    if (!template) continue;
+    const result = await request("/deployment-orders", "POST", {
+      kind,
+      name: `creation-check-${kind}`,
+      projectId: template.projectId,
+      region: template.region,
+      mode: "on_demand",
+      labels: [],
+      nodePool: template.nodePool,
+      spec: structuredClone(template.spec),
+    });
+    expect(result.status).toBe(201);
+    expect(result.data.resource.status).toBe("provisioning");
+    expect(result.data.order.status).toBe("provisioning");
+    expect(result.data.order.resourceUuid).toBe(result.data.resource.resourceUuid);
+  }
+});
