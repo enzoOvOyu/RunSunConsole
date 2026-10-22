@@ -47,7 +47,6 @@ const context = {
   resource,
   osName: "Ubuntu 22.04 LTS",
   osFamily: "Ubuntu",
-  username: "ubuntu",
   driverVersion: "615.71.10",
   cudaVersion: "13.0",
 };

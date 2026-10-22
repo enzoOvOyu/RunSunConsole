@@ -30,7 +30,6 @@ export type SafeCommandContext = {
   resource: ResourceOf<"gpu_vm">;
   osName: string;
   osFamily: string;
-  username: string;
   driverVersion?: string;
   cudaVersion?: string;
   now?: Date;
@@ -42,7 +41,8 @@ export function runSafeCommand(
   context: SafeCommandContext,
 ): string {
   const command = input.trim();
-  const { resource, osName, osFamily, username } = context;
+  const { resource, osName, osFamily } = context;
+  const username = "root";
   const isWindows = /windows/i.test(osFamily);
   const hostname = resource.displayId;
   const home = isWindows
