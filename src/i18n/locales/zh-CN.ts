@@ -1021,6 +1021,7 @@ export default {
   "storage.duplicateBucket": "当前区域已有同名 Bucket；名称在全平台必须唯一。",
   "storage.deleteFolder": "删除当前文件夹",
   "storage.deleteFolderConfirm": "删除文件夹标记；其中对象不会删除：",
+  "storage.moreActions": "更多操作",
   "storage.bucketCount": "存储桶数量",
   "storage.bucketDetails": "存储桶概览",
   "storage.accessDetails": "访问与关联",

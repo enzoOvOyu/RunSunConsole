@@ -138,7 +138,7 @@ export function VolumeTable({ rows, kind, projectName, onDetails }: Props) {
         },
         {
           id: "operation",
-          header: t("common.action"),
+          header: t("storage.moreActions"),
           cell: ({ row }) => (
             <Button
               onClick={(event) => {

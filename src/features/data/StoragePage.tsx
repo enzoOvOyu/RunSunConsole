@@ -812,7 +812,7 @@ export default function StoragePage() {
                     },
                     {
                       id: "remove",
-                      header: t("common.action"),
+                      header: t("storage.moreActions"),
                       cell: ({ row }) => (
                         <Button
                           variant="danger"

@@ -1057,6 +1057,7 @@ export default {
   "storage.duplicateBucket": "A Bucket with this name already exists here. Names must be unique platform-wide.",
   "storage.deleteFolder": "Delete current folder",
   "storage.deleteFolderConfirm": "Delete the folder marker; its objects will remain:",
+  "storage.moreActions": "More actions",
   "storage.bucketCount": "Buckets",
   "storage.bucketDetails": "Bucket overview",
   "storage.accessDetails": "Access and links",

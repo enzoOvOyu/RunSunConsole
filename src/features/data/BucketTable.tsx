@@ -80,7 +80,7 @@ export function BucketTable({
         },
         {
           id: "operation",
-          header: t("common.action"),
+          header: t("storage.moreActions"),
           cell: ({ row }) => (
             <div className="row">
               <Button
