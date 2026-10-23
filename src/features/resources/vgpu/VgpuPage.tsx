@@ -35,7 +35,7 @@ export default function VgpuPage() {
       id: "pool",
       header: t("resource.pool"),
       cell: ({ row }) =>
-        row.original.spec.nodePools
+        row.original.spec.deploymentMode === "slice" ? row.original.spec.slice?.skuId || "—" : row.original.spec.nodePools
           .map((p) => poolDisplayName(p.poolCode))
           .join(", "),
     },
@@ -53,18 +53,18 @@ export default function VgpuPage() {
       id: "nodes",
       header: t("resource.nodeCount"),
       cell: ({ row }) =>
-        row.original.spec.nodePools.reduce((a, p) => a + p.nodeCount, 0),
+        row.original.spec.deploymentMode === "slice" ? "—" : row.original.spec.nodePools.reduce((a, p) => a + p.nodeCount, 0),
     },
     {
       id: "gpu",
       header: t("resource.gpu"),
-      cell: ({ row }) => row.original.spec.gpuCount,
+      cell: ({ row }) => row.original.spec.deploymentMode === "slice" ? `${row.original.spec.slice?.count || 0} ${t("slice.quantity")}` : row.original.spec.gpuCount,
     },
     {
       id: "slicing",
       header: t("resource.slicing"),
       cell: ({ row }) =>
-        row.original.spec.nodePools
+        row.original.spec.deploymentMode === "slice" ? t("slice.slice") : row.original.spec.nodePools
           .map(
             (p) =>
               t(`spec.${p.slicingPolicy}`) +
@@ -92,8 +92,8 @@ export default function VgpuPage() {
         {
           id: "slicing",
           label: t("resource.slicing"),
-          value: (r) => r.spec.nodePools[0]?.slicingPolicy || "none",
-          format: (value) => t(`spec.${value}`),
+          value: (r) => r.spec.deploymentMode === "slice" ? "slice" : "none",
+          format: (value) => value === "slice" ? t("slice.slice") : t("slice.exclusive"),
         },
       ]}
     />

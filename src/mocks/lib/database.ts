@@ -8,6 +8,7 @@ import {
   syncResourceNetwork,
 } from "./network";
 import type {
+  SliceInventoryItem,
   Resource,
   Project,
   ResourceEvent,
@@ -26,6 +27,7 @@ import type {
   Voucher,
   Account,
 } from "../../types/domain";
+import { seedSliceInventory } from "../fixtures/slices";
 import { seedResources, seedTime } from "../fixtures/resources";
 import {
   MODELS,
@@ -43,6 +45,7 @@ import { round } from "../../lib/money";
 import { defaultScaling, normalizeSpec } from "../../lib/config";
 import { displayId, formatResourceId } from "../../lib/ids";
 export interface Database {
+  sliceInventory: SliceInventoryItem[];
   network: NetworkState;
   usageMeters: Record<string, { quantity: number; amount: number }>;
   voucherPending: Record<string, number>;
@@ -360,6 +363,7 @@ export function makeDatabase(): Database {
     createdAt: r.createdAt,
   }));
   return {
+    sliceInventory: seedSliceInventory(),
     network,
     usageMeters: {},
     voucherPending: {},
@@ -408,6 +412,7 @@ const unitNames = [
   "per_cluster_hour",
   "per_gb_hour",
   "per_ip_hour",
+  "per_slice_hour",
 ] as const;
 const statusNames = [
   "provisioning",
@@ -619,6 +624,7 @@ export function restoreDatabase() {
       );
       const restored = {
         ...data,
+        sliceInventory: data.sliceInventory || seedSliceInventory(),
         billingCursors: data.billingCursors || {},
         replicaRestarts: data.replicaRestarts || {},
         voucherPending: data.voucherPending || {},

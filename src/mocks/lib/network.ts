@@ -148,6 +148,8 @@ export function interfaceCount(r: Resource) {
     ? r.spec.quantity
     : r.kind === "gpu_baremetal"
       ? r.spec.machineCount
+      : r.kind === "vgpu" && r.spec.deploymentMode === "slice"
+        ? 0
       : r.kind === "vgpu"
         ? r.spec.nodePools.reduce((n, p) => n + p.nodeCount, 0) +
           (r.spec.controlPlaneTier === "ha" ? 3 : 1)
@@ -211,6 +213,8 @@ export function resolveNetwork(n: NetworkState, r: Resource) {
     subnet.region !== r.region
   )
     networkFail(409, "NETWORK_SCOPE_MISMATCH");
+  if (r.kind === "vgpu" && r.spec.deploymentMode === "slice")
+    return { vpc, subnet, groups: [] };
   const names = r.spec.securityGroups ?? ["default"];
   if (!names.length || names.length > 5 || new Set(names).size !== names.length)
     networkFail(422, "VALIDATION_ERROR");
@@ -266,7 +270,7 @@ export function clusterSubnets(n: NetworkState, r: Extract<Resource, { kind: "vg
 export function checkResourceNetwork(n: NetworkState, r: Resource, peak = 1) {
   const { subnet } = resolveNetwork(n, r);
   const controlPlane =
-    r.kind === "vgpu" ? (r.spec.controlPlaneTier === "ha" ? 3 : 1) : 0;
+    r.kind === "vgpu" && r.spec.deploymentMode !== "slice" ? (r.spec.controlPlaneTier === "ha" ? 3 : 1) : 0;
   const needed =
     Math.ceil((interfaceCount(r) - controlPlane) * peak) + controlPlane;
   if (r.kind === "vgpu") {

@@ -1,6 +1,7 @@
 import { useData } from "../../shared/hooks";
 import { EP } from "../../../lib/api-client";
 import type { ClusterView } from "../../../types/monitoring";
+import { SliceDetail } from "./SliceDetail";
 import { ResourceNetwork } from "../../network/ResourceNetwork";
 import {
   ControlPlanePanel,
@@ -20,6 +21,10 @@ import {
 } from "../shared/common";
 const TopologyView = lazy(() => import("../../../components/ops/TopologyView"));
 export function VgpuDetail({ resource: r }: { resource: ResourceOf<"vgpu"> }) {
+  if (r.spec.deploymentMode === "slice") return <SliceDetail resource={r} />;
+  return <ExclusiveClusterDetail resource={r} />;
+}
+function ExclusiveClusterDetail({ resource: r }: { resource: ResourceOf<"vgpu"> }) {
   const [tab, setTab] = useState("overview");
   const cluster = useData<ClusterView>(
     ["cluster-runtime", r.resourceUuid],

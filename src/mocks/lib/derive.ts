@@ -1,3 +1,4 @@
+import { sliceSku } from "../fixtures/slices";
 import { GPU_SPECS } from "../fixtures/gpu-specs";
 import type {
   Resource,
@@ -61,6 +62,11 @@ export function estimate(
       true,
     );
   else if (kind === "vgpu" && "nodePools" in spec) {
+    if (spec.deploymentMode === "slice") {
+      const sku = sliceSku(spec.slice?.skuId || "");
+      if (!sku) throw new Error("SLICE_SKU_NOT_FOUND");
+      add("slice:" + sku.id, "per_slice_hour", find("per_slice_hour", sku.poolCode), spec.slice!.count, true);
+    } else {
     for (const pool of spec.nodePools)
       add(
         `compute:${pool.poolCode}`,
@@ -76,6 +82,7 @@ export function estimate(
       1,
       false,
     );
+    }
   } else
     add(
       "compute",
@@ -131,6 +138,8 @@ export function estimate(
       ? spec.machineCount
       : kind === "inference" && "replicas" in spec
         ? spec.replicas
+        : kind === "vgpu" && "nodePools" in spec && spec.deploymentMode === "slice"
+          ? spec.slice?.count || 1
         : kind === "vgpu" && "nodePools" in spec
           ? spec.nodePools.reduce((a, p) => a + p.nodeCount, 0)
           : "quantity" in spec
@@ -219,6 +228,7 @@ export function modelMemory(
 export function allocatedMemoryGb(r: Resource): number {
   if (r.kind === "gpu_vm") return r.spec.memoryGb * r.spec.quantity;
   if (r.kind === "gpu_baremetal") return r.spec.memoryGb * r.spec.machineCount;
+  if (r.kind === "vgpu" && r.spec.deploymentMode === "slice") return 0;
   if (r.kind === "vgpu")
     return r.spec.nodePools.reduce(
       (n, p) => n + GPU_SPECS[p.poolCode].memorySystemGb * p.nodeCount,
@@ -237,8 +247,8 @@ export function quotaUse(r: Resource, metric: string): number {
   )
     return 0;
   if (metric === "ip") return Number(r.spec.publicIp);
-  if (metric === "gpu") return r.spec.gpuCount;
-  if (metric === "memory") return allocatedMemoryGb(r);
+  if (metric === "gpu") return r.kind === "vgpu" && r.spec.deploymentMode === "slice" ? 0 : r.spec.gpuCount;
+  if (metric === "memory") return r.kind === "vgpu" && r.spec.deploymentMode === "slice" ? 0 : allocatedMemoryGb(r);
   if (metric === "vcpu")
     return "vcpu" in r.spec
       ? r.spec.vcpu * r.spec.quantity

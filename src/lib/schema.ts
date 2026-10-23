@@ -193,6 +193,20 @@ export const nodePoolSchema = z.object({
   timeSliceShare: z.number().int().min(2).max(8),
 });
 export const vgpuSchema = z.object({
+  deploymentMode: z.enum(["exclusive", "slice"]).optional(),
+  slice: z.object({
+    skuId: z.string().min(1),
+    count: z.number().int().min(1).max(64),
+    profile: z.string().optional(),
+    gpuModel: z.string().optional(),
+    memoryGb: z.number().optional(),
+    layoutId: z.string().optional(),
+    kubernetesResource: z.string().optional(),
+    unitPriceUsd: z.number().optional(),
+    namespace: z.string().optional(),
+    workspaceId: z.string().optional(),
+    instanceIds: z.array(z.string()).optional(),
+  }).optional(),
   description: z.string().trim().max(500).optional(),
   subnets: z.array(z.string()).max(3).optional(),
   volumeBindings: z.array(z.object({
@@ -218,9 +232,11 @@ export const vgpuSchema = z.object({
     tolerateGpuTaint: z.boolean(),
   })).optional(),
   ...common,
+  securityGroups: z.array(z.string()).max(5).optional(),
+  gpuCount: z.number().int().min(0),
   k8sVersion: z.enum(["1.31", "1.32", "1.33", "1.34", "1.35", "1.36", "1.37"]),
   controlPlaneTier: z.enum(["standard", "ha"]),
-  nodePools: z.array(nodePoolSchema).min(1).max(5).refine(
+  nodePools: z.array(nodePoolSchema).max(5).refine(
     (pools) => pools.every((p) => (p.minNodes ?? 1) <= p.nodeCount && p.nodeCount <= (p.maxNodes ?? 64)) &&
       new Set(pools.map((p, i) => p.name || `pool-${i+1}`)).size === pools.length,
     "INVALID_NODE_POOL_RANGE",
@@ -236,6 +252,13 @@ export const vgpuSchema = z.object({
   rbacDefaultAdmin: z.boolean(),
   vpc: z.string(),
   subnet: z.string(),
+}).superRefine((spec, ctx) => {
+  if (spec.deploymentMode === "slice") {
+    if (!spec.slice || spec.nodePools.length !== 0 || spec.gpuCount !== 0 || spec.scaling ||
+      spec.storageMode === "local_nvme" || spec.apiServerPublic || spec.ingressEnabled)
+      ctx.addIssue({ code: "custom", message: "INVALID_SLICE_SPEC" });
+  } else if (spec.nodePools.length === 0)
+    ctx.addIssue({ code: "custom", message: "INVALID_NODE_POOL_RANGE" });
 });
 export const inferenceGovernanceSchema = z.object({
   canaryPercent: z.number().int().min(0).max(99),

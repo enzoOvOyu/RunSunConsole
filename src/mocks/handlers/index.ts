@@ -66,6 +66,7 @@ import { db, persist, addEvent } from "../lib/database";
 import { consolePasswordFingerprint } from "../lib/console-auth";
 import { RATES } from "../fixtures/pricing";
 import { IMAGES, PIPELINES } from "../fixtures/content";
+import { SLICE_SKUS, sliceSku } from "../fixtures/slices";
 import { poolsFor, GPU_SPECS } from "../fixtures/gpu-specs";
 import {
   provisioningSeconds,
@@ -112,6 +113,38 @@ function fail(
 const resource = (id: string) =>
   db.resources.find((r) => r.resourceUuid === id) || fail(404, "NOT_FOUND");
 const live = () => db.resources.filter((r) => !r.deletedAt);
+const sliceLimit = (projectId: string) => db.projects.find((project) => project.id === projectId)?.sliceQuota ?? 32;
+const sliceUsed = (projectId: string, region: Region) => live().filter((r) =>
+  r.kind === "vgpu" && r.projectId === projectId && r.region === region &&
+  r.spec.deploymentMode === "slice" && !["stopped", "error", "terminating"].includes(r.status),
+).reduce((sum, r) => sum + (r.kind === "vgpu" ? r.spec.slice?.count || 0 : 0), 0);
+const sliceStock = (skuId: string, region: Region) => db.sliceInventory.filter((item) => item.skuId === skuId && item.region === region);
+function reserveSlices(r: Extract<Resource, { kind: "vgpu" }>) {
+  const slice = r.spec.slice;
+  const sku = sliceSku(slice?.skuId || "");
+  if (!sku || r.nodePool !== sku.poolCode || !slice || !Number.isInteger(slice.count) || slice.count < 1 ||
+    slice.count > 64 || sliceUsed(r.projectId, r.region) + slice.count > sliceLimit(r.projectId))
+    fail(409, "SLICE_QUOTA_OR_SKU_INVALID");
+  const selected = sliceStock(sku.id, r.region).filter((item) => item.state === "free" && item.layoutId === sku.layoutId).slice(0, slice.count);
+  if (selected.length !== slice.count) fail(409, "INSUFFICIENT_SLICE_CAPACITY");
+  for (const item of selected) { item.state = "reserved"; item.resourceUuid = r.resourceUuid; }
+  slice.instanceIds = selected.map((item) => item.id);
+  slice.profile = sku.profile;
+  slice.gpuModel = sku.gpuModel;
+  slice.memoryGb = sku.memoryGb;
+  slice.layoutId = sku.layoutId;
+  slice.kubernetesResource = sku.kubernetesResource;
+  slice.unitPriceUsd = RATES.find((rate) => rate.kind === "vgpu" && rate.region === r.region && rate.pool === sku.poolCode && rate.unit === "per_slice_hour")!.unitPrice;
+  slice.workspaceId = `workspace-${r.resourceUuid}`;
+  slice.namespace = `tenant-${r.resourceUuid.slice(0, 12)}`;
+}
+function releaseSlices(r: Resource) {
+  if (r.kind !== "vgpu" || r.spec.deploymentMode !== "slice") return;
+  for (const item of db.sliceInventory)
+    if (item.resourceUuid === r.resourceUuid) { item.state = "free"; item.resourceUuid = null; }
+  if (r.spec.slice) r.spec.slice.instanceIds = [];
+}
+
 const limits: Record<Region, Record<Quota["metric"], number>> = {
   jp: { gpu: 528, vcpu: 8448, memory: 135168, storage: 1_000_000, ip: 24 },
   sg: { gpu: 320, vcpu: 5120, memory: 90112, storage: 500_000, ip: 12 },
@@ -299,12 +332,26 @@ function precheck(r: Resource, exclude?: string) {
     )
       fail(422, "VALIDATION_ERROR");
   }
+  const sliceMode = r.kind === "vgpu" && r.spec.deploymentMode === "slice";
   const pool = catalogFor(r.region, exclude).find((p) => p.code === r.nodePool);
-  if (!pool?.available) fail(409, "INSUFFICIENT_CAPACITY");
-  if (r.kind === "gpu_vm" && r.spec.gpuPerInstance > pool.gpusPerNode)
+  if (!sliceMode && !pool?.available) fail(409, "INSUFFICIENT_CAPACITY");
+  if (sliceMode) {
+    const sku = sliceSku(r.spec.slice?.skuId || "");
+    const count = r.spec.slice?.count || 0;
+    if (!sku || sku.poolCode !== r.nodePool || r.spec.scaling || !Number.isInteger(count) || count < 1 ||
+      count > 64 || !RATES.some((rate) => rate.kind === "vgpu" && rate.region === r.region && rate.pool === sku.poolCode && rate.unit === "per_slice_hour") ||
+      sliceUsed(r.projectId, r.region) + count > sliceLimit(r.projectId))
+      fail(409, "SLICE_QUOTA_OR_SKU_INVALID");
+    const allocatedToSelf = db.sliceInventory.filter((item) => item.resourceUuid === exclude && item.skuId === sku.id).length;
+    if (sliceStock(sku.id, r.region).filter((item) => item.state === "free").length + allocatedToSelf < count)
+      fail(409, "INSUFFICIENT_SLICE_CAPACITY");
+  }
+  if (r.kind === "gpu_vm" && r.spec.gpuPerInstance > pool!.gpusPerNode)
     fail(422, "VALIDATION_ERROR");
   const selected =
-    r.kind === "vgpu"
+    r.kind === "vgpu" && r.spec.deploymentMode === "slice"
+      ? []
+      : r.kind === "vgpu"
       ? r.spec.nodePools.map((p) => ({
           code: p.poolCode,
           count: p.nodeCount * p.gpuPerNode,
@@ -400,7 +447,7 @@ function precheck(r: Resource, exclude?: string) {
       fail(422, "UNSUPPORTED_PRECISION");
     if (
       modelMemory(model, r.spec.quantization, r.spec.maxModelLen).requiredGb >
-      pool.memoryGb * r.spec.gpuPerReplica
+      pool!.memoryGb * r.spec.gpuPerReplica
     )
       fail(422, "MODEL_MEMORY_EXCEEDED");
   }
@@ -713,12 +760,20 @@ function tick(settleBilling = true) {
   else db.account.depletedAt ??= new Date().toISOString();
 
   for (const r of live()) {
+    if (r.kind === "vgpu" && r.spec.deploymentMode === "slice" && r.status === "error" &&
+      db.sliceInventory.some((item) => item.resourceUuid === r.resourceUuid)) {
+      releaseSlices(r);
+      const order = db.orders.find((item) => item.resourceUuid === r.resourceUuid);
+      if (order) order.status = "failed";
+      lifecycleChanged = true;
+    }
     if (settleBilling) settle(r);
     if (db.account.depletedAt) {
       const start = new Date(db.account.depletedAt).getTime();
       const age = Date.now() - start;
       if (age >= 86400000 && r.status === "running") {
         if (!settleBilling) settle(r);
+        releaseSlices(r);
         r.status = "stopped";
         r.runningSince = null;
         r.stoppedAt = new Date(start + 86400000).toISOString();
@@ -729,6 +784,7 @@ function tick(settleBilling = true) {
       if (age >= 8 * 86400000) {
         if (!settleBilling) settle(r);
         releaseResourceNetwork(db.network, r.resourceUuid);
+        releaseSlices(r);
         r.deletedAt = new Date(start + 8 * 86400000).toISOString();
         r.status = "terminating";
         r.runningSince = null;
@@ -743,6 +799,9 @@ function tick(settleBilling = true) {
         1000;
       const duration = provisioningSeconds(r, db.models);
       if (age >= duration) {
+        if (r.kind === "vgpu" && r.spec.deploymentMode === "slice")
+          for (const item of db.sliceInventory)
+            if (item.resourceUuid === r.resourceUuid && item.state === "reserved") item.state = "allocated";
         r.status = "running";
         r.runningSince = new Date(
           new Date(r.provisioningSince || r.createdAt).getTime() +
@@ -1993,6 +2052,23 @@ async function dispatch(request: Request, settleBilling = true) {
     return json(RATES.filter((r) => !region || r.region === region));
   if (path === "/api/node-pools")
     return json(catalogFor((region || "jp") as Region));
+  if (path === "/api/slices/catalog") {
+    const selectedRegion = (region || "jp") as Region;
+    const projectId = qs.get("project_id") || "";
+    if (!db.projects.some((item) => item.id === projectId && !item.deletedAt)) fail(422, "VALIDATION_ERROR");
+    return json(SLICE_SKUS.map((sku) => {
+      const stock = sliceStock(sku.id, selectedRegion);
+      return { ...sku, hourlyUsd: RATES.find((rate) => rate.kind === "vgpu" && rate.region === selectedRegion && rate.pool === sku.poolCode && rate.unit === "per_slice_hour")?.unitPrice ?? null,
+        physicalGpus: new Set(stock.map((item) => item.physicalGpuId)).size,
+        createdInstances: stock.length,
+        free: stock.filter((item) => item.state === "free").length,
+        reserved: stock.filter((item) => item.state === "reserved").length,
+        allocated: stock.filter((item) => item.state === "allocated").length,
+        maintenance: stock.filter((item) => item.state === "maintenance").length,
+        projectLimit: sliceLimit(projectId), projectUsed: sliceUsed(projectId, selectedRegion),
+      };
+    }));
+  }
   if (path === "/api/quotas")
     return json(quotas().filter((q) => !region || q.region === region));
   if (path === "/api/overview") {
@@ -2435,6 +2511,8 @@ async function dispatch(request: Request, settleBilling = true) {
         const names =
           r.kind === "gpu_baremetal"
             ? ["allocation", "network", "bmc", "os", "driver", "ready"]
+            : r.kind === "vgpu" && r.spec.deploymentMode === "slice"
+              ? ["allocation", "workspace", "quota", "ready"]
             : r.kind === "vgpu"
               ? ["allocation", "controlplane", "network", "plugins", "ready"]
               : r.kind === "inference"
@@ -2480,6 +2558,9 @@ async function dispatch(request: Request, settleBilling = true) {
         );
       }
     }
+    if (r.kind === "vgpu" && r.spec.deploymentMode === "slice" &&
+      ["workloads", "cordon", "uncordon", "resize", "access"].includes(action || ""))
+      fail(409, "SLICE_WORKSPACE_MOCK_ONLY");
     if (r.kind === "vgpu" && action === "workloads" && method === "POST") {
       if (r.deletedAt || r.status !== "running") fail(409, "INVALID_STATE");
       const input = z.object({
@@ -2547,6 +2628,7 @@ async function dispatch(request: Request, settleBilling = true) {
       const before = r.status;
       settle(r);
       releaseResourceNetwork(db.network, r.resourceUuid);
+      releaseSlices(r);
       delete db.consolePasswordFingerprints[r.resourceUuid];
       r.deletedAt = new Date().toISOString();
       for (const volume of db.volumes)
@@ -2582,11 +2664,17 @@ async function dispatch(request: Request, settleBilling = true) {
       if (action === "start") {
         if (r.status !== "stopped") fail(409, "INVALID_STATE");
         precheck(r, r.resourceUuid);
+        if (r.kind === "vgpu" && r.spec.deploymentMode === "slice") {
+          reserveSlices(r);
+          for (const item of db.sliceInventory)
+            if (item.resourceUuid === r.resourceUuid) item.state = "allocated";
+        }
         r.status = "running";
         r.runningSince = new Date().toISOString();
         r.stoppedAt = null;
       } else if (action === "stop") {
         if (r.status !== "running") fail(409, "INVALID_STATE");
+        releaseSlices(r);
         r.status = "stopped";
         r.stoppedAt = new Date().toISOString();
         r.runningSince = null;
@@ -2596,6 +2684,7 @@ async function dispatch(request: Request, settleBilling = true) {
       } else if (action === "retry") {
         if (r.status !== "error") fail(409, "INVALID_STATE");
         precheck(r, r.resourceUuid);
+        if (r.kind === "vgpu" && r.spec.deploymentMode === "slice") reserveSlices(r);
         r.status = "provisioning";
         r.provisioningSince = new Date().toISOString();
         const order = db.orders.find((o) => o.resourceUuid === r.resourceUuid);
@@ -2846,6 +2935,18 @@ async function dispatch(request: Request, settleBilling = true) {
     if (parsed.kind === "gpu_baremetal" && "machineCount" in spec)
       spec.gpuCount = spec.machineCount * pool.gpusPerNode;
     if (parsed.kind === "vgpu" && "nodePools" in spec) {
+      if (spec.deploymentMode === "slice") {
+        const sku = sliceSku(spec.slice?.skuId || "");
+        if (!sku || sku.poolCode !== parsed.nodePool || sku.k8sVersion !== spec.k8sVersion || parsed.mode !== "on_demand" || spec.nodePools.length || spec.scaling ||
+          !["dynamic_block", "shared_file"].includes(spec.storageMode || "") ||
+          spec.localPvGb || spec.apiServerPublic || spec.ingressEnabled || spec.rbacDefaultAdmin ||
+          (spec.storageSelections || []).length || (spec.workloads || []).length)
+          fail(422, "INVALID_SLICE_SPEC");
+        spec.controlPlaneTier = "standard";
+        spec.gpuCount = 0;
+        spec.podCidr = "";
+        spec.serviceCidr = "";
+      }
       if (spec.rbacDefaultAdmin && role !== "owner" && role !== "admin") fail(403, "FORBIDDEN");
       if (!/^[a-z][a-z0-9-]{1,61}[a-z0-9]$/.test(parsed.name))
         fail(422, "INVALID_CLUSTER_NAME");
@@ -2856,10 +2957,10 @@ async function dispatch(request: Request, settleBilling = true) {
       const podCidr = spec.podCidr || "172.20.0.0/16";
       const serviceCidr = spec.serviceCidr || "172.21.0.0/16";
       const knownVpcCidrs = db.network.vpcs.filter((item) => !item.deletedAt && item.projectId === parsed.projectId && item.region === parsed.region && vpcNetworkType(item) === "standard").map((item) => item.cidr);
-      if (!["cilium", "calico"].includes(spec.networkPlugin) || !privateCidr(podCidr) || !privateCidr(serviceCidr) ||
+      if (spec.deploymentMode !== "slice" && (!["cilium", "calico"].includes(spec.networkPlugin) || !privateCidr(podCidr) || !privateCidr(serviceCidr) ||
         !cidrRange(podCidr) || !cidrRange(serviceCidr) ||
         cidrOverlaps(podCidr, serviceCidr) ||
-        knownVpcCidrs.some((cidr) => cidrOverlaps(podCidr, cidr) || cidrOverlaps(serviceCidr, cidr)))
+        knownVpcCidrs.some((cidr) => cidrOverlaps(podCidr, cidr) || cidrOverlaps(serviceCidr, cidr))))
         fail(422, "CLUSTER_CIDR_CONFLICT");
       if (spec.ingressEnabled && (spec.ingressClass !== "nginx" || !spec.securityGroups?.length || !spec.vpc || !spec.subnet))
         fail(422, "VALIDATION_ERROR");
@@ -2868,22 +2969,25 @@ async function dispatch(request: Request, settleBilling = true) {
         (nodePool.minNodes ?? 1) <= nodePool.nodeCount &&
         nodePool.nodeCount <= (nodePool.maxNodes ?? 64)))
         fail(422, "INVALID_NODE_POOL_RANGE");
-      if (!spec.nodePools.every((nodePool) => {
+      if (spec.deploymentMode !== "slice" && !spec.nodePools.every((nodePool) => {
         const image = IMAGES.find((item) => item.id === (nodePool.imageRef || "ubuntu-22.04"));
         const hardware = GPU_SPECS[nodePool.poolCode];
         return image?.type === "os" && image.osFamily !== "Windows Server" &&
           image.architectures.includes(hardware.cpuArchitecture) &&
           image.supportedGpuModels.includes(nodePool.poolCode);
       })) fail(422, "INVALID_NODE_IMAGE");
-      spec.podCidr = podCidr;
-      spec.serviceCidr = serviceCidr;
+      if (spec.deploymentMode !== "slice") {
+        spec.podCidr = podCidr;
+        spec.serviceCidr = serviceCidr;
+      }
     }
     if (parsed.kind === "vgpu" && "nodePools" in spec)
       spec.nodePools = spec.nodePools.map((pool) => ({
         ...pool,
         gpuPerNode: GPU_SPECS[pool.poolCode].gpusPerNode,
+        ...(spec.deploymentMode === "exclusive" ? { slicingPolicy: "none", migProfile: "", timeSliceShare: 2 } : {}),
       }));
-    if (parsed.kind === "vgpu" && "nodePools" in spec)
+    if (parsed.kind === "vgpu" && "nodePools" in spec && spec.deploymentMode !== "slice")
       spec.gpuCount = spec.nodePools.reduce(
         (a, p) => a + p.nodeCount * GPU_SPECS[p.poolCode].gpusPerNode,
         0,
@@ -2941,6 +3045,8 @@ async function dispatch(request: Request, settleBilling = true) {
       orderUuid: crypto.randomUUID(),
     } as Resource;
     precheck(r);
+    const priceSnapshot = estimate(r, RATES);
+    if (r.kind === "vgpu" && r.spec.deploymentMode === "slice") reserveSlices(r);
     const networkBeforeCreate = r.kind === "gpu_vm" && r.spec.publicIp
       ? structuredClone(db.network)
       : null;
@@ -2948,91 +3054,105 @@ async function dispatch(request: Request, settleBilling = true) {
       syncResourceNetwork(db.network, r);
     } catch (error) {
       if (networkBeforeCreate) db.network = networkBeforeCreate;
+      releaseSlices(r);
       throw error;
     }
-    db.resources.push(r);
-    if (r.kind === "vgpu") for (const binding of r.spec.volumeBindings || []) {
-      const volume = db.volumes.find((item) => item.id === binding.volumeId)!;
-      volume.resourceUuid = r.resourceUuid;
-      volume.role = "pvc";
-      volume.mountPath = `/pvc/${binding.namespace}/${binding.pvcName}`;
-    }
-    if (
-      (r.kind === "gpu_vm" || r.kind === "gpu_baremetal") &&
-      r.spec.authMethod === "password"
-    ) {
-      const password = String(body.authPassword);
-      db.consolePasswordFingerprints[r.resourceUuid] =
-        consolePasswordFingerprint(r.resourceUuid, password);
-    }
-    db.volumes.push(...volumesForResource(r).map((volume) => r.kind === "vgpu" ? {
-      ...volume, zone: (() => {
-        if (volume.kind === "file") return undefined;
-        const match = volume.id.match(/-pvc-(\d+)-(\d+)$/);
-        const nodeIndex = match ? r.spec.nodePools.slice(0, Number(match[1])).reduce((count, pool) => count + pool.nodeCount, 0) + Number(match[2]) : 0;
-        const controlPlaneNodes = r.spec.controlPlaneTier === "ha" ? 3 : 1;
-        const nic = db.network.interfaces.find((item) => item.resourceUuid === r.resourceUuid && !item.releasedAt && item.index === controlPlaneNodes + nodeIndex);
-        return db.network.subnets.find((subnet) => subnet.id === nic?.subnetId)?.zone || `${r.region}-a`;
-      })(),
-    } : volume));
-    for (const row of spec.storageSelections || []) {
-      if (row.kind !== "object") continue;
-      db.buckets.push({
-        id: crypto.randomUUID(),
-        name: row.name,
-        region: r.region,
+    try {
+      db.resources.push(r);
+      if (r.kind === "vgpu") for (const binding of r.spec.volumeBindings || []) {
+        const volume = db.volumes.find((item) => item.id === binding.volumeId)!;
+        volume.resourceUuid = r.resourceUuid;
+        volume.role = "pvc";
+        volume.mountPath = `/pvc/${binding.namespace}/${binding.pvcName}`;
+      }
+      if (
+        (r.kind === "gpu_vm" || r.kind === "gpu_baremetal") &&
+        r.spec.authMethod === "password"
+      ) {
+        const password = String(body.authPassword);
+        db.consolePasswordFingerprints[r.resourceUuid] =
+          consolePasswordFingerprint(r.resourceUuid, password);
+      }
+      db.volumes.push(...volumesForResource(r).map((volume) => r.kind === "vgpu" ? {
+        ...volume, zone: (() => {
+          if (volume.kind === "file") return undefined;
+          const match = volume.id.match(/-pvc-(\d+)-(\d+)$/);
+          const nodeIndex = match ? r.spec.nodePools.slice(0, Number(match[1])).reduce((count, pool) => count + pool.nodeCount, 0) + Number(match[2]) : 0;
+          const controlPlaneNodes = r.spec.controlPlaneTier === "ha" ? 3 : 1;
+          const nic = db.network.interfaces.find((item) => item.resourceUuid === r.resourceUuid && !item.releasedAt && item.index === controlPlaneNodes + nodeIndex);
+          return db.network.subnets.find((subnet) => subnet.id === nic?.subnetId)?.zone || `${r.region}-a`;
+        })(),
+      } : volume));
+      for (const row of spec.storageSelections || []) {
+        if (row.kind !== "object") continue;
+        db.buckets.push({
+          id: crypto.randomUUID(),
+          name: row.name,
+          region: r.region,
+          projectId: r.projectId,
+          storageClass: row.tier === "oss_ia" ? "IA" : "STANDARD",
+          attachedResourceUuid: r.resourceUuid,
+          access: "private",
+          status: "active",
+          quotaGb: row.sizeGb,
+          createdAt: r.createdAt,
+          objects: [],
+          lifecycle: [],
+          references: [{ name: r.name, href: resourceLink(r) }],
+        });
+      }
+      const order = {
+        idempotencyKey,
+        orderUuid: r.orderUuid,
         projectId: r.projectId,
-        storageClass: row.tier === "oss_ia" ? "IA" : "STANDARD",
-        attachedResourceUuid: r.resourceUuid,
-        access: "private",
-        status: "active",
-        quotaGb: row.sizeGb,
-        createdAt: r.createdAt,
-        objects: [],
-        lifecycle: [],
-        references: [{ name: r.name, href: resourceLink(r) }],
-      });
-    }
-    const order = {
-      idempotencyKey,
-      orderUuid: r.orderUuid,
-      projectId: r.projectId,
-      resourceUuid,
-      status: "provisioning",
-      requested_spec: structuredClone(spec),
-      price_snapshot: estimate(r, RATES),
-      sourceType: String(body.sourceType || "direct"),
-      sourceRefId: String(body.sourceRefId || ""),
-      createdAt: r.createdAt,
-    };
-    db.orders.push(order);
-    if (spec.scaling)
-      db.policies.push({
-        id: crypto.randomUUID(),
         resourceUuid,
-        name: `${r.displayId}-autoscaler`,
-        config: spec.scaling,
-        status: "active",
-        updatedAt: r.createdAt,
-      });
-    addEvent(r, "provisioning", "requested", "provisioning");
-    persist();
-    return json(
-      {
-        resource: r,
-        order,
-        apiKey:
-          r.kind === "inference" && r.spec.authEnabled
-            ? `rs_${crypto.randomUUID().replaceAll("-", "")}`
-            : null,
-      },
-      201,
-    );
+        status: "provisioning",
+        requested_spec: structuredClone(spec),
+        price_snapshot: priceSnapshot,
+        sourceType: String(body.sourceType || "direct"),
+        sourceRefId: String(body.sourceRefId || ""),
+        createdAt: r.createdAt,
+      };
+      db.orders.push(order);
+      if (spec.scaling)
+        db.policies.push({
+          id: crypto.randomUUID(),
+          resourceUuid,
+          name: `${r.displayId}-autoscaler`,
+          config: spec.scaling,
+          status: "active",
+          updatedAt: r.createdAt,
+        });
+      addEvent(r, "provisioning", "requested", "provisioning");
+      persist();
+      return json(
+        {
+          resource: r,
+          order,
+          apiKey:
+            r.kind === "inference" && r.spec.authEnabled
+              ? `rs_${crypto.randomUUID().replaceAll("-", "")}`
+              : null,
+        },
+        201,
+      );
+    } catch (error) {
+      if (r.kind === "vgpu" && r.spec.deploymentMode === "slice") {
+        releaseSlices(r);
+        db.resources = db.resources.filter((item) => item.resourceUuid !== r.resourceUuid);
+        db.volumes = db.volumes.filter((item) => item.resourceUuid !== r.resourceUuid);
+        db.orders = db.orders.filter((item) => item.resourceUuid !== r.resourceUuid);
+        db.policies = db.policies.filter((item) => item.resourceUuid !== r.resourceUuid);
+        db.events = db.events.filter((item) => item.resourceUuid !== r.resourceUuid);
+        releaseResourceNetwork(db.network, r.resourceUuid);
+      }
+      throw error;
+    }
   }
   if (path === "/api/deployment-orders/estimate" && method === "POST") {
     const input = body as unknown as Parameters<typeof estimate>[0];
     const spec = normalizeSpec(input.spec);
-    if ("nodePools" in spec) {
+    if ("nodePools" in spec && spec.deploymentMode !== "slice") {
       spec.nodePools = spec.nodePools.map((pool) => ({
         ...pool,
         gpuPerNode: GPU_SPECS[pool.poolCode].gpusPerNode,

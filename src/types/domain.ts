@@ -23,6 +23,7 @@ export type BillingUnit =
   | "per_gpu_hour"
   | "per_machine_hour"
   | "per_cluster_hour"
+  | "per_slice_hour"
   | "per_gb_hour"
   | "per_ip_hour";
 export type BillingMode = "on_demand" | "spot" | "reserved";
@@ -138,7 +139,59 @@ export interface ClusterVolumeBinding {
   pvcName: string;
   namespace: string;
 }
+export interface SliceSku {
+  id: string;
+  poolCode: PoolCode;
+  gpuModel: string;
+  profile: string;
+  memoryGb: number;
+  layoutId: string;
+  slicesPerGpu: number;
+  isolation: string;
+  kubernetesResource: string;
+  k8sVersion: string;
+  gpuOperator: string;
+  driverBranch: string;
+  cudaBaseline: string;
+  hourlyUsd: number;
+  workload: string;
+}
+export interface SliceInventoryItem {
+  id: string;
+  region: Region;
+  skuId: string;
+  layoutId: string;
+  physicalGpuId: string;
+  state: "free" | "reserved" | "allocated" | "maintenance";
+  resourceUuid: string | null;
+}
+export interface SliceAllocation {
+  skuId: string;
+  count: number;
+  profile?: string;
+  gpuModel?: string;
+  memoryGb?: number;
+  layoutId?: string;
+  kubernetesResource?: string;
+  unitPriceUsd?: number;
+  namespace?: string;
+  workspaceId?: string;
+  instanceIds?: string[];
+}
+export interface SliceCatalogItem extends Omit<SliceSku, "hourlyUsd"> {
+  hourlyUsd: number | null;
+  physicalGpus: number;
+  createdInstances: number;
+  free: number;
+  reserved: number;
+  allocated: number;
+  maintenance: number;
+  projectLimit: number;
+  projectUsed: number;
+}
 export interface VgpuSpec extends CommonSpec {
+  deploymentMode?: "exclusive" | "slice";
+  slice?: SliceAllocation;
   subnets?: string[];
   volumeBindings?: ClusterVolumeBinding[];
   localPvGb?: number;
@@ -230,6 +283,7 @@ export interface Project {
   name: string;
   slug: string;
   isDefault: boolean;
+  sliceQuota?: number;
   defaultRegion: Region;
   labels: string[];
   createdAt: string;

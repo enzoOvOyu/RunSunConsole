@@ -56,7 +56,7 @@ export function volumesForResource(resource: Resource): StorageVolume[] {
   } else if (resource.kind === "vgpu") {
     const spec = resource.spec;
     if (spec.defaultPvcGb > 0) {
-      if (spec.storageMode === "dynamic_block" || spec.storageMode === "existing_block") {
+      if (spec.deploymentMode !== "slice" && (spec.storageMode === "dynamic_block" || spec.storageMode === "existing_block")) {
         spec.nodePools.forEach((pool, poolIndex) => {
           for (let index = 0; index < pool.nodeCount; index++)
             add(`pvc-${poolIndex}-${index}`, `${resource.displayId}-pool${poolIndex + 1}-node${index + 1}-data`, "block",

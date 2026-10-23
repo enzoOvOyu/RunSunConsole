@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { z } from "zod";
-import type { DeploymentOptions, Pool, Image, VgpuSpec } from "../../types/domain";
+import type { DeploymentOptions, Pool, Image, SliceCatalogItem, VgpuSpec } from "../../types/domain";
 import { cidrContains, cidrOverlaps, cidrRange, ipv4String, privateCidr, subnetCapacity, SUBNET_RESERVED_IPS, suggestedClusterCidrs, vpcNetworkType } from "../../lib/network";
 import { EP, post, query } from "../../lib/api-client";
 import { formatResourceId } from "../../lib/ids";
@@ -12,6 +12,7 @@ import { useAuth } from "../../stores/auth";
 import { Button, Field, Loading, Panel, KeyValues, ErrorState, Check, Modal } from "../../components/ui";
 import { useAction, useData } from "../shared/hooks";
 import { WizardLayout, PoolCards } from "./shared/WizardLayout";
+import { ClusterModeSelector, SliceConfiguration, SliceNetwork, SliceStorage, SliceAccess } from "./SliceConfiguration";
 import {
   useSpec, SpecCheck, SpecNumber, SpecSelect, SpecText,
   DeploymentOptionSelect, Review, ScalingToggle,
@@ -47,10 +48,16 @@ const plannedSubnets = (cidr: string, region: string) => {
     { name: "gpu-b", cidr: `${ipv4String(range.start + size)}/${prefix}`, zone: `${region}-b` }];
 };
 
-function validStep(values: WizardValues, step: number, lookups?: { network?: DeploymentOptions; pools: Pool[]; images: Image[] }) {
+function validStep(values: WizardValues, step: number, lookups?: { network?: DeploymentOptions; slices?: SliceCatalogItem[]; pools: Pool[]; images: Image[] }) {
   const spec = values.spec as VgpuSpec;
   if (step === 0) return ["1.31", "1.32", "1.33", "1.34", "1.35", "1.36", "1.37"].includes(spec.k8sVersion) &&
     ["standard", "ha"].includes(spec.controlPlaneTier) && (!spec.apiServerPublic || isCidr(spec.authorizedCidr));
+  if (step === 1 && spec.deploymentMode === "slice") {
+    const sku = lookups?.slices?.find((item) => item.id === spec.slice?.skuId);
+    const count = spec.slice?.count || 0;
+    return !!sku && sku.hourlyUsd !== null && sku.poolCode === values.nodePool && sku.k8sVersion === spec.k8sVersion &&
+      Number.isInteger(count) && count >= 1 && count <= Math.min(64, sku.free, sku.projectLimit - sku.projectUsed);
+  }
   if (step === 1)
     return z.array(nodePoolSchema).min(1).max(5).safeParse(spec.nodePools).success &&
       new Set(spec.nodePools.map(poolName)).size === spec.nodePools.length &&
@@ -63,6 +70,11 @@ function validStep(values: WizardValues, step: number, lookups?: { network?: Dep
           !!image && image.type === "os" && image.osFamily !== "Windows Server" &&
           imageSupportsPool(image, pool.poolCode) && imageSupportsArchitecture(image, hardware.cpuArchitecture);
       });
+  if (step === 2 && spec.deploymentMode === "slice") {
+    const vpc = lookups?.network?.vpcs.find((item) => item.id === spec.vpc && vpcNetworkType(item) === "standard");
+    return !!vpc && !!vpc.subnets.find((item) => item.id === spec.subnet) &&
+      spec.subnets?.length === 1 && spec.subnets[0] === spec.subnet;
+  }
   if (step === 2) {
     if (spec.apiServerPublic && !isCidr(spec.authorizedCidr)) return false;
     const subnets = selectedSubnets(spec);
@@ -77,6 +89,10 @@ function validStep(values: WizardValues, step: number, lookups?: { network?: Dep
       ["cilium", "calico"].includes(spec.networkPlugin) &&
       !!spec.securityGroups?.length && spec.securityGroups.every((id) => lookups?.network?.securityGroups.some((item) => item.id === id && item.vpcId === vpc.id));
   }
+  if (step === 3 && spec.deploymentMode === "slice")
+    return ["dynamic_block", "shared_file"].includes(spec.storageMode || "") &&
+      Number.isInteger(spec.defaultPvcGb) && spec.defaultPvcGb >= 1 && spec.defaultPvcGb <= 32768 &&
+      spec.storageClass === (spec.storageMode === "shared_file" ? "shared-fs" : "ssd");
   if (step === 3) {
     const mode = spec.storageMode || "dynamic_block";
     const cloud = mode === "dynamic_block" || mode === "existing_block" || mode === "shared_file";
@@ -86,6 +102,7 @@ function validStep(values: WizardValues, step: number, lookups?: { network?: Dep
         mode === "local_nvme" && spec.defaultPvcGb === 0 && Number.isInteger(spec.localPvGb) && !!spec.localPvGb &&
         spec.localPvGb <= Math.min(...spec.nodePools.map((pool) => lookups?.pools.find((item) => item.code === pool.poolCode)?.localNvmeGb || 0)));
   }
+  if (step === 4 && spec.deploymentMode === "slice") return true;
   if (step === 4)
     return (!spec.ingressEnabled || (spec.ingressClass === "nginx" && !!spec.vpc && selectedSubnets(spec).length > 0 && !!spec.securityGroups?.length)) &&
       (!spec.rbacDefaultAdmin || ["owner", "admin"].includes(useAuth.getState().role));
@@ -93,6 +110,9 @@ function validStep(values: WizardValues, step: number, lookups?: { network?: Dep
 }
 
 function ManagedControlPlane({ spec }: { spec: VgpuSpec }) {
+  if (spec.deploymentMode === "slice") return <Panel title={t("slice.sharedWorkspaceTitle")}>
+    <p>{t("slice.sharedWorkspaceHint")}</p>
+  </Panel>;
   const general = spec.nodePools.filter((pool) => pool.role === "general").length;
   const gpu = spec.nodePools.filter((pool) => pool.role !== "general").length;
   return <Panel title={t("eks.managedControlPlaneTitle")}>
@@ -122,16 +142,18 @@ function ClusterBasics() {
     <p>{t("eks.projectStepIntro")}</p>
     <div className="form-grid">
       <SpecText name="description" label={t("common.description")} />
-      <DeploymentOptionSelect name="k8sVersion" label={t("resource.k8s")} />
-      <SpecSelect name="controlPlaneTier" label={t("eks.managedServiceTier")} options={["standard", "ha"]} />
+      {spec.deploymentMode === "slice" ? <Field label={t("resource.k8s")}><strong>{spec.k8sVersion}</strong></Field> :
+        <DeploymentOptionSelect name="k8sVersion" label={t("resource.k8s")} />}
+      {spec.deploymentMode === "slice" ? <Field label={t("eks.managedServiceTier")}><strong>{t("slice.platformShared")}</strong></Field> :
+        <SpecSelect name="controlPlaneTier" label={t("eks.managedServiceTier")} options={["standard", "ha"]} />}
     </div>
-    <small>{t("eks.managedTierHint")}</small>
-    <Panel title={t("eks.apiAccess")}>
+    {spec.deploymentMode !== "slice" && <small>{t("eks.managedTierHint")}</small>}
+    {spec.deploymentMode !== "slice" && <Panel title={t("eks.apiAccess")}>
       <SpecCheck name="apiServerPublic" label={t("wizard.apiPublic")} />
       {spec.apiServerPublic && <SpecText name="authorizedCidr" label={t("wizard.cidr")} />}
       {spec.apiServerPublic && !isCidr(spec.authorizedCidr) && <p className="field-error">{t("eks.authorizedCidrInvalid")}</p>}
       <small>{t("eks.apiAccessHint")}</small>
-    </Panel>
+    </Panel>}
   </div>;
 }
 
@@ -339,7 +361,7 @@ function ClusterStorage({ pools }: { pools: Pool[] }) {
   </div>;
 }
 
-function ClusterNodes({ pools, images }: FormContext) {
+function ExclusiveNodes({ pools, images }: FormContext) {
   const { spec, update, form } = useSpec<VgpuSpec>();
   const updatePool = (index: number, patch: Partial<VgpuSpec["nodePools"][number]>) => {
     const nodePools = spec.nodePools.map((pool, i) => i === index ? { ...pool, ...patch } : pool);
@@ -368,9 +390,6 @@ function ClusterNodes({ pools, images }: FormContext) {
             <Field label={t("eks.maxNodes")}><input className="input" type="number" min={1} max={64} value={pool.maxNodes ?? 64} onChange={(event) => updatePool(index, { maxNodes: Number(event.target.value) })} /></Field>
             <Field label={t("eks.nodeDisk")}><input className="input" type="number" min={100} max={4096} value={pool.diskGb ?? 200} onChange={(event) => updatePool(index, { diskGb: Number(event.target.value) })} /></Field>
             <Field label={t("eks.nodeImage")}><select value={pool.imageRef || "ubuntu-22.04"} onChange={(event) => updatePool(index, { imageRef: event.target.value })}>{images.filter((image) => image.type === "os" && image.osFamily !== "Windows Server" && imageSupportsPool(image, pool.poolCode) && imageSupportsArchitecture(image, hardware?.cpuArchitecture || "x86_64")).map((image) => <option key={image.id} value={image.id}>{image.name}</option>)}</select></Field>
-            <Field label={t("resource.slicing")}><select value={pool.slicingPolicy} onChange={(event) => updatePool(index, { slicingPolicy: event.target.value })}>{["none", "mig", "time_slicing", "mps"].map((value) => <option key={value} value={value}>{value}</option>)}</select></Field>
-            {pool.slicingPolicy === "mig" && <Field label="MIG Profile"><select value={pool.migProfile} onChange={(event) => updatePool(index, { migProfile: event.target.value })}>{(hardware?.migProfiles || [hardware?.migProfile || pool.migProfile]).map((value) => <option key={value}>{value}</option>)}</select></Field>}
-            {pool.slicingPolicy === "time_slicing" && <Field label="Time slice"><input className="input" type="number" min={2} max={8} value={pool.timeSliceShare} onChange={(event) => updatePool(index, { timeSliceShare: Number(event.target.value) })} /></Field>}
             <Field label={t("eks.nodeLabel")}><input className="input" value={pool.labels?.["workload.runsuncloud.com/type"] || "gpu"} onChange={(event) => updatePool(index, { labels: { ...pool.labels, "workload.runsuncloud.com/type": event.target.value } })} /></Field>
             <Field label={t("eks.gpuTaint")}><select value={pool.gpuTaint === false ? "off" : "on"} onChange={(event) => updatePool(index, { gpuTaint: event.target.value === "on" })}><option value="on">{t("common.enabled")}</option><option value="off">{t("common.disabled")}</option></select></Field>
           </div>
@@ -382,6 +401,13 @@ function ClusterNodes({ pools, images }: FormContext) {
       const first = spec.nodePools[0]; update({ nodePools: [...spec.nodePools, { ...first, name: `gpu-pool-${spec.nodePools.length + 1}`, nodeCount: 1, labels: { ...first.labels } }] });
     }}>{t("wizard.addPool")}</Button>
     <ScalingToggle kind="vgpu" />
+  </div>;
+}
+
+function ClusterNodes(context: FormContext) {
+  const { spec } = useSpec<VgpuSpec>();
+  return <div className="stack"><ClusterModeSelector />
+    {spec.deploymentMode === "slice" ? <SliceConfiguration /> : <ExclusiveNodes {...context} />}
   </div>;
 }
 
@@ -442,6 +468,19 @@ function ClusterConfirm({ context }: { context: FormContext }) {
   const values = form.watch();
   const vpc = useData<DeploymentOptions>(["cluster-network-options", values.region, values.projectId], EP.options + query({ region: values.region, project_id: values.projectId, kind: "vgpu" }));
   const selected = vpc.data?.vpcs.find((item) => item.id === spec.vpc);
+  if (spec.deploymentMode === "slice") return <div className="stack">
+    <ManagedControlPlane spec={spec} />
+    <Panel title={t("eks.resourceSummary")}><KeyValues items={[
+      [t("common.project"), context.projects.find((item) => item.id === values.projectId)?.name || values.projectId],
+      [t("common.region"), t(`common.${values.region}`)], [t("common.name"), values.name],
+      [t("resource.k8s"), spec.k8sVersion], [t("slice.modeTitle"), t("slice.slice")],
+      [t("slice.skuTitle"), spec.slice?.skuId || "—"], [t("slice.quantity"), spec.slice?.count || 0],
+      ["VPC", selected?.name || "—"], [t("eks.subnetConfig"), selected?.subnets.find((item) => item.id === spec.subnet)?.name || "—"],
+      [t("eks.storageScheme"), t(`eks.storageMode.${spec.storageMode || "dynamic_block"}`)],
+      [t("slice.pvcCapacity"), `${spec.defaultPvcGb} GB`], [t("slice.accessScope"), t("slice.namespaceRbac")],
+    ]} /></Panel>
+    <Review hideSpec />
+  </div>;
   return <div className="stack"><p>{t("eks.confirmStepIntro")}</p>
     <ManagedControlPlane spec={spec} />
     <Panel title={t("eks.resourceSummary")}><KeyValues items={[
@@ -470,6 +509,10 @@ function ClusterAside() {
   const { spec, form } = useSpec<VgpuSpec>();
   const region = form.watch("region"), projectId = form.watch("projectId");
   const network = useData<DeploymentOptions>(["cluster-network-options", region, projectId], EP.options + query({ region, project_id: projectId, kind: "vgpu" }), { enabled: !!projectId });
+  if (spec.deploymentMode === "slice") return <Panel title={t("eks.resourceChain")}>
+    <KeyValues items={[[t("slice.modeTitle"), t("slice.slice")], [t("slice.skuTitle"), spec.slice?.skuId || "—"],
+      [t("slice.quantity"), spec.slice?.count || 0], [t("slice.accessScope"), t("slice.namespaceRbac")]]} />
+  </Panel>;
   const vpc = network.data?.vpcs.find((item) => item.id === spec.vpc);
   const subnetNames = vpc?.subnets.filter((item) => selectedSubnets(spec).includes(item.id)).map((item) => `${item.zone} · ${item.cidr}`) || [];
   const gpuCount = spec.nodePools.reduce((sum, pool) => sum + pool.nodeCount * pool.gpuPerNode, 0);
@@ -486,11 +529,24 @@ function ClusterAside() {
   </div></Panel>;
 }
 
+function ClusterStepNetwork() {
+  const { spec } = useSpec<VgpuSpec>();
+  return spec.deploymentMode === "slice" ? <SliceNetwork /> : <ClusterNetwork />;
+}
+function ClusterStepStorage({ pools }: { pools: Pool[] }) {
+  const { spec } = useSpec<VgpuSpec>();
+  return spec.deploymentMode === "slice" ? <SliceStorage /> : <ClusterStorage pools={pools} />;
+}
+function ClusterStepAccess() {
+  const { spec } = useSpec<VgpuSpec>();
+  return spec.deploymentMode === "slice" ? <SliceAccess /> : <ClusterAddons />;
+}
+
 export default function VgpuWizard() {
   return <WizardLayout kind="vgpu" clusterLayout aside={<ClusterAside />} firstStepContent={<ClusterBasics />}
     steps={["clusterProject", "clusterNodes", "clusterNetwork", "clusterStorage", "clusterAddons", "clusterConfirm"]}
     stepHints={[1, 4, 2, 3, 5, 6].map((index) => t(`eks.stepHint${index}`))}
     validateStep={validStep}
     validateFirstStep={(values) => validStep(values, 0)}
-    render={(context) => context.step === 1 ? <ClusterNodes {...context} /> : context.step === 2 ? <ClusterNetwork /> : context.step === 3 ? <ClusterStorage pools={context.pools} /> : context.step === 4 ? <ClusterAddons /> : <ClusterConfirm context={context} />} />;
+    render={(context) => context.step === 1 ? <ClusterNodes {...context} /> : context.step === 2 ? <ClusterStepNetwork /> : context.step === 3 ? <ClusterStepStorage pools={context.pools} /> : context.step === 4 ? <ClusterStepAccess /> : <ClusterConfirm context={context} />} />;
 }

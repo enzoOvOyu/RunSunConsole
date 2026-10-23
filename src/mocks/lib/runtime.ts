@@ -154,6 +154,19 @@ export function clusterView(
   fault = "",
 ): ClusterView {
   const active = r.status === "running";
+  if (r.spec.deploymentMode === "slice") {
+    const volume = db.volumes.find((item) => item.resourceUuid === r.resourceUuid && !item.deletedAt && item.role === "pvc");
+    const pvc = volume ? [{ namespace: r.spec.slice?.namespace || "default", name: "workspace-pvc", pvName: `${r.displayId}-workspace-pv`, sizeGb: volume.sizeGb, status: "Bound" }] : [];
+    const pvs: ClusterView["storage"]["pvs"] = volume ? [{ name: `${r.displayId}-workspace-pv`, source: volume.kind === "file" ? "file" : "block", sizeGb: volume.sizeGb, zone: volume.zone || `${r.region}-a`, nodeUuid: null, status: "Bound", volumeId: volume.id }] : [];
+    return {
+      summary: { totalNodes: 0, readyNodes: 0, cpuTotal: 0, cpuAllocated: 0, memoryGbTotal: 0, memoryGbAllocated: 0, gpuTotal: 0, gpuAllocated: 0 },
+      components: [], nodes: [], workloads: [], scheduling: [],
+      network: { cniErrors: 0, serviceP99Ms: null, ingressQps: null, vpcPeering: "unavailable" },
+      storage: { bound: pvc.length, pending: 0, pendingReason: "", pvCapacityGb: volume?.sizeGb || 0, provisioned: !!volume, csiErrors: 0, pvs, pvcs: pvc },
+      plugins: { gpuOperator: "", gpuOperatorReady: false, devicePluginHealthy: false, nfdVersion: "", nfdReady: false, ingressControllerReady: false, driverReady: 0, driverDesired: 0 },
+      poolStatus: active ? "workspace-ready-mock" : "workspace-pending-mock",
+    };
+  }
   const desired = r.spec.controlPlaneTier === "ha" ? 3 : 1;
   const nodes: ClusterView["nodes"] = r.spec.nodePools.flatMap((pool, poolIndex) => {
     const hardware = GPU_SPECS[pool.poolCode];

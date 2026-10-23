@@ -12,6 +12,7 @@ import {
   type Model,
   type Resource,
   type PriceEstimate,
+  type SliceCatalogItem,
   type DeploymentOptions,
 } from "../../../types/domain";
 import { defaultSpec } from "../../../lib/config";
@@ -45,6 +46,7 @@ function normalizeServerCompute(spec: Resource["spec"]): Resource["spec"] {
   return { ...spec, vcpu, memoryGb: vcpu * 2 };
 }
 interface ClusterLookups {
+  slices?: SliceCatalogItem[];
   network?: DeploymentOptions;
   pools: Pool[];
   images: Image[];
@@ -283,6 +285,7 @@ function WizardForm({
       if (stored && !clone && !source.model && !source.image && !source.runtime) {
         const draft = JSON.parse(stored) as WizardValues;
         if (kind === "gpu_vm") draft.spec = normalizeServerCompute(draft.spec);
+        if (kind === "vgpu" && "nodePools" in draft.spec && draft.spec.deploymentMode === "slice") draft.mode = "on_demand";
         if (!availableProjects.some((item) => item.id === draft.projectId))
           draft.projectId = initialProjectId;
         return draft;
@@ -331,7 +334,13 @@ function WizardForm({
     EP.options + query({ region: values.region, project_id: values.projectId, kind: "vgpu" }),
     { enabled: kind === "vgpu" && !!values.projectId },
   );
+  const sliceCatalog = useData<SliceCatalogItem[]>(
+    ["slice-catalog", values.region, values.projectId],
+    EP.slices + query({ region: values.region, project_id: values.projectId }),
+    { enabled: kind === "vgpu" && !!values.projectId },
+  );
   const clusterLookups: ClusterLookups = {
+    slices: sliceCatalog.data,
     network: clusterNetwork.data,
     pools: context.pools, images: context.images,
   };
@@ -381,6 +390,7 @@ function WizardForm({
         spec: values.spec,
       }),
     retry: false,
+    enabled: !(kind === "vgpu" && "nodePools" in values.spec && values.spec.deploymentMode === "slice" && !values.spec.slice?.skuId),
   });
   const firstValid = z
     .object({
@@ -394,6 +404,8 @@ function WizardForm({
   const currentSize =
     "quantity" in values.spec
       ? values.spec.quantity
+      : "nodePools" in values.spec && values.spec.deploymentMode === "slice"
+        ? values.spec.slice?.count || 1
       : "machineCount" in values.spec
         ? values.spec.machineCount
         : "nodePools" in values.spec
@@ -403,7 +415,9 @@ function WizardForm({
     ? values.spec.scaling.max_size / currentSize
     : 1;
   const requests =
-    "nodePools" in values.spec
+    "nodePools" in values.spec && values.spec.deploymentMode === "slice"
+      ? []
+      : "nodePools" in values.spec
       ? values.spec.nodePools.map((p) => ({
           pool: p.poolCode,
           gpu: p.nodeCount * p.gpuPerNode * factor,
@@ -426,7 +440,10 @@ function WizardForm({
     !(step >= poolStep && overCapacity) &&
     !scalingRangeInvalid;
   const submit = async () => {
-    const result = orderSchema.safeParse({ ...values, kind });
+    const orderValues = kind === "vgpu" && "nodePools" in values.spec && values.spec.deploymentMode === "slice"
+      ? { ...values, spec: { ...values.spec, nodePools: [], gpuCount: 0 } }
+      : { ...values, kind };
+    const result = orderSchema.safeParse({ ...orderValues, kind });
     if (!result.success || !values.agree) {
       setError(new Error("VALIDATION_ERROR"));
       return;
@@ -508,7 +525,7 @@ function WizardForm({
                 onClick={() => setStep(i)}
               >
                 <span className="step-number">{i < step ? "✓" : i + 1}</span>
-                {clusterLayout ? <span className="wizard-step-copy"><strong>{t("wizard." + id)}</strong><small>{stepHints?.[i]}</small></span> : t("wizard." + id)}
+                {clusterLayout ? <span className="wizard-step-copy"><strong>{t("wizard." + id)}</strong><small>{kind === "vgpu" && "nodePools" in values.spec && values.spec.deploymentMode === "slice" && i === 1 ? t("slice.stepHint") : stepHints?.[i]}</small></span> : t("wizard." + id)}
               </button>
             ))}
           </nav>
@@ -608,13 +625,13 @@ function WizardForm({
             <Panel title={t("price.breakdown")} className="cost-panel">
               <div className="cost-mode">
                 <Field label={t("common.type")}>
-                  <select {...form.register("mode")}>
-                    {["on_demand", "spot", "reserved"].map((mode) => (
-                      <option key={mode} value={mode}>
-                        {t("price." + mode)}
-                      </option>
-                    ))}
-                  </select>
+                  {kind === "vgpu" && "nodePools" in values.spec && values.spec.deploymentMode === "slice"
+                    ? <strong>{t("price.on_demand")}</strong>
+                    : <select {...form.register("mode")}>
+                        {["on_demand", "spot", "reserved"].map((mode) => (
+                          <option key={mode} value={mode}>{t("price." + mode)}</option>
+                        ))}
+                      </select>}
                 </Field>
               </div>
               {values.mode === "spot" && (
@@ -622,7 +639,9 @@ function WizardForm({
                   {t("price.spotWarning")}
                 </p>
               )}
-              {price.isPending ? (
+              {kind === "vgpu" && "nodePools" in values.spec && values.spec.deploymentMode === "slice" && !values.spec.slice?.skuId ? (
+                <p className="muted">{t("slice.selectSkuForPrice")}</p>
+              ) : price.isPending ? (
                 <Loading />
               ) : price.error ? (
                 <ErrorState error={price.error} />

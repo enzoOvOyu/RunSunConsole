@@ -6,6 +6,7 @@ import {
   type PoolCode,
   type Region,
 } from "../../types/domain";
+import { SLICE_SKUS } from "./slices";
 import { storageProduct } from "../../lib/storage";
 export const BASE_GPU: Record<PoolCode, number> = {
   H100_SXM: 3.49,
@@ -41,6 +42,13 @@ export const RATES: Rate[] = REGIONS.flatMap((region) => [
         MULTIPLIERS[region],
     })),
   ),
+  ...SLICE_SKUS.map((sku) => ({
+    kind: "vgpu" as const,
+    pool: sku.poolCode,
+    region,
+    unit: "per_slice_hour" as const,
+    unitPrice: sku.hourlyUsd * MULTIPLIERS[region],
+  })),
   {
     kind: "vgpu" as const,
     pool: null,

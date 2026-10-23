@@ -23,6 +23,7 @@ import type {
   Model,
   BillingMode,
   ScalingConfig,
+  VgpuSpec,
 } from "../../../types/domain";
 import {
   Field,
@@ -49,6 +50,9 @@ import {
   imageSupportsPool,
 } from "./image-compat";
 export interface WizardValues {
+  clusterModeDrafts?: { exclusive?: VgpuSpec; slice?: VgpuSpec };
+  clusterModeBilling?: { exclusive?: BillingMode; slice?: BillingMode };
+  clusterModePools?: { exclusive?: Pool["code"]; slice?: Pool["code"] };
   projectId: string;
   region: Region;
   name: string;
