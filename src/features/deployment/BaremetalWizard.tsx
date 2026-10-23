@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { gpuModelDisplayName } from "../../lib/gpu-labels";
+import { isWindowsImage } from "../../lib/windows-image";
 import {
   imageSupportsArchitecture,
   imageSupportsPool,
@@ -62,6 +63,13 @@ function BaremetalForm({ step, pools, images }: FormContext) {
     if (!pool.migPreconfigured && !spec.passthrough)
       update({ passthrough: true });
   }, [pool.migPreconfigured, spec.passthrough, update]);
+  useEffect(() => {
+    if (!images.length) return;
+    const current = images.find((image) => image.id === spec.imageRef);
+    if (current?.type === "os" && !isWindowsImage(current) && imageSupportsPool(current, pool.code) && imageSupportsArchitecture(current, pool.cpuArchitecture)) return;
+    const fallback = images.find((image) => image.type === "os" && !isWindowsImage(image) && imageSupportsPool(image, pool.code) && imageSupportsArchitecture(image, pool.cpuArchitecture));
+    if (fallback) update({ imageRef: fallback.id });
+  }, [images, pool.code, pool.cpuArchitecture, spec.imageRef, update]);
   return step === 1 ? (
     <PoolCards
       kind="gpu_baremetal"
@@ -72,6 +80,7 @@ function BaremetalForm({ step, pools, images }: FormContext) {
         const currentImage = images.find((image) => image.id === spec.imageRef);
         const compatible = (image: (typeof images)[number]) =>
           image.type === "os" &&
+          !isWindowsImage(image) &&
           imageSupportsPool(image, p.code) &&
           imageSupportsArchitecture(image, p.cpuArchitecture);
         const nextImage =
@@ -139,6 +148,7 @@ function BaremetalForm({ step, pools, images }: FormContext) {
         os
         architecture={pool.cpuArchitecture}
         gpuModel={pool.code}
+        excludeWindows
       />
       <Field label={t("wizard.hostname")} hint={t("wizard.hostnameHint")}>
         <input

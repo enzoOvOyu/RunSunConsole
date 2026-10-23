@@ -272,7 +272,7 @@ function WizardForm({
     };
     try {
       const stored = sessionStorage.getItem(`wizard:${kind}`);
-      if (stored && !clone && !source.model) {
+      if (stored && !clone && !source.model && !source.image && !source.runtime) {
         const draft = JSON.parse(stored) as WizardValues;
         if (kind === "gpu_vm") draft.spec = normalizeServerCompute(draft.spec);
         return draft;

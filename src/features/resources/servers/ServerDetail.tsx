@@ -8,6 +8,7 @@ import { useData } from "../../shared/hooks";
 import { t } from "../../../i18n";
 import { Panel, Tabs, KeyValues } from "../../../components/ui";
 import { date } from "../../../lib/date";
+import { isWindowsImage, WINDOWS_LOGIN_USER, WINDOWS_RDP_PORT } from "../../../lib/windows-image";
 import {
   MonitorPanel,
   SpecPanel,
@@ -31,13 +32,14 @@ export function ServerDetail({
   const [tab, setTab] = useState("overview");
   const images = useData<Image[]>(["images"], EP.images);
   const baseImage = images.data?.find((image) => image.id === r.spec.imageRef);
+  const windows = isWindowsImage(baseImage) || r.spec.imageRef.startsWith("windows-server-");
   const runtimeImage = images.data?.find(
     (image) => image.id === r.spec.runtimeImageRef,
   );
   const tabs = [
     "overview",
     "monitoring",
-    "console",
+    ...(windows ? [] : ["console"]),
     "configuration",
     "network",
     "events",
@@ -77,17 +79,26 @@ export function ServerDetail({
                   runtimeImage?.frameworks.join(", ") ||
                     t("images.noneIncluded"),
                 ],
-                ["CUDA", runtimeImage?.cudaVersion || t("images.noneIncluded")],
+                ["CUDA", runtimeImage?.cudaVersion || baseImage?.cudaVersion || t("images.noneIncluded")],
                 [t("common.region"), t("common." + r.region)],
                 [t("resource.pool"), poolDisplayName(r.nodePool)],
                 [t("common.createdAt"), date(r.createdAt)],
               ]}
             />
           </Panel>
+          {windows && <Panel title={t("images.windowsConnection")}>
+            <KeyValues items={[
+              [t("images.loginUser"), WINDOWS_LOGIN_USER],
+              [t("field.authMethod"), t("wizard.password")],
+              [t("images.remoteProtocol"), `RDP · TCP ${WINDOWS_RDP_PORT}`],
+            ]} />
+            <p className="muted">{t("images.windowsRdpHint")}</p>
+            <p className="muted">{t("images.windowsNoConsole")}</p>
+          </Panel>}
         </div>
       ) : tab === "monitoring" ? (
         <MonitorPanel resource={r} />
-      ) : tab === "console" ? (
+      ) : tab === "console" && !windows ? (
         <RemoteTerminal
           resource={r}
           authMethod={r.spec.authMethod || "ssh_key"}

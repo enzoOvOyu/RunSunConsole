@@ -1,6 +1,7 @@
 import { bucketStoredBytes, objectStoredBytes, isRegionalPoolVolume } from "../../lib/storage";
 import { fileScopePrefix } from "../../lib/s3-files";
 import { inferenceEndpoint } from "../../lib/inference-endpoint";
+import { isWindowsImage, validWindowsPassword, WINDOWS_MIN_SYSTEM_DISK_GB, WINDOWS_RDP_PORT } from "../../lib/windows-image";
 import type { FileAccessConfig } from "../../types/storage";
 import type { ElasticIp, SecurityRule, IpsecTunnel } from "../../types/network";
 import {
@@ -409,6 +410,9 @@ function precheck(r: Resource, exclude?: string) {
         ? IMAGES.find((i) => i.id === r.spec.runtimeImageRef)
         : undefined;
     const poolSpec = GPU_SPECS[r.nodePool];
+    if (isWindowsImage(image) && (r.kind !== "gpu_vm" || r.spec.authMethod !== "password" ||
+      !!runtimeImage || r.spec.systemDiskGb < WINDOWS_MIN_SYSTEM_DISK_GB))
+      fail(422, "VALIDATION_ERROR");
     if (
       !image ||
       image.type !== "os" ||
@@ -1681,6 +1685,8 @@ async function dispatch(request: Request, settleBilling = true) {
     const target = resource(consoleLoginMatch[1]);
     if (target.kind !== "gpu_vm") fail(404, "NOT_FOUND");
     if (target.status !== "running") fail(409, "INVALID_STATE");
+    if (isWindowsImage(IMAGES.find((image) => image.id === target.spec.imageRef)))
+      fail(409, "WINDOWS_CONSOLE_UNAVAILABLE");
     if (target.spec.authMethod !== "password")
       fail(409, "PASSWORD_AUTH_NOT_CONFIGURED");
     const username = z.literal("root").parse(body.username);
@@ -2816,6 +2822,13 @@ async function dispatch(request: Request, settleBilling = true) {
     if (!db.projects.some((p) => p.id === parsed.projectId && !p.deletedAt))
       fail(422, "VALIDATION_ERROR");
     const spec = normalizeSpec(parsed.spec);
+    const windowsOrder = "imageRef" in spec && isWindowsImage(IMAGES.find((image) => image.id === spec.imageRef));
+    if (windowsOrder && parsed.kind === "gpu_vm") {
+      if (!("authMethod" in spec) || spec.authMethod !== "password" ||
+        !validWindowsPassword(String(body.authPassword || "")))
+        fail(422, "WINDOWS_PASSWORD_WEAK");
+      spec.ports = [WINDOWS_RDP_PORT];
+    }
     const pool = GPU_SPECS[parsed.nodePool];
     if (
       (parsed.kind === "gpu_vm" || parsed.kind === "gpu_baremetal") &&

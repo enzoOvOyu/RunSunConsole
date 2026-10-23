@@ -8,6 +8,7 @@ import {
 } from "../../components/ModelPublisherLogo";
 import { poolDisplayName } from "../../lib/gpu-labels";
 import { compareFeaturedModels } from "../../lib/model-order";
+import { isWindowsImage, WINDOWS_LOGIN_USER, WINDOWS_MIN_SYSTEM_DISK_GB, WINDOWS_RDP_PORT } from "../../lib/windows-image";
 import { supportsChatInference } from "../../lib/inference-precision";
 import type { Image, Model } from "../../types/domain";
 import { useAuth } from "../../stores/auth";
@@ -47,6 +48,7 @@ const operatingSystemLogos: Record<string, string> = {
   Ubuntu: "/os-logos/ubuntu.svg",
   "Rocky Linux": "/os-logos/rockylinux.svg",
   Debian: "/os-logos/debian.svg",
+  "Windows Server": "/os-logos/windows.svg",
 };
 
 function publisherName(model: Model) {
@@ -70,9 +72,7 @@ export default function ImagesPage() {
   const [imageArchitecture, setImageArchitecture] = useState("");
   const models = useData<Model[]>(["models"], EP.models);
   const images = useData<Image[]>(["images"], EP.images);
-  const catalogImages = (images.data || []).filter(
-    (item) => item.osFamily !== "Windows Server",
-  );
+  const catalogImages = images.data || [];
   const { run, busy } = useAction();
   const role = useAuth((s) => s.role);
   const navigate = useNavigate();
@@ -424,6 +424,7 @@ export default function ImagesPage() {
                         ? item.frameworks.join(", ")
                         : t("images.noneIncluded")}
                     </small>
+                    {isWindowsImage(item) && <small>{t("images.windowsPasswordLogin", { user: WINDOWS_LOGIN_USER, port: WINDOWS_RDP_PORT })}</small>}
                     <div className="model-catalog-tags">
                       {item.supportedGpuModels.map((gpu) => (
                         <span className="chip" key={gpu}>
@@ -599,11 +600,19 @@ export default function ImagesPage() {
                   ],
                   [
                     t("images.compatibleGpuModels"),
-                    image.supportedGpuModels.join(", "),
+                    image.supportedGpuModels.map(poolDisplayName).join(", "),
                   ],
                   [t("common.size"), image.sizeGb + " GB"],
                   [t("common.source"), image.source],
-                  [t("common.description"), image.description],
+                  [t("common.description"), isWindowsImage(image) ? t("images.windowsDescription") : image.description],
+                  ...(isWindowsImage(image) ? [
+                    [t("images.windowsEdition"), t("images.desktopExperience")],
+                    [t("images.loginUser"), WINDOWS_LOGIN_USER],
+                    [t("field.authMethod"), t("wizard.password")],
+                    [t("images.remoteProtocol"), `RDP · TCP ${WINDOWS_RDP_PORT}`],
+                    [t("images.deployScope"), t("images.windowsVmOnly")],
+                    [t("images.systemDiskMinimum"), `${WINDOWS_MIN_SYSTEM_DISK_GB} GB`],
+                  ] as [string, string][] : []),
                 ]}
               />
             </Panel>

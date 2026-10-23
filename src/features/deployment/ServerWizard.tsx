@@ -2,6 +2,13 @@ import { StorageRows } from "./shared/StorageRows";
 import { useEffect } from "react";
 import { gpuModelDisplayName } from "../../lib/gpu-labels";
 import {
+  isWindowsImage,
+  validWindowsPassword,
+  WINDOWS_LOGIN_USER,
+  WINDOWS_MIN_SYSTEM_DISK_GB,
+  WINDOWS_RDP_PORT,
+} from "../../lib/windows-image";
+import {
   imageCompatibleWithOs,
   imageOsFamily,
   imageSupportsArchitecture,
@@ -25,8 +32,15 @@ import {
   type FormContext,
   type WizardValues,
 } from "./shared/fields";
-function validate(v: WizardValues, step: number) {
+function validate(
+  v: WizardValues,
+  step: number,
+  lookups?: { images: FormContext["images"] },
+) {
   const s = v.spec as ServerSpec;
+  const windows = isWindowsImage(
+    lookups?.images.find((image) => image.id === s.imageRef),
+  );
   if (step === 1)
     return z
       .object({
@@ -46,16 +60,20 @@ function validate(v: WizardValues, step: number) {
       z
         .object({
           imageRef: z.string().min(1),
-          systemDiskGb: z.number().min(40).max(2048),
+          systemDiskGb: z.number().min(windows ? WINDOWS_MIN_SYSTEM_DISK_GB : 40).max(2048),
           dataDiskGb: z.number().min(0).max(32768),
         })
         .safeParse(s).success &&
-      storageSelectionsSchema.safeParse(s.storageSelections || []).success
+      storageSelectionsSchema.safeParse(s.storageSelections || []).success &&
+      (!windows || !s.runtimeImageRef)
     );
   if (step === 3)
     return (
+      (!windows || s.authMethod === "password") &&
       (s.authMethod === "password"
-        ? z.string().min(8).max(128).safeParse(v.password).success
+        ? windows
+          ? validWindowsPassword(v.password)
+          : z.string().min(8).max(128).safeParse(v.password).success
         : z
             .string()
             .regex(/^ssh-(ed25519|rsa)\s+[A-Za-z0-9+/=]+/)
@@ -74,18 +92,44 @@ function ServerForm({ step, pools, images }: FormContext) {
   const selected = form.watch("nodePool");
   const selectedPool = pools.find((pool) => pool.code === selected);
   const password = form.watch("password") || "";
+  const baseImage = images.find((image) => image.id === spec.imageRef);
+  const windows = isWindowsImage(baseImage);
   useEffect(() => {
     if (!images.length || !selectedPool) return;
     const current = images.find((image) => image.id === spec.imageRef);
     const isEligible = (image: (typeof images)[number]) =>
       image.type === "os" &&
-      image.osFamily !== "Windows Server" &&
       imageSupportsPool(image, selectedPool.code) &&
       imageSupportsArchitecture(image, selectedPool.cpuArchitecture);
     if (current && isEligible(current)) return;
     const fallback = images.find(isEligible);
     if (fallback) update({ imageRef: fallback.id, runtimeImageRef: "" });
   }, [images, selectedPool, spec.imageRef, update]);
+  useEffect(() => {
+    if (!baseImage) return;
+    if (windows) {
+      const changes: Partial<ServerSpec> = {};
+      if (spec.authMethod !== "password") changes.authMethod = "password";
+      if (spec.sshPubkey) changes.sshPubkey = "";
+      if (spec.runtimeImageRef) changes.runtimeImageRef = "";
+      if (spec.ports?.length !== 1 || spec.ports[0] !== WINDOWS_RDP_PORT)
+        changes.ports = [WINDOWS_RDP_PORT];
+      if (spec.systemDiskGb < WINDOWS_MIN_SYSTEM_DISK_GB)
+        changes.systemDiskGb = WINDOWS_MIN_SYSTEM_DISK_GB;
+      if (Object.keys(changes).length) update(changes);
+    } else if (spec.ports?.includes(WINDOWS_RDP_PORT)) {
+      update({ ports: [22, 8888] });
+    }
+  }, [
+    baseImage,
+    windows,
+    spec.authMethod,
+    spec.sshPubkey,
+    spec.runtimeImageRef,
+    spec.ports,
+    spec.systemDiskGb,
+    update,
+  ]);
   return step === 1 ? (
     <div className="stack">
       <PoolCards
@@ -95,7 +139,6 @@ function ServerForm({ step, pools, images }: FormContext) {
         onSelect={(p) => {
           form.setValue("nodePool", p.code);
           const fits = (image: (typeof images)[number]) =>
-            (image.type !== "os" || image.osFamily !== "Windows Server") &&
             imageSupportsPool(image, p.code) &&
             imageSupportsArchitecture(image, p.cpuArchitecture);
           const baseImage = images.find((image) => image.id === spec.imageRef);
@@ -177,24 +220,22 @@ function ServerForm({ step, pools, images }: FormContext) {
         os
         architecture={selectedPool?.cpuArchitecture}
         gpuModel={selectedPool?.code}
-        excludeWindows
       />
-      <ImageCards
-        images={images}
-        runtime
-        architecture={selectedPool?.cpuArchitecture}
-        gpuModel={selectedPool?.code}
-        osFamily={
-          images.find((image) => image.id === spec.imageRef)
-            ? imageOsFamily(images.find((image) => image.id === spec.imageRef)!)
-            : undefined
-        }
-      />
+      {!windows && (
+        <ImageCards
+          images={images}
+          runtime
+          architecture={selectedPool?.cpuArchitecture}
+          gpuModel={selectedPool?.code}
+          osFamily={baseImage ? imageOsFamily(baseImage) : undefined}
+        />
+      )}
+      {windows && <p className="notice">{t("images.windowsRuntimeHint")}</p>}
       <div className="form-grid">
         <SpecNumber
           name="systemDiskGb"
           label={t("wizard.systemDisk")}
-          min={40}
+          min={windows ? WINDOWS_MIN_SYSTEM_DISK_GB : 40}
           max={2048}
         />
         <SpecSelect
@@ -218,26 +259,39 @@ function ServerForm({ step, pools, images }: FormContext) {
   ) : step === 3 ? (
     <div className="stack">
       <NetworkFields />
-      <SpecSelect
-        name="authMethod"
-        label={t("field.authMethod")}
-        options={[
-          { value: "ssh_key", label: t("wizard.sshKey") },
-          { value: "password", label: t("wizard.password") },
-        ]}
-      />
+      {windows ? (
+        <Field label={t("field.authMethod")} hint={t("images.windowsRdpHint")}>
+          <input
+            className="input"
+            value={t("images.windowsPasswordLogin", {
+              user: WINDOWS_LOGIN_USER,
+              port: WINDOWS_RDP_PORT,
+            })}
+            readOnly
+          />
+        </Field>
+      ) : (
+        <SpecSelect
+          name="authMethod"
+          label={t("field.authMethod")}
+          options={[
+            { value: "ssh_key", label: t("wizard.sshKey") },
+            { value: "password", label: t("wizard.password") },
+          ]}
+        />
+      )}
       {spec.authMethod === "password" ? (
-        <Field label={t("wizard.password")} hint={t("wizard.passwordRule")}>
+        <Field label={t("wizard.password")} hint={t(windows ? "images.windowsPasswordRule" : "wizard.passwordRule")}>
           <input
             className="input"
             type="password"
             autoComplete="new-password"
-            aria-invalid={password.length < 8 || password.length > 128}
+            aria-invalid={windows ? !validWindowsPassword(password) : password.length < 8 || password.length > 128}
             {...form.register("password")}
           />
-          {(password.length < 8 || password.length > 128) && (
+          {(windows ? !validWindowsPassword(password) : password.length < 8 || password.length > 128) && (
             <small className="field-error">
-              {t("wizard.passwordRequired")}
+              {t(windows ? "images.windowsPasswordRule" : "wizard.passwordRequired")}
             </small>
           )}
         </Field>

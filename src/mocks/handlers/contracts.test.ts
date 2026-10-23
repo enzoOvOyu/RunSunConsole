@@ -546,6 +546,39 @@ it("replays password orders without storing credentials or allocating twice", as
     ).status,
   ).toBe(401);
 });
+it("creates Windows GPU VMs with password-only RDP metadata and no browser console", async () => {
+  const spec = defaultSpec("gpu_vm", poolsFor("sg")[0]);
+  if (!("imageRef" in spec)) throw new Error("Expected server spec");
+  spec.imageRef = "windows-server-2025";
+  spec.authMethod = "password";
+  spec.sshPubkey = "";
+  spec.subnet = "sg-default";
+  const body = {
+    kind: "gpu_vm", name: "windows-order", projectId: "default", region: "sg",
+    nodePool: "H100_SXM", mode: "on_demand", labels: [], spec,
+    authPassword: "Strong-Windows-Password-42!",
+  };
+  const created = await request("/deployment-orders", "POST", body);
+  expect(created.status).toBe(201);
+  expect(created.data.resource.spec.imageRef).toBe("windows-server-2025");
+  expect(created.data.resource.spec.ports).toEqual([3389]);
+  expect(created.data.resource.spec.runtimeImageRef).toBe("");
+  expect(JSON.stringify(db)).not.toContain(body.authPassword);
+  const resource = db.resources.find((item) => item.resourceUuid === created.data.resource.resourceUuid)!;
+  resource.status = "running";
+  expect((await request(`/resources/${resource.resourceUuid}/console-login`, "POST", {
+    username: "root", password: body.authPassword,
+  }, "viewer")).status).toBe(409);
+  const weak = await request("/deployment-orders", "POST", {
+    ...body, name: "weak-windows-order", authPassword: "weakpass",
+  });
+  expect(weak.status).toBe(422);
+  const ssh = await request("/deployment-orders", "POST", {
+    ...body, name: "ssh-windows-order", spec: { ...spec, authMethod: "ssh_key", sshPubkey: "ssh-ed25519 AAAAB3NzaC1yc2EAAAADAQABAAABAQ" },
+  });
+  expect(ssh.status).toBe(422);
+});
+
 it("returns kind-specific hardware, cluster and replica diagnostics", async () => {
   const bm = db.resources.find(
     (r) => r.kind === "gpu_baremetal" && r.status === "running",

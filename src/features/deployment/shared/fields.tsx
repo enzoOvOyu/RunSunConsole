@@ -37,6 +37,7 @@ import { defaultScaling, normalizeSpec } from "../../../lib/config";
 import { formatResourceId } from "../../../lib/ids";
 import { SCALING_METRIC_LIMITS } from "../../../lib/schema";
 import { vpcNetworkType } from "../../../lib/network";
+import { isWindowsImage, WINDOWS_LOGIN_USER, WINDOWS_RDP_PORT } from "../../../lib/windows-image";
 import { NetworkEditor } from "../../network/NetworkEditor";
 import { readSshKeys } from "../../../lib/ssh-keys";
 import {
@@ -575,6 +576,9 @@ export function ImageCards({
                 ? imageFrameworks(image).join(", ")
                 : t("images.noneIncluded")}
             </small>
+            {os && isWindowsImage(image) && (
+              <small>{t("images.windowsPasswordLogin", { user: WINDOWS_LOGIN_USER, port: WINDOWS_RDP_PORT })}</small>
+            )}
             {runtime && (
               <small>
                 {t("images.compatibleOperatingSystems")}:{" "}

@@ -12,7 +12,9 @@ describe("image compatibility catalog", () => {
     expect(operatingSystems.map((image) => image.osVersion)).toContain("26.04 LTS");
     expect(operatingSystems.map((image) => image.osFamily)).toContain("Rocky Linux");
     expect(operatingSystems.map((image) => image.osFamily)).toContain("Debian");
-    expect(operatingSystems.map((image) => image.osFamily)).toContain("Windows Server");
+    expect(operatingSystems.filter((image) => image.osFamily === "Windows Server").map((image) => image.id)).toEqual([
+      "windows-server-2022", "windows-server-2025",
+    ]);
     expect(operatingSystems.every((image) => image.frameworks.length === 0)).toBe(true);
     expect(operatingSystems.every((image) => image.cudaVersion === "13.0")).toBe(true);
     expect(runtimes.every((image) => image.cudaVersion === "13.0")).toBe(true);
