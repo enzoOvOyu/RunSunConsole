@@ -881,18 +881,6 @@
   }
 }
 
-.overview-panel,
-.overview-stat-card,
-.overview-distribution-region,
-.overview-health-tile,
-.overview-quota-region {
-  transition:
-    border-color 150ms ease,
-    background-color 150ms ease,
-    box-shadow 150ms ease,
-    transform 150ms ease;
-}
-
 .overview-distribution-region:nth-child(1) {
   --region-x: -1px;
   --region-y: -2px;
@@ -911,16 +899,185 @@
   --region-tilt: -0.2deg;
 }
 
-.overview-panel:hover,
-.overview-stat-card:hover,
-.overview-distribution-region:hover,
-.overview-health-tile:hover,
-.overview-quota-region:hover {
-  border-color: color-mix(in srgb, var(--rs-brand) 42%, var(--rs-border));
-  background-color: color-mix(in srgb, var(--rs-brand-soft) 28%, var(--rs-bg));
-  box-shadow: var(--rs-shadow-sm);
-  transform: translate(
-    var(--region-x, 0),
-    calc(var(--region-y, 0) - 2px)
-  ) rotate(var(--region-tilt, 0deg));
+/* Dashboard motion uses the existing RunSun color tokens. */
+.overview-stat-card,
+.overview-panel,
+.overview-distribution-region,
+.overview-health-tile,
+.overview-quota-region {
+  transition:
+    border-color 260ms ease,
+    background-color 260ms ease,
+    box-shadow 260ms ease,
+    transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.overview-panel-icon,
+.overview-stat-icon,
+.overview-distribution-icon,
+.overview-distribution-flag,
+.overview-health-icon {
+  transition:
+    color 220ms ease,
+    background-color 220ms ease,
+    border-color 220ms ease,
+    transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .overview-panel:hover,
+  .overview-stat-card:hover,
+  .overview-distribution-region:hover {
+    border-color: color-mix(in srgb, var(--rs-brand) 30%, var(--rs-border));
+    background-color: var(--rs-surface);
+    box-shadow:
+      0 2px 7px rgb(25 35 56 / 4%),
+      0 16px 34px -14px rgb(25 35 56 / 18%);
+    transform: translate(
+      var(--region-x, 0px),
+      calc(var(--region-y, 0px) - 4px)
+    ) rotate(var(--region-tilt, 0deg));
+  }
+
+  .overview-panel:hover .overview-panel-icon,
+  .overview-stat-card:hover .overview-stat-icon,
+  .overview-distribution-region:hover .overview-distribution-flag {
+    border-color: color-mix(in srgb, var(--rs-brand) 32%, var(--rs-border));
+    background-color: var(--rs-brand-soft);
+    color: var(--rs-brand-strong);
+    transform: translateY(-2px);
+  }
+
+  .overview-health-tile:hover,
+  .overview-quota-region:hover {
+    background-color: color-mix(in srgb, var(--rs-brand-soft) 32%, var(--rs-surface));
+    transform: translateY(-2px);
+    box-shadow: 0 8px 18px -14px rgb(25 35 56 / 22%);
+  }
+
+  .overview-distribution-resource:not(:disabled):hover {
+    border-color: color-mix(in srgb, var(--rs-brand) 26%, var(--rs-border));
+    background-color: color-mix(in srgb, var(--rs-brand-soft) 32%, var(--rs-surface));
+    transform: translateX(3px);
+  }
+
+  .overview-distribution-resource:not(:disabled):hover .overview-distribution-icon {
+    border-color: color-mix(in srgb, var(--rs-brand) 30%, var(--rs-border));
+    transform: translateY(-2px);
+  }
+
+  .overview-project-row:hover,
+  .overview-spend-item:hover,
+  .overview-region-row:hover {
+    background-color: color-mix(in srgb, var(--rs-brand-soft) 28%, var(--rs-surface));
+  }
+
+  .overview-action-buttons .btn:not(:disabled):hover {
+    transform: translateY(-2px);
+    box-shadow: 0 7px 16px rgb(0 0 0 / 20%);
+  }
+}
+
+.overview-region-row,
+.overview-spend-item,
+.overview-project-row,
+.overview-distribution-resource,
+.overview-action-buttons .btn {
+  transition:
+    background-color 200ms ease,
+    border-color 200ms ease,
+    box-shadow 200ms ease,
+    transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.overview-region-row,
+.overview-spend-item {
+  padding-inline: 8px;
+  margin-inline: -8px;
+  border-radius: var(--rs-r-sm);
+}
+
+.overview-finance-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.overview-finance-card::before {
+  position: absolute;
+  inset: 15px auto 15px 0;
+  width: 3px;
+  border-radius: var(--rs-r-pill);
+  background: var(--rs-brand);
+  opacity: 0;
+  transform: scaleY(0.55);
+  transition: opacity 240ms ease, transform 280ms ease;
+  content: "";
+}
+
+.overview-finance-card:hover::before {
+  opacity: 1;
+  transform: scaleY(1);
+}
+
+.overview-action-bar::before {
+  position: absolute;
+  inset: -80% -20%;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at 26% 55%,
+    color-mix(in srgb, var(--rs-brand) 35%, transparent),
+    transparent 46%
+  );
+  opacity: 0.3;
+  transform: translateX(-22%);
+  transition: opacity 450ms ease, transform 650ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  content: "";
+}
+
+.overview-action-bar:hover::before {
+  opacity: 0.75;
+  transform: translateX(0);
+}
+
+.overview-action-bar > * {
+  position: relative;
+  z-index: 1;
+}
+
+.overview-project-row:focus-visible,
+.overview-distribution-resource:focus-visible,
+.overview-action-buttons .btn:focus-visible {
+  outline: 2px solid var(--rs-brand);
+  outline-offset: 2px;
+}
+
+@keyframes overview-reveal {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.overview-summary-layout > .overview-stat-card,
+.overview-finance-stack > .overview-finance-card,
+.overview-action-bar,
+.overview-action-bar + .section-gap > :nth-child(-n + 4) {
+  animation: overview-reveal 420ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+
+.overview-finance-stack > :nth-child(1) { animation-delay: 55ms; }
+.overview-finance-stack > :nth-child(2) { animation-delay: 100ms; }
+.overview-finance-stack > :nth-child(3) { animation-delay: 145ms; }
+.overview-action-bar { animation-delay: 175ms; }
+.overview-action-bar + .section-gap > :nth-child(1) { animation-delay: 210ms; }
+.overview-action-bar + .section-gap > :nth-child(2) { animation-delay: 245ms; }
+.overview-action-bar + .section-gap > :nth-child(3) { animation-delay: 280ms; }
+.overview-action-bar + .section-gap > :nth-child(4) { animation-delay: 315ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .overview-stats *,
+  .overview-action-bar,
+  .overview-action-bar *,
+  .overview-action-bar + .section-gap * {
+    animation: none;
+    transition-duration: 0.01ms;
+  }
 }
