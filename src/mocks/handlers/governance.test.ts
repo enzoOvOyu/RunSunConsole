@@ -3,6 +3,7 @@ import { setupServer } from "msw/node";
 import { handlers } from "./index";
 import { db, makeDatabase } from "../lib/database";
 import { costPerHour } from "../lib/derive";
+import { inferenceEndpoint } from "../../lib/inference-endpoint";
 import { RATES } from "../fixtures/pricing";
 const server = setupServer(...handlers);
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
@@ -31,6 +32,7 @@ it("returns weighted versions and safe gateway defaults without disclosing crede
   const r = running();
   const result = await request(r.resourceUuid);
   expect(result.status).toBe(200);
+  expect(result.data.endpoint).toBe(inferenceEndpoint(r));
   expect(result.data.qpsLimit).toBe(100);
   expect(result.data.timeoutMs).toBe(30000);
   expect(result.data.versions).toHaveLength(2);

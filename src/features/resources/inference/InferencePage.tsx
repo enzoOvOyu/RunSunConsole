@@ -1,10 +1,11 @@
 import { poolDisplayName } from "../../../lib/gpu-labels";
 import { precisionLabel } from "../../../lib/inference-precision";
+import { inferenceEndpoint } from "../../../lib/inference-endpoint";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { ResourceOf } from "../../../types/domain";
 import { ResourceListShell, ResourceName } from "../shared/ResourceListShell";
 import { money } from "../../../lib/money";
-import { Badge } from "../../../components/ui";
+import { Badge, Button, copy } from "../../../components/ui";
 import { t } from "../../../i18n";
 export default function InferencePage() {
   const columns: ColumnDef<ResourceOf<"inference">>[] = [
@@ -59,9 +60,21 @@ export default function InferencePage() {
         `${poolDisplayName(row.original.nodePool)} × ${row.original.spec.gpuPerReplica}`,
     },
     {
-      id: "port",
+      id: "endpoint",
       header: t("common.endpoint"),
-      cell: ({ row }) => row.original.spec.port,
+      cell: ({ row }) => (
+        <Button
+          variant="default"
+          title={inferenceEndpoint(row.original)}
+          onClick={(event) => {
+            event.stopPropagation();
+            void copy(inferenceEndpoint(row.original));
+          }}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
+          {t("common.copy")}
+        </Button>
+      ),
     },
     {
       id: "hourly",

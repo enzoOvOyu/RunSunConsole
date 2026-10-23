@@ -1,5 +1,6 @@
 import { bucketStoredBytes, objectStoredBytes, isRegionalPoolVolume } from "../../lib/storage";
 import { fileScopePrefix } from "../../lib/s3-files";
+import { inferenceEndpoint } from "../../lib/inference-endpoint";
 import type { FileAccessConfig } from "../../types/storage";
 import type { ElasticIp, SecurityRule, IpsecTunnel } from "../../types/network";
 import {
@@ -2354,7 +2355,7 @@ async function dispatch(request: Request, settleBilling = true) {
         const active = r.status === "running" && !r.deletedAt;
         const data: InferenceGovernance = {
           resourceUuid: r.resourceUuid,
-          endpoint: `https://${r.displayId}.${r.region}.runsun.cloud`,
+          endpoint: inferenceEndpoint(r),
           modelRef: r.spec.modelRef,
           modelName: model?.name || r.spec.modelRef,
           authEnabled: r.spec.authEnabled,
