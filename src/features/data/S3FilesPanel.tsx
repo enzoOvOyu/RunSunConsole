@@ -7,6 +7,7 @@ import { formatResourceId } from "../../lib/ids";
 import { filePathIssue, fileScopePrefix } from "../../lib/s3-files";
 import { vpcNetworkType } from "../../lib/network";
 import { date } from "../../lib/date";
+import { sizeBytes } from "../../lib/money";
 import { useAuth } from "../../stores/auth";
 import { canWrite } from "../../lib/rbac";
 import { t } from "../../i18n";
@@ -67,11 +68,6 @@ export function S3FilesPanel({
 
   return (
     <div className="stack">
-      <Panel title={t("storage.s3FilesTitle")}>
-        <p>{t("storage.s3FilesIntro")}</p>
-        <div className="notice">{t("storage.s3FilesBoundary")}</div>
-        <small>{t("storage.s3FilesFlow")}</small>
-      </Panel>
       {!config ? (
         <Panel title={t("storage.s3FilesSetup")}>
           <div className="stack">
@@ -206,60 +202,57 @@ export function S3FilesPanel({
             />
             <small>{t("storage.s3FilesConfigHint")}</small>
           </Panel>
-          <Panel
-            title={t("storage.s3FilesAccessibleObjects")}
-            action={
-              <Button onClick={() => onBrowse(config.prefix)}>
-                {t("storage.s3FilesBrowseObjects")}
-              </Button>
-            }
-          >
-            <div className="row">
-              <strong>
-                {accessible} {t("storage.s3FilesAccessible")}
-              </strong>
-              <small>
-                {incompatible} {t("storage.s3FilesIncompatible")}
-              </small>
-            </div>
-            <label className="row">
-              <input
-                type="checkbox"
-                checked={showAll}
-                onChange={(event) => setShowAll(event.target.checked)}
-              />
-              {t("storage.s3FilesShowIncompatible")}
-            </label>
-            <DataTable
-              data={
-                showAll ? fileRows : fileRows.filter((object) => !object.issue)
-              }
-              columns={[
-                {
-                  accessorKey: "key",
-                  header: t("storage.s3FilesPath"),
-                  cell: ({ row }) =>
-                    row.original.key.slice(config.prefix.length),
-                },
-                {
-                  accessorKey: "size",
-                  header: t("storage.s3FilesFileSize"),
-                  cell: ({ row }) => `${row.original.size.toLocaleString()} B`,
-                },
-                { accessorKey: "storageClass", header: t("storage.tier") },
-                {
-                  id: "compatibility",
-                  header: t("common.status"),
-                  cell: ({ row }) =>
-                    row.original.issue
-                      ? t(`storage.s3FilesIssue.${row.original.issue}`)
-                      : t("storage.s3FilesCompatible"),
-                },
-              ]}
-            />
-          </Panel>
         </>
       )}
+      <Panel
+        title={t("storage.s3FilesAccessibleObjects")}
+        action={
+          <Button onClick={() => onBrowse(scope)}>
+            {t("storage.s3FilesBrowseObjects")}
+          </Button>
+        }
+      >
+        <div className="row">
+          <strong>
+            {accessible} {t("storage.s3FilesAccessible")}
+          </strong>
+          <small>
+            {incompatible} {t("storage.s3FilesIncompatible")}
+          </small>
+        </div>
+        <label className="row">
+          <input
+            type="checkbox"
+            checked={showAll}
+            onChange={(event) => setShowAll(event.target.checked)}
+          />
+          {t("storage.s3FilesShowIncompatible")}
+        </label>
+        <DataTable
+          data={showAll ? fileRows : fileRows.filter((object) => !object.issue)}
+          columns={[
+            {
+              accessorKey: "key",
+              header: t("storage.s3FilesPath"),
+              cell: ({ row }) => row.original.key.slice(scope.length),
+            },
+            {
+              accessorKey: "size",
+              header: t("storage.s3FilesFileSize"),
+              cell: ({ row }) => sizeBytes(row.original.size),
+            },
+            { accessorKey: "storageClass", header: t("storage.tier") },
+            {
+              id: "compatibility",
+              header: t("common.status"),
+              cell: ({ row }) =>
+                row.original.issue
+                  ? t(`storage.s3FilesIssue.${row.original.issue}`)
+                  : t("storage.s3FilesCompatible"),
+            },
+          ]}
+        />
+      </Panel>
       <Panel title={t("storage.s3FilesLimitations")}>
         <ul className="stack">
           <li>{t("storage.s3FilesLimitPaths")}</li>

@@ -17,6 +17,16 @@ export const number = (v: number, digits = 0) =>
 export const size = (gb: number) =>
   gb >= 1000 ? `${number(gb / 1000, 2)} TB` : `${number(gb, 1)} GB`;
 
+export const sizeBytes = (bytes: number) => {
+  if (!Number.isFinite(bytes) || bytes < 0) return "—";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const step = Math.min(
+    Math.floor(Math.log(Math.max(bytes, 1)) / Math.log(1000)),
+    units.length - 1,
+  );
+  return `${number(bytes / 1000 ** step, step === 0 ? 0 : 2)} ${units[step]}`;
+};
+
 export const unitMoney = (v: number) =>
   new Intl.NumberFormat(useLocale.getState().locale, {
     style: "currency",
