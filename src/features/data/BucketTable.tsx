@@ -86,14 +86,6 @@ export function BucketTable({
               <Button
                 onClick={(event) => {
                   event.stopPropagation();
-                  onDetails(row.original);
-                }}
-              >
-                {t("storage.browse")}
-              </Button>
-              <Button
-                onClick={(event) => {
-                  event.stopPropagation();
                   onManage(row.original);
                 }}
               >
