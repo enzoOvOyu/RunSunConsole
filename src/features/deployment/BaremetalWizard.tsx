@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { gpuModelDisplayName } from "../../lib/gpu-labels";
 import { isWindowsImage } from "../../lib/windows-image";
+import { validResourcePassword } from "../../lib/password-policy";
 import {
   imageSupportsArchitecture,
   imageSupportsPool,
@@ -41,7 +42,7 @@ function validate(v: WizardValues, step: number) {
       /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(s.hostnamePrefix.trim()) &&
       s.hostnamePrefix.trim().length <= 45 &&
       (s.authMethod === "password"
-        ? v.password.length >= 8 && v.password.length <= 128
+        ? validResourcePassword(v.password)
         : /^ssh-(ed25519|rsa)\s+[A-Za-z0-9+/=]+/.test(s.sshPubkey)) &&
       ["recommended", "latest"].includes(s.firmwareBaseline)
     );
@@ -56,7 +57,7 @@ function validate(v: WizardValues, step: number) {
 }
 function BaremetalForm({ step, pools, images }: FormContext) {
   const { spec, update, form } = useSpec<BaremetalSpec>();
-  const password = form.watch("password");
+  const password = form.watch("password") || "";
   const selected = form.watch("nodePool");
   const pool = pools.find((p) => p.code === selected)!;
   useEffect(() => {
@@ -178,19 +179,18 @@ function BaremetalForm({ step, pools, images }: FormContext) {
           ]}
         />
         {spec.authMethod === "password" ? (
-          <Field label={t("wizard.password")} hint={t("wizard.passwordRule")}>
+          <Field
+            label={t("wizard.password")}
+            hint={validResourcePassword(password) ? t("wizard.passwordRule") : undefined}
+            error={!validResourcePassword(password) ? t(password ? "wizard.passwordRule" : "wizard.passwordRequired") : undefined}
+          >
             <input
               className="input"
               type="password"
               autoComplete="new-password"
-              aria-invalid={password.length < 8 || password.length > 128}
+              aria-invalid={!validResourcePassword(password)}
               {...form.register("password")}
             />
-            {(password.length < 8 || password.length > 128) && (
-              <small className="field-error">
-                {t("wizard.passwordRequired")}
-              </small>
-            )}
           </Field>
         ) : (
           <>

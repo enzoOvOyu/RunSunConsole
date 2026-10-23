@@ -1,7 +1,8 @@
 import { bucketStoredBytes, objectStoredBytes, isRegionalPoolVolume } from "../../lib/storage";
 import { fileScopePrefix } from "../../lib/s3-files";
 import { inferenceEndpoint } from "../../lib/inference-endpoint";
-import { isWindowsImage, validWindowsPassword, WINDOWS_MIN_SYSTEM_DISK_GB, WINDOWS_RDP_PORT } from "../../lib/windows-image";
+import { isWindowsImage, WINDOWS_MIN_SYSTEM_DISK_GB, WINDOWS_RDP_PORT } from "../../lib/windows-image";
+import { validResourcePassword } from "../../lib/password-policy";
 import type { FileAccessConfig } from "../../types/storage";
 import type { ElasticIp, SecurityRule, IpsecTunnel } from "../../types/network";
 import {
@@ -2825,7 +2826,7 @@ async function dispatch(request: Request, settleBilling = true) {
     const windowsOrder = "imageRef" in spec && isWindowsImage(IMAGES.find((image) => image.id === spec.imageRef));
     if (windowsOrder && parsed.kind === "gpu_vm") {
       if (!("authMethod" in spec) || spec.authMethod !== "password" ||
-        !validWindowsPassword(String(body.authPassword || "")))
+        !validResourcePassword(String(body.authPassword || "")))
         fail(422, "WINDOWS_PASSWORD_WEAK");
       spec.ports = [WINDOWS_RDP_PORT];
     }
@@ -2834,8 +2835,10 @@ async function dispatch(request: Request, settleBilling = true) {
       (parsed.kind === "gpu_vm" || parsed.kind === "gpu_baremetal") &&
       "authMethod" in spec &&
       spec.authMethod === "password"
-    )
-      z.string().min(8).max(128).parse(body.authPassword);
+    ) {
+      if (!validResourcePassword(String(body.authPassword || "")))
+        fail(422, "PASSWORD_WEAK");
+    }
     if (parsed.kind === "gpu_vm" && "gpuPerInstance" in spec)
       spec.gpuCount = spec.gpuDisabled
         ? 0
@@ -2958,7 +2961,7 @@ async function dispatch(request: Request, settleBilling = true) {
       (r.kind === "gpu_vm" || r.kind === "gpu_baremetal") &&
       r.spec.authMethod === "password"
     ) {
-      const password = z.string().min(8).max(128).parse(body.authPassword);
+      const password = String(body.authPassword);
       db.consolePasswordFingerprints[r.resourceUuid] =
         consolePasswordFingerprint(r.resourceUuid, password);
     }

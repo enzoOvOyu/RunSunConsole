@@ -559,8 +559,8 @@ export default {
   "wizard.memoryRatio":
     "Automatically set to vCPU × 2 GB; cannot be edited separately.",
   "wizard.passwordRule":
-    "8–128 characters; combine upper/lowercase letters, numbers and symbols for a stronger password.",
-  "wizard.passwordRequired": "Enter a password with 8–128 characters.",
+    "Use 12–128 characters and at least three of uppercase, lowercase, digits, and symbols.",
+  "wizard.passwordRequired": "Enter a password: 12–128 characters and at least three of uppercase, lowercase, digits, and symbols.",
   "wizard.sshKeyRequired": "Select or import a valid SSH public key.",
   "wizard.selectSshKey": "Select an imported SSH public key",
   "wizard.noSshKey": "No public keys are available yet.",
@@ -1854,6 +1854,7 @@ export default {
   "images.windowsRdpHint": "Allow TCP 3389 in the security group only from trusted sources. Public access also requires an EIP bound to the VM.",
   "images.windowsConnection": "Windows remote access",
   "images.windowsNoConsole": "The browser command console currently supports Linux only. Use an RDP client for Windows.",
+  "error.PASSWORD_WEAK": "Password must be 12–128 characters and contain at least three of uppercase, lowercase, digits, and symbols.",
   "error.WINDOWS_PASSWORD_WEAK": "Windows password strength is insufficient or password login is not selected.",
   "error.WINDOWS_CONSOLE_UNAVAILABLE": "The browser simulation console is unavailable for Windows.",
   "images.operatingSystems": "Operating systems",

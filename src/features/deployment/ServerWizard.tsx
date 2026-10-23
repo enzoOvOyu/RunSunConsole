@@ -1,9 +1,9 @@
 import { StorageRows } from "./shared/StorageRows";
+import { validResourcePassword } from "../../lib/password-policy";
 import { useEffect } from "react";
 import { gpuModelDisplayName } from "../../lib/gpu-labels";
 import {
   isWindowsImage,
-  validWindowsPassword,
   WINDOWS_LOGIN_USER,
   WINDOWS_MIN_SYSTEM_DISK_GB,
   WINDOWS_RDP_PORT,
@@ -71,9 +71,7 @@ function validate(
     return (
       (!windows || s.authMethod === "password") &&
       (s.authMethod === "password"
-        ? windows
-          ? validWindowsPassword(v.password)
-          : z.string().min(8).max(128).safeParse(v.password).success
+        ? validResourcePassword(v.password)
         : z
             .string()
             .regex(/^ssh-(ed25519|rsa)\s+[A-Za-z0-9+/=]+/)
@@ -281,19 +279,18 @@ function ServerForm({ step, pools, images }: FormContext) {
         />
       )}
       {spec.authMethod === "password" ? (
-        <Field label={t("wizard.password")} hint={t(windows ? "images.windowsPasswordRule" : "wizard.passwordRule")}>
+        <Field
+          label={t("wizard.password")}
+          hint={validResourcePassword(password) ? t("wizard.passwordRule") : undefined}
+          error={!validResourcePassword(password) ? t(password ? "wizard.passwordRule" : "wizard.passwordRequired") : undefined}
+        >
           <input
             className="input"
             type="password"
             autoComplete="new-password"
-            aria-invalid={windows ? !validWindowsPassword(password) : password.length < 8 || password.length > 128}
+            aria-invalid={!validResourcePassword(password)}
             {...form.register("password")}
           />
-          {(windows ? !validWindowsPassword(password) : password.length < 8 || password.length > 128) && (
-            <small className="field-error">
-              {t(windows ? "images.windowsPasswordRule" : "wizard.passwordRequired")}
-            </small>
-          )}
         </Field>
       ) : (
         <>
