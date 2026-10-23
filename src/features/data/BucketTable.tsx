@@ -10,6 +10,7 @@ type Props = {
   projectName: (id?: string) => string;
   onDetails: (bucket: Bucket) => void;
   onManage: (bucket: Bucket) => void;
+  onFiles: (bucket: Bucket) => void;
 };
 
 export function BucketTable({
@@ -17,6 +18,7 @@ export function BucketTable({
   projectName,
   onDetails,
   onManage,
+  onFiles,
 }: Props) {
   return (
     <DataTable
@@ -67,6 +69,23 @@ export function BucketTable({
                 0,
               ) / 1e9,
             ),
+        },
+        {
+          accessorKey: "storageClass",
+          header: t("storage.tier"),
+          cell: ({ row }) => row.original.storageClass || "STANDARD",
+        },
+        {
+          id: "fileInterface",
+          header: t("storage.s3FilesTitle"),
+          cell: ({ row }) => (
+            <Button onClick={(event) => {
+              event.stopPropagation();
+              onFiles(row.original);
+            }}>
+              {t(row.original.fileInterface ? "storage.s3FilesPreviewOnly" : "storage.s3FilesUnconfigured")}
+            </Button>
+          ),
         },
         {
           accessorKey: "access",

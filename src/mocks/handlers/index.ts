@@ -1,4 +1,5 @@
 import { bucketStoredBytes, objectStoredBytes, isRegionalPoolVolume } from "../../lib/storage";
+import { fileScopePrefix } from "../../lib/s3-files";
 import type { FileAccessConfig } from "../../types/storage";
 import type { ElasticIp, SecurityRule, IpsecTunnel } from "../../types/network";
 import {
@@ -1131,7 +1132,8 @@ async function dispatchNetwork(
         n.subnets.some((s) => s.vpcId === id && !s.deletedAt) ||
         n.groups.some((g) => g.vpcId === id && !g.deletedAt) ||
         interfaces.some((i) => i.vpcId === id) ||
-        n.tunnels.some((t) => t.vpcId === id && !t.deletedAt)
+        n.tunnels.some((t) => t.vpcId === id && !t.deletedAt) ||
+        db.buckets.some((bucket) => bucket.fileInterface?.vpcId === id)
       )
         fail(409, "NETWORK_HAS_DEPENDENCIES");
       v.deletedAt = new Date().toISOString();
@@ -3860,7 +3862,7 @@ async function dispatch(request: Request, settleBilling = true) {
     }
   }
   const bm = path.match(
-    /^\/api\/buckets\/([^/]+)(?:\/(overview|objects|lifecycle|sign|settings))?$/,
+    /^\/api\/buckets\/([^/]+)(?:\/(overview|objects|lifecycle|sign|settings|file-interface))?$/,
   );
   if (bm) {
     const b = db.buckets.find((b) => b.id === bm[1]) || fail(404, "NOT_FOUND");
@@ -3892,6 +3894,7 @@ async function dispatch(request: Request, settleBilling = true) {
     if (lifecycleChanged) persist();
     const part = bm[2];
     if (method === "DELETE" && !part) {
+      if (b.fileInterface) fail(409, "BUCKET_IN_USE", { fileInterfaceId: b.fileInterface.id });
       if (b.references.length)
         fail(409, "BUCKET_IN_USE", { references: b.references });
       if (b.objects.length)
@@ -4008,6 +4011,33 @@ async function dispatch(request: Request, settleBilling = true) {
         expires,
       });
     }
+    if (part === "file-interface") {
+      if (method === "PUT") {
+        if (b.fileInterface) fail(409, "FILE_INTERFACE_EXISTS");
+        if (!b.versioning) fail(409, "VERSIONING_REQUIRED");
+        const input = z.object({ prefix: z.string().max(1024), vpcId: z.string().min(1) }).parse(body);
+        const prefix = fileScopePrefix(input.prefix);
+        if (prefix === null) fail(422, "INVALID_FILE_PATH");
+        const vpc = db.network.vpcs.find((item) =>
+          item.id === input.vpcId && !item.deletedAt && item.projectId === b.projectId &&
+          item.region === b.region && vpcNetworkType(item) === "standard",
+        );
+        if (!vpc) fail(409, "NETWORK_SCOPE_MISMATCH");
+        b.fileInterface = {
+          id: crypto.randomUUID(), prefix, vpcId: vpc.id,
+          createdAt: new Date().toISOString(), status: "simulated",
+        };
+        persist();
+        return json(b.fileInterface);
+      }
+      if (method === "DELETE") {
+        if (!b.fileInterface) fail(404, "NOT_FOUND");
+        delete b.fileInterface;
+        persist();
+        return json({ ok: true });
+      }
+      fail(405, "METHOD_NOT_ALLOWED");
+    }
     if (part === "settings") {
       if (method !== "PUT") fail(405, "METHOD_NOT_ALLOWED");
       const config = z.object({
@@ -4016,6 +4046,7 @@ async function dispatch(request: Request, settleBilling = true) {
         tags: z.record(z.string().min(1).max(128), z.string().max(256)),
       }).parse(body);
       if (config.access === "public_read" && config.blockPublicAccess) fail(422, "VALIDATION_ERROR");
+      if (b.fileInterface && !config.versioning) fail(409, "VERSIONING_REQUIRED");
       if ((b.blockPublicAccess !== false && !config.blockPublicAccess) ||
           (b.defaultEncryption !== false && !config.defaultEncryption) ||
           (b.access === "private" && config.access === "public_read")) {

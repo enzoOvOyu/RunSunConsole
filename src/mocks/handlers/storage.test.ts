@@ -459,3 +459,32 @@ it("keeps Bucket security, versions, folders and actual quota in one data model"
   expect((await fetch(`http://localhost/api/buckets/${id}/objects?key=models%2Fconfig.txt`, { method: "DELETE", headers: { "X-Role": "owner" } })).status).toBe(204);
   expect((await request(`/buckets/${id}/overview`)).data.usedGb).toBe(0);
 });
+
+it("keeps the S3 Files preview scoped to a versioned bucket and its project VPC", async () => {
+  const bucket = db.buckets[0];
+  const path = `/buckets/${bucket.id}/file-interface`;
+  const vpc = db.network.vpcs.find((item) => item.projectId === bucket.projectId && item.region === bucket.region && item.networkType !== "baremetal")!;
+  const otherVpc = db.network.vpcs.find((item) => item.projectId !== bucket.projectId)!;
+  expect((await request(path, "PUT", { prefix: "datasets", vpcId: vpc.id })).status).toBe(409);
+  expect((await request(`/buckets/${bucket.id}/settings`, "PUT", {
+    blockPublicAccess: bucket.blockPublicAccess !== false,
+    defaultEncryption: bucket.defaultEncryption !== false,
+    versioning: true,
+    access: bucket.access,
+    tags: bucket.tags || {},
+  })).status).toBe(200);
+  expect((await request(path, "PUT", { prefix: "datasets", vpcId: otherVpc.id })).status).toBe(409);
+  expect((await request(path, "PUT", { prefix: "a//b", vpcId: vpc.id })).status).toBe(422);
+  expect((await request(path, "PUT", { prefix: "datasets", vpcId: vpc.id })).data).toMatchObject({ prefix: "datasets/", vpcId: vpc.id, status: "simulated" });
+  expect((await request(`/buckets/${bucket.id}/overview`)).data.bucket.fileInterface.prefix).toBe("datasets/");
+  expect((await request(`/buckets/${bucket.id}`, "DELETE")).status).toBe(409);
+  expect((await request(`/buckets/${bucket.id}/settings`, "PUT", {
+    blockPublicAccess: bucket.blockPublicAccess !== false,
+    defaultEncryption: bucket.defaultEncryption !== false,
+    versioning: false,
+    access: bucket.access,
+    tags: bucket.tags || {},
+  })).status).toBe(409);
+  expect((await request(path, "DELETE")).status).toBe(200);
+  expect(db.buckets.some((item) => item.id === bucket.id)).toBe(true);
+});

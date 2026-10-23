@@ -91,6 +91,7 @@ export type BucketFilters = {
   projectId: string;
   storageClass: string;
   status: string;
+  fileInterface?: string;
 };
 
 export function selectBucketRows(
@@ -115,7 +116,9 @@ export function selectBucketRows(
       (!filters.projectId || bucket.projectId === filters.projectId) &&
       (!filters.storageClass ||
         (bucket.storageClass || "STANDARD") === filters.storageClass) &&
-      (!filters.status || bucket.access === filters.status)
+      (!filters.status || bucket.access === filters.status) &&
+      (!filters.fileInterface ||
+        (filters.fileInterface === "configured" ? !!bucket.fileInterface : !bucket.fileInterface))
     );
   });
 }

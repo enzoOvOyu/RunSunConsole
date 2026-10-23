@@ -1430,6 +1430,7 @@ Mock `Database.network` 保存实体、历史接口、审计和地址池序号�
 
 - `StorageRequest` 作为 `CommonSpec.storageSelections` 进入四类订单；`normalizeSpec` 将块与文件容量汇入 `storageGb`，对象桶的容量上限不进入已分配量。
 - `/api/storage/products` 返回规格与价格；`/api/storage/volumes` 及 `/:id` 返回有效卷、关联计算资源名称和类型。对象桶沿用 `/api/buckets`，增加 `projectId`、`storageClass`、`attachedResourceUuid`。
+- Bucket 可选 `fileInterface` 记录源前缀、同项目同区域标准 VPC 与配置状态；`PUT/DELETE /api/buckets/:id/file-interface` 管理预览配置。创建要求版本控制，存在配置时阻止关闭版本控制及删除 Bucket/VPC。文件路径预览直接派生自 Bucket 对象，不另建对象副本；当前不提供 NFS、POSIX、同步或文件接口计费后端。
 - Mock `Database.volumes` 从既有系统盘、数据盘、PVC、基础卷和新订单行派生；旧浏览器快照缺少该字段时自动补建。创建订单时卷和桶与资源一起写入；删除资源时卷软删除、桶解除绑定。
 - 导航新入口为 `/storage/block`、`/storage/file`、`/storage/object`；`/data/storage` 重定向至对象存储。安全组规范入口为 `/network/security-groups`，旧 `/network/firewalls` 重定向。
 

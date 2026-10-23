@@ -56,6 +56,7 @@ export type ResourceIdType =
   | "tun"
   | "blk"
   | "fil"
+  | "sfi"
   | "obj"
   | "prj"
   | "tkt"

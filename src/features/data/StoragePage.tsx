@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useUrlState } from "../shared/useUrlState";
 import { bucketSummary, selectBucketRows } from "../shared/storageView";
 import { BucketTable } from "./BucketTable";
+import { S3FilesPanel } from "./S3FilesPanel";
 import { confirmAction } from "../../components/ui/ConfirmAction";
 import { useEffect, useState, type DragEvent } from "react";
 import type { Bucket, StorageObject, Project, Quota } from "../../types/domain";
@@ -67,6 +68,7 @@ export default function StoragePage() {
   const [projectFilter, setProjectFilter] = useState("");
   const [classFilter, setClassFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [fileFilter, setFileFilter] = useState("");
   const [prefix, setPrefix] = useState("");
   const [tab, setTab] = useState("objects");
   const [grid, setGrid] = useState(false);
@@ -139,6 +141,7 @@ export default function StoragePage() {
       projectId: projectFilter,
       storageClass: classFilter,
       status: statusFilter,
+      fileInterface: fileFilter,
     },
     projectName,
   );
@@ -151,7 +154,8 @@ export default function StoragePage() {
     search ||
     projectFilter ||
     classFilter ||
-    statusFilter
+    statusFilter ||
+    fileFilter
   );
   const upload = async (files: FileList | null) => {
     if (!files || !id) return;
@@ -360,6 +364,15 @@ export default function StoragePage() {
           <option value="private">{t("common.private")}</option>
           <option value="public_read">{t("common.public_read")}</option>
         </select>
+        <select
+          aria-label={t("storage.s3FilesTitle")}
+          value={fileFilter}
+          onChange={(event) => setFileFilter(event.target.value)}
+        >
+          <option value="">{t("storage.s3FilesAll")}</option>
+          <option value="configured">{t("storage.s3FilesPreviewOnly")}</option>
+          <option value="unconfigured">{t("storage.s3FilesUnconfigured")}</option>
+        </select>
         {filterActive && (
           <Button
             onClick={() => {
@@ -367,6 +380,7 @@ export default function StoragePage() {
               setProjectFilter("");
               setClassFilter("");
               setStatusFilter("");
+              setFileFilter("");
             }}
           >
             {t("common.reset")}
@@ -391,6 +405,10 @@ export default function StoragePage() {
             onManage={(selectedBucket) => {
               setId(selectedBucket.id);
               setTab("management");
+            }}
+            onFiles={(selectedBucket) => {
+              setId(selectedBucket.id);
+              setTab("s3-files");
             }}
           />
         ) : (
@@ -428,6 +446,12 @@ export default function StoragePage() {
                 {formatResourceId("obj", bucket.id)} ·{" "}
                 {projectName(bucket.projectId)} · {t("common." + bucket.region)}
               </small>
+              <div className="row" style={{ marginTop: 12, gap: 16, flexWrap: "wrap" }}>
+                <span>{t("storage.objects")}: <strong>{overview.data.objectCount}</strong></span>
+                <span>{t("storage.actualUsage")}: <strong>{size(overview.data.usedGb)}</strong></span>
+                <span>{t("storage.accessPolicy")}: <strong>{t("common." + bucket.access)}</strong></span>
+                <span>{t("storage.s3FilesTitle")}: <strong>{t(bucket.fileInterface ? "storage.s3FilesPreviewOnly" : "storage.s3FilesUnconfigured")}</strong></span>
+              </div>
             </Panel>
             <Panel
               title={t("storage.capacity")}
@@ -439,7 +463,8 @@ export default function StoragePage() {
                     busy ||
                     bucket.objects.length > 0 ||
                     bucket.references.length > 0 ||
-                    bucket.lifecycle.length > 0
+                    bucket.lifecycle.length > 0 ||
+                    !!bucket.fileInterface
                   }
                   onClick={async () => {
                     if (
@@ -461,7 +486,8 @@ export default function StoragePage() {
             >
               {(bucket.objects.length > 0 ||
                 bucket.references.length > 0 ||
-                bucket.lifecycle.length > 0) && (
+                bucket.lifecycle.length > 0 ||
+                !!bucket.fileInterface) && (
                 <small>{t("storage.bucketDeleteHint")}</small>
               )}
               <div className="between">
@@ -482,6 +508,7 @@ export default function StoragePage() {
             <Tabs
               items={[
                 "objects",
+                "s3-files",
                 "properties",
                 "permissions",
                 "management",
@@ -900,6 +927,13 @@ export default function StoragePage() {
                   </Button>
                 </div>
               </div>
+            ) : tab === "s3-files" ? (
+              <S3FilesPanel bucket={bucket} onBrowse={(targetPrefix) => {
+                setPrefix(targetPrefix);
+                setObjectSearch("");
+                setObjectPage(1);
+                setTab("objects");
+              }} />
             ) : tab === "properties" ? (
               <div className="stack">
                 <Panel title={t("storage.bucketDetails")}>
@@ -917,6 +951,8 @@ export default function StoragePage() {
                         bucket.storageClass || "STANDARD",
                       ],
                       [t("storage.bucketLimit"), size(bucket.quotaGb)],
+                      [t("storage.s3FilesTitle"), t(bucket.fileInterface ? "storage.s3FilesPreviewOnly" : "storage.s3FilesUnconfigured")],
+                      [t("storage.s3FilesSource"), bucket.fileInterface ? `s3://${bucket.name}/${bucket.fileInterface.prefix}` : "—"],
                       [
                         t("storage.defaultEncryption"),
                         t(

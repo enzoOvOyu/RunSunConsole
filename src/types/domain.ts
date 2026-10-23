@@ -463,6 +463,7 @@ export interface Bucket {
   blockPublicAccess?: boolean;
   defaultEncryption?: boolean;
   versioning?: boolean;
+  fileInterface?: { id: string; prefix: string; vpcId: string; createdAt: string; status: "simulated" };
   tags?: Record<string, string>;
   status: "active";
   quotaGb: number;
