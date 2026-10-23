@@ -135,6 +135,18 @@
   color: var(--rs-text-secondary);
 }
 
+.roleBadge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+  padding: 2px 7px;
+  border-radius: var(--rs-r-sm);
+  background: var(--rs-brand-soft);
+  color: var(--rs-brand-strong);
+  font-size: var(--rs-fs-xs);
+  font-weight: 600;
+}
+
 .main {
   margin-left: 296px;
   min-width: 0;

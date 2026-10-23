@@ -1,5 +1,5 @@
-import { NavLink } from "react-router-dom";
-import { memo, useMemo } from "react";
+import { NavLink, useLocation } from "react-router-dom";
+import { memo, useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { useAuth } from "../../stores/auth";
@@ -16,6 +16,12 @@ export const Sidebar = memo(function Sidebar({
   onClose: () => void;
 }) {
   const role = useAuth((s) => s.role);
+  const location = useLocation();
+  const [closedActiveGroup, setClosedActiveGroup] = useState<{
+    id: string;
+    routeKey: string;
+    role: string;
+  } | null>(null);
   useLocale((state) => state.locale);
   const collapsedGroups = useNav((state) => state.collapsedGroups);
   const toggle = useNav((state) => state.toggle);
@@ -37,7 +43,18 @@ export const Sidebar = memo(function Sidebar({
         </NavLink>
         <nav className={styles.nav}>
           {groups.map((group) => {
-            const expanded = !collapsedGroups.includes(group.id);
+            const activeGroup = group.items.some(
+              (item) =>
+                location.pathname === item.path ||
+                location.pathname.startsWith(`${item.path}/`),
+            );
+            const manuallyClosed =
+              closedActiveGroup?.id === group.id &&
+              closedActiveGroup.routeKey === location.key &&
+              closedActiveGroup.role === role;
+            const expanded = activeGroup
+              ? !manuallyClosed
+              : !collapsedGroups.includes(group.id);
             const Icon = group.icon;
             return (
               <div className={styles.navGroup} key={group.id}>
@@ -60,7 +77,25 @@ export const Sidebar = memo(function Sidebar({
                       variant="ghost"
                       className={styles.groupButton}
                       aria-expanded={expanded}
-                      onClick={() => toggle(group.id)}
+                      onClick={() => {
+                        if (!activeGroup) {
+                          toggle(group.id);
+                        } else if (expanded) {
+                          setClosedActiveGroup({
+                            id: group.id,
+                            routeKey: location.key,
+                            role,
+                          });
+                          if (!collapsedGroups.includes(group.id)) {
+                            toggle(group.id);
+                          }
+                        } else {
+                          setClosedActiveGroup(null);
+                          if (collapsedGroups.includes(group.id)) {
+                            toggle(group.id);
+                          }
+                        }
+                      }}
                     >
                       <Icon size={16} />
                       {group.label()}
@@ -112,6 +147,7 @@ export const Sidebar = memo(function Sidebar({
           <div className="row">
             <span className="status-dot" />
             RunSun Cloud
+            <span className={styles.roleBadge}>{t(`common.${role}`)}</span>
           </div>
           <small>© {new Date().getFullYear()} RunSun</small>
         </div>

@@ -37,9 +37,13 @@ export function Topbar({
   const notifications = useData<
     { id: string; resource?: Resource; messageKey?: string; href?: string }[]
   >(["notifications"], EP.notifications, { poll: true });
-  const item = buildGroups(role)
-    .flatMap((g) => g.items)
-    .find((i) => location.pathname.startsWith(i.path));
+  const item =
+    buildGroups(role)
+      .flatMap((g) => g.items)
+      .find((i) => location.pathname.startsWith(i.path)) ||
+    buildGroups("owner")
+      .flatMap((g) => g.items)
+      .find((i) => location.pathname.startsWith(i.path));
   const toggleMenu = (name: string) => setMenu(menu === name ? "" : name);
   return (
     <header className={styles.topbar}>
@@ -139,7 +143,10 @@ export function Topbar({
             {t("header.role")}
             <select
               value={role}
-              onChange={(e) => setRole(e.target.value as typeof role)}
+              onChange={(e) => {
+                setMenu("");
+                setRole(e.target.value as typeof role);
+              }}
             >
               {ROLES.map((r) => (
                 <option key={r} value={r}>

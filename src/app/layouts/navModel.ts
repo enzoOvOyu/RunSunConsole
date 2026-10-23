@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { KINDS, type Role } from "../../types/domain";
 import { KIND_META } from "../../lib/ids";
-import { canSeePath } from "../../lib/rbac";
+import { canSeeNavPath } from "../../lib/rbac";
 import { t } from "../../i18n";
 export interface NavItem {
   id: string;
@@ -140,7 +140,7 @@ export function buildGroups(role: Role): NavGroup[] {
   return groups
     .map((g) => ({
       ...g,
-      items: g.items.filter((i) => canSeePath(role, i.path)),
+      items: g.items.filter((i) => canSeeNavPath(role, i.path)),
     }))
     .filter((g) => g.items.length);
 }

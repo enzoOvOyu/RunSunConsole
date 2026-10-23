@@ -15,3 +15,10 @@ export function canSeePath(role: Role, path: string) {
   if (role === "member") return !path.startsWith("/billing/");
   return true;
 }
+
+export function canSeeNavPath(role: Role, path: string) {
+  if (!canSeePath(role, path)) return false;
+  if (role === "viewer" && path.startsWith("/deployment/")) return false;
+  if (role === "billing" && path.startsWith("/network/")) return false;
+  return true;
+}

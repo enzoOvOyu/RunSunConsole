@@ -83,7 +83,9 @@ export function CommandPalette({
               .filter((g) => g.id !== "deployment")
               .flatMap((g) => g.items),
           },
-        ].map((g) => (
+        ]
+          .filter((group) => group.items.length)
+          .map((g) => (
           <Command.Group key={g.id} heading={t(`command.${g.id}`)}>
             {g.items.map((item) => (
               <Command.Item

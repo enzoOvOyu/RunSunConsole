@@ -1,5 +1,6 @@
 import { it, expect } from "vitest";
 import { buildGroups } from "./navModel";
+import { canSeeNavPath, canSeePath } from "../../lib/rbac";
 import { dictionaries } from "../../i18n";
 it("assigns distinct semantic submenu icons through the shared navigation model", () => {
   const groups = buildGroups("owner");
@@ -34,4 +35,18 @@ it("assigns distinct semantic submenu icons through the shared navigation model"
   expect(dictionaries["en-US"]["nav.ops"]).toBe("Projects & Support");
   expect(dictionaries["zh-CN"]["nav.resources"]).toBe("我的资源");
   expect(dictionaries["en-US"]["nav.resources"]).toBe("My resources");
+});
+
+it("shows role-appropriate menus while keeping read-only deep links available", () => {
+  const ids = (role: Parameters<typeof buildGroups>[0]) =>
+    buildGroups(role).map((group) => group.id);
+  expect(ids("billing")).toEqual(["overview", "resources", "billing"]);
+  expect(ids("viewer")).not.toContain("deployment");
+  expect(ids("viewer")).toContain("network");
+  expect(ids("member")).not.toContain("billing");
+  expect(ids("owner")).toContain("deployment");
+  expect(canSeeNavPath("billing", "/network/eips")).toBe(false);
+  expect(canSeePath("billing", "/network/eips")).toBe(true);
+  expect(canSeeNavPath("viewer", "/deployment/server")).toBe(false);
+  expect(canSeePath("viewer", "/deployment/server")).toBe(true);
 });
