@@ -89,7 +89,12 @@ export function VolumeTable({ rows, kind, projectName, onDetails }: Props) {
             kind === "file" ? "storage.linkedCompute" : "storage.attached",
           ),
           cell: ({ row }) =>
-            row.original.resourceName ? (
+            kind === "file" && row.original.accessClients?.length ? (
+              <div className="storage-resource-cell">
+                <strong>{dt(row.original.accessClients[0].name)}</strong>
+                <small>{row.original.accessClients[0].displayId} · {t("storage.authorizedClients")}</small>
+              </div>
+            ) : row.original.resourceName ? (
               <div className="storage-resource-cell">
                 <strong>{dt(row.original.resourceName)}</strong>
                 <small>

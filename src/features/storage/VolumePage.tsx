@@ -379,6 +379,12 @@ export default function VolumePage() {
                   [t("storage.accessPath"), v.mountPath || "—"],
                 ] as [string, string][]),
               ]} />
+              {!!v.accessClients?.length && <div className="stack">
+                <strong>{t("storage.authorizedClients")}</strong>
+                {v.accessClients.map((client) => <Link key={client.resourceUuid} to={resourceLink({ kind: client.kind, resourceUuid: client.resourceUuid, region: v.region })}>
+                  {dt(client.name)} · {client.displayId} · {client.privateIp}
+                </Link>)}
+              </div>}
               {v.mountPath && linkedResource?.kind !== "vgpu" && <div className="row"><code>{v.mountPath}</code><CopyButton value={v.mountPath} /></div>}
               {linkedResource?.kind === "vgpu" && <small>{t("storage.fileNodePoolHint")}</small>}
               {v.resourceUuid && v.resourceKind && <Link to={resourceLink({ kind: v.resourceKind, resourceUuid: v.resourceUuid, region: v.region })}>{t("storage.viewResource")}</Link>}

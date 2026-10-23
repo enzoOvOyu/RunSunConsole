@@ -879,6 +879,7 @@ export default {
   "storage.fileSystem": "文件系统",
   "storage.pvAndPvc": "NFSv4.1 · VPC 访问规则",
   "storage.computeConsumers": "授权客户端与集群工作负载",
+  "storage.authorizedClients": "授权客户端",
   "storage.fileAccessTitle": "NFS 访问配置",
   "storage.fileAccessIntro": "文件系统面向同一 VPC 内的多个客户端；此处配置网络访问范围和导出权限，不直接把文件系统挂到单台设备。",
   "storage.fileProtocol": "挂载协议",

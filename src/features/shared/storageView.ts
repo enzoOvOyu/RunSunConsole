@@ -1,5 +1,5 @@
 import { bucketStoredBytes } from "../../lib/storage";
-import type { Bucket, Kind } from "../../types/domain";
+import type { Bucket, Kind, ResourceUuid } from "../../types/domain";
 import type { ClusterView } from "../../types/monitoring";
 import type { StorageVolume } from "../../types/storage";
 import { formatResourceId } from "../../lib/ids";
@@ -8,6 +8,7 @@ import { isRegionalPoolVolume } from "../../lib/storage";
 export type VolumeRow = StorageVolume & {
   resourceName: string;
   resourceKind: Kind | null;
+  accessClients?: { resourceUuid: ResourceUuid; name: string; displayId: string; kind: Kind; privateIp: string }[];
 };
 
 export type VolumeFilters = {
@@ -35,6 +36,7 @@ export function selectVolumeRows(
       volume.id,
       formatResourceId(kind === "block" ? "blk" : "fil", volume.id),
       volume.resourceName,
+      ...(volume.accessClients || []).flatMap((client) => [client.name, client.displayId, client.privateIp]),
       volume.fileAccess?.vpcId,
       volume.fileAccess?.allowedCidr,
       volume.projectId,

@@ -3,7 +3,7 @@ import { fileScopePrefix } from "../../lib/s3-files";
 import { inferenceEndpoint } from "../../lib/inference-endpoint";
 import { isWindowsImage, WINDOWS_MIN_SYSTEM_DISK_GB, WINDOWS_RDP_PORT } from "../../lib/windows-image";
 import { validResourcePassword } from "../../lib/password-policy";
-import type { FileAccessConfig } from "../../types/storage";
+import type { FileAccessConfig, StorageVolume } from "../../types/storage";
 import type { ElasticIp, SecurityRule, IpsecTunnel } from "../../types/network";
 import {
   NetworkFailure,
@@ -1812,6 +1812,20 @@ async function dispatch(request: Request, settleBilling = true) {
     });
   }
   if (path === "/api/storage/products") return json(STORAGE_PRODUCTS);
+  function fileAccessClients(volume: StorageVolume) {
+    const access = volume.fileAccess;
+    if (volume.kind !== "file" || !access) return [];
+    const clients = new Map<string, { resourceUuid: ResourceUuid; name: string; displayId: string; kind: Resource["kind"]; privateIp: string }>();
+    for (const nic of db.network.interfaces) {
+      if (nic.releasedAt || nic.vpcId !== access.vpcId) continue;
+      const address = nic.privateIp.split("/")[0];
+      if (!cidrContains(access.allowedCidr, `${address}/32`)) continue;
+      const resource = db.resources.find((item) => item.resourceUuid === nic.resourceUuid && !item.deletedAt);
+      if (!resource || !["gpu_vm", "gpu_baremetal"].includes(resource.kind) || resource.projectId !== volume.projectId || resource.region !== volume.region) continue;
+      clients.set(resource.resourceUuid, { resourceUuid: resource.resourceUuid, name: resource.name, displayId: resource.displayId, kind: resource.kind, privateIp: address });
+    }
+    return [...clients.values()];
+  }
   if (path === "/api/storage/volumes") {
     if (method === "GET")
       return json(
@@ -1832,6 +1846,7 @@ async function dispatch(request: Request, settleBilling = true) {
               ...volume,
               resourceName: attached?.name || "",
               resourceKind: attached?.kind || null,
+              accessClients: fileAccessClients(volume),
             };
           }),
       );
@@ -2041,6 +2056,7 @@ async function dispatch(request: Request, settleBilling = true) {
         ...volume,
         resourceName: attached?.name || "",
         resourceKind: attached?.kind || null,
+        accessClients: fileAccessClients(volume),
       });
     }
   }

@@ -913,6 +913,7 @@ export default {
   "storage.fileSystem": "File system",
   "storage.pvAndPvc": "NFSv4.1 · VPC access rules",
   "storage.computeConsumers": "Authorized clients and cluster workloads",
+  "storage.authorizedClients": "Authorized clients",
   "storage.fileAccessTitle": "NFS access configuration",
   "storage.fileAccessIntro": "A file system serves multiple clients within a VPC. Configure network scope and export permissions here instead of attaching it to one machine.",
   "storage.fileProtocol": "Mount protocol",
