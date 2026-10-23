@@ -4,7 +4,7 @@ import { useUrlState } from "../shared/useUrlState";
 import { bucketSummary, selectBucketRows } from "../shared/storageView";
 import { BucketTable } from "./BucketTable";
 import { confirmAction } from "../../components/ui/ConfirmAction";
-import { useState, type DragEvent } from "react";
+import { useEffect, useState, type DragEvent } from "react";
 import type { Bucket, StorageObject, Project, Quota } from "../../types/domain";
 import { EP, query, post, remove, api } from "../../lib/api-client";
 import { useRegion } from "../../stores/region";
@@ -44,6 +44,25 @@ export default function StoragePage() {
   );
   const [quotaGb, setQuotaGb] = useState(2000);
   const [bucketProject, setBucketProject] = useState(projectId);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [createBlockPublic, setCreateBlockPublic] = useState(true);
+  const [createEncryption, setCreateEncryption] = useState(true);
+  const [createVersioning, setCreateVersioning] = useState(false);
+  const [createTagKey, setCreateTagKey] = useState("");
+  const [createTagValue, setCreateTagValue] = useState("");
+  const [settings, setSettings] = useState({
+    blockPublicAccess: true,
+    defaultEncryption: true,
+    versioning: false,
+    access: "private" as "private" | "public_read",
+    tags: {} as Record<string, string>,
+  });
+  const [tagKey, setTagKey] = useState("");
+  const [tagValue, setTagValue] = useState("");
+  const [objectSearch, setObjectSearch] = useState("");
+  const [objectPage, setObjectPage] = useState(1);
+  const [objectPageSize, setObjectPageSize] = useState(10);
+  const [folderName, setFolderName] = useState("");
   const [search, setSearch] = useUrlState("q");
   const [projectFilter, setProjectFilter] = useState("");
   const [classFilter, setClassFilter] = useState("");
@@ -73,7 +92,8 @@ export default function StoragePage() {
     objectCount: number;
     usedGb: number;
     quotaGb: number;
-    requests: { date: string; value: number }[];
+    measuredAt: string;
+    requests: null;
   }>(["bucket-overview", id], `${EP.buckets}/${id}/overview`, {
     enabled: !!id,
   });
@@ -84,14 +104,55 @@ export default function StoragePage() {
   );
   const { run, busy } = useAction();
   const bucket = overview.data?.bucket;
+  useEffect(() => {
+    if (!bucket) return;
+    setSettings({
+      blockPublicAccess: bucket.blockPublicAccess !== false,
+      defaultEncryption: bucket.defaultEncryption !== false,
+      versioning: !!bucket.versioning,
+      access: bucket.access,
+      tags: bucket.tags || {},
+    });
+  }, [bucket]);
+  const directObjects = objects.data?.objects || [];
+  const visibleObjects = directObjects.filter((item) =>
+    item.key.toLowerCase().includes(objectSearch.trim().toLowerCase()),
+  );
+  const pageCount = Math.max(
+    1,
+    Math.ceil(visibleObjects.length / objectPageSize),
+  );
+  const pageObjects = visibleObjects.slice(
+    (Math.min(objectPage, pageCount) - 1) * objectPageSize,
+    Math.min(objectPage, pageCount) * objectPageSize,
+  );
   const projectName = (value?: string) =>
-    dt(projects.data?.find((project) => project.id === value)?.name || value || "—");
-  const bucketRows = selectBucketRows(q.data || [],
-    { search, projectId: projectFilter, storageClass: classFilter, status: statusFilter },
+    dt(
+      projects.data?.find((project) => project.id === value)?.name ||
+        value ||
+        "—",
+    );
+  const bucketRows = selectBucketRows(
+    q.data || [],
+    {
+      search,
+      projectId: projectFilter,
+      storageClass: classFilter,
+      status: statusFilter,
+    },
     projectName,
   );
-  const { actualBytes, limitGb: bucketLimitGb, objectCount } = bucketSummary(bucketRows);
-  const filterActive = !!(search || projectFilter || classFilter || statusFilter);
+  const {
+    actualBytes,
+    limitGb: bucketLimitGb,
+    objectCount,
+  } = bucketSummary(bucketRows);
+  const filterActive = !!(
+    search ||
+    projectFilter ||
+    classFilter ||
+    statusFilter
+  );
   const upload = async (files: FileList | null) => {
     if (!files || !id) return;
     for (const file of Array.from(files)) {
@@ -127,6 +188,49 @@ export default function StoragePage() {
       } else download(o.key.split("/").at(-1) + ".url", result.url);
     }
   };
+  const saveSettings = async () => {
+    if (!bucket) return;
+    const weakens =
+      (bucket.blockPublicAccess !== false && !settings.blockPublicAccess) ||
+      (bucket.defaultEncryption !== false && !settings.defaultEncryption) ||
+      (bucket.access === "private" && settings.access === "public_read");
+    if (
+      weakens &&
+      !(await confirmAction(t("storage.securityConfirm") + " " + bucket.name))
+    )
+      return;
+    await run(() =>
+      api(`${EP.buckets}/${bucket.id}/settings`, {
+        method: "PUT",
+        body: JSON.stringify({
+          ...settings,
+          confirm: weakens ? bucket.name : undefined,
+        }),
+      }),
+    );
+  };
+  const createFolder = async () => {
+    const segment = folderName.trim();
+    if (
+      !id ||
+      !segment ||
+      segment.includes("/") ||
+      segment === "." ||
+      segment === ".."
+    )
+      return;
+    const created = await run(
+      () =>
+        post(`${EP.buckets}/${id}/objects`, {
+          key: `${prefix}${segment}/`,
+          size: 0,
+          contentType: "application/x-directory",
+          content: "",
+        }),
+      "success.created",
+    );
+    if (created) setFolderName("");
+  };
   return (
     <>
       <PageHeader
@@ -146,29 +250,128 @@ export default function StoragePage() {
         }
       />
       <div className="grid grid-4 resource-summary-grid storage-object-summary">
-        <Panel title={t("storage.bucketCount")} className="resource-summary-card"><div className="resource-summary-value">{q.data ? bucketRows.length : "—"}</div><small>{t("nav.object")}</small></Panel>
-        <Panel title={t("storage.totalBucketLimits")} className="resource-summary-card"><div className="resource-summary-value">{q.data ? size(bucketLimitGb) : "—"}<span className="resource-unit">{t("storage.configuredLimit")}</span></div><small>{t("storage.bucketLimitIndependent")}</small></Panel>
-        <Panel title={t("storage.actualUsage")} className="resource-summary-card"><div className="resource-summary-value">{q.data ? size(actualBytes / 1e9) : "—"}</div><small>{t("storage.fromObjectRecords")}</small></Panel>
-        <Panel title={t("storage.objects")} className="resource-summary-card"><div className="resource-summary-value">{q.data ? objectCount : "—"}</div><small>{t("storage.objectCount")}</small></Panel>
+        <Panel
+          title={t("storage.bucketCount")}
+          className="resource-summary-card"
+        >
+          <div className="resource-summary-value">
+            {q.data ? bucketRows.length : "—"}
+          </div>
+          <small>{t("nav.object")}</small>
+        </Panel>
+        <Panel
+          title={t("storage.totalBucketLimits")}
+          className="resource-summary-card"
+        >
+          <div className="resource-summary-value">
+            {q.data ? size(bucketLimitGb) : "—"}
+            <span className="resource-unit">
+              {t("storage.configuredLimit")}
+            </span>
+          </div>
+          <small>{t("storage.bucketLimitIndependent")}</small>
+        </Panel>
+        <Panel
+          title={t("storage.actualUsage")}
+          className="resource-summary-card"
+        >
+          <div className="resource-summary-value">
+            {q.data ? size(actualBytes / 1e9) : "—"}
+          </div>
+          <small>{t("storage.fromObjectRecords")}</small>
+        </Panel>
+        <Panel title={t("storage.objects")} className="resource-summary-card">
+          <div className="resource-summary-value">
+            {q.data ? objectCount : "—"}
+          </div>
+          <small>{t("storage.objectCount")}</small>
+        </Panel>
       </div>
-      <Panel title={t("storage.regionalObjectQuota")} className="storage-regional-quota">
-        {objectQuota ? <><div className="between"><strong>{t("storage.regionalQuotaRemaining")}: {size(Math.max(0, objectQuota.limitGb - objectQuota.usedGb))}</strong><small>{t("storage.regionUsage", { used: objectQuota.usedGb.toLocaleString(), limit: objectQuota.limitGb.toLocaleString() })} GB</small></div><Progress value={objectQuota.limitGb > 0 ? objectQuota.usedGb / objectQuota.limitGb * 100 : 0} /></> : <small>—</small>}
+      <Panel
+        title={t("storage.regionalObjectQuota")}
+        className="storage-regional-quota"
+      >
+        {objectQuota ? (
+          <>
+            <div className="between">
+              <strong>
+                {t("storage.regionalQuotaRemaining")}:{" "}
+                {size(Math.max(0, objectQuota.limitGb - objectQuota.usedGb))}
+              </strong>
+              <small>
+                {t("storage.regionUsage", {
+                  used: objectQuota.usedGb.toLocaleString(),
+                  limit: objectQuota.limitGb.toLocaleString(),
+                })}{" "}
+                GB
+              </small>
+            </div>
+            <Progress
+              value={
+                objectQuota.limitGb > 0
+                  ? (objectQuota.usedGb / objectQuota.limitGb) * 100
+                  : 0
+              }
+            />
+          </>
+        ) : (
+          <small>—</small>
+        )}
         <small>{t("storage.regionQuotaUsesActual")}</small>
       </Panel>
       <div className="toolbar storage-volume-filters">
         <RegionFilter />
-        <input className="input search" aria-label={t("common.search")} placeholder={t("common.search")} value={search} onChange={(event) => setSearch(event.target.value)} />
-        <select aria-label={t("common.project")} value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}>
+        <input
+          className="input search"
+          aria-label={t("common.search")}
+          placeholder={t("common.search")}
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+        <select
+          aria-label={t("common.project")}
+          value={projectFilter}
+          onChange={(event) => setProjectFilter(event.target.value)}
+        >
           <option value="">{t("common.allProjects")}</option>
-          {projects.data?.filter((project) => !project.deletedAt).map((project) => <option key={project.id} value={project.id}>{dt(project.name)} · {formatResourceId("prj", project.id)}</option>)}
+          {projects.data
+            ?.filter((project) => !project.deletedAt)
+            .map((project) => (
+              <option key={project.id} value={project.id}>
+                {dt(project.name)} · {formatResourceId("prj", project.id)}
+              </option>
+            ))}
         </select>
-        <select aria-label={t("storage.tier")} value={classFilter} onChange={(event) => setClassFilter(event.target.value)}>
-          <option value="">{t("storage.allTiers")}</option><option value="STANDARD">STANDARD</option><option value="IA">IA</option>
+        <select
+          aria-label={t("storage.tier")}
+          value={classFilter}
+          onChange={(event) => setClassFilter(event.target.value)}
+        >
+          <option value="">{t("storage.allTiers")}</option>
+          <option value="STANDARD">STANDARD</option>
+          <option value="IA">IA</option>
         </select>
-        <select aria-label={t("common.status")} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-          <option value="">{t("storage.allStatuses")}</option><option value="active">{t("common.active")}</option>
+        <select
+          aria-label={t("storage.accessPolicy")}
+          value={statusFilter}
+          onChange={(event) => setStatusFilter(event.target.value)}
+        >
+          <option value="">{t("storage.allAccess")}</option>
+          <option value="private">{t("common.private")}</option>
+          <option value="public_read">{t("common.public_read")}</option>
         </select>
-        {filterActive && <Button onClick={() => { setSearch(""); setProjectFilter(""); setClassFilter(""); setStatusFilter(""); }}>{t("common.reset")}</Button>}
+        {filterActive && (
+          <Button
+            onClick={() => {
+              setSearch("");
+              setProjectFilter("");
+              setClassFilter("");
+              setStatusFilter("");
+            }}
+          >
+            {t("common.reset")}
+          </Button>
+        )}
       </div>
       <div className="panel">
         {q.isPending ? (
@@ -183,9 +386,18 @@ export default function StoragePage() {
               setId(selectedBucket.id);
               setPrefix("");
               setTab("objects");
+              setObjectPage(1);
+            }}
+            onManage={(selectedBucket) => {
+              setId(selectedBucket.id);
+              setTab("management");
             }}
           />
-        ) : <Empty text={t(filterActive ? "common.noResults" : "storage.noBuckets")} />}
+        ) : (
+          <Empty
+            text={t(filterActive ? "common.noResults" : "storage.noBuckets")}
+          />
+        )}
       </div>
       <Modal
         drawer
@@ -202,43 +414,21 @@ export default function StoragePage() {
           <ErrorState error={overview.error} />
         ) : bucket ? (
           <div className="stack">
-            <Panel title={t("storage.bucketDetails")}>
-              <KeyValues
-                items={[
-                  ["ID", formatResourceId("obj", bucket.id)],
-                  [t("common.name"), bucket.name],
-                  [t("common.region"), t("common." + bucket.region)],
-                  [t("storage.tier"), bucket.storageClass || "STANDARD"],
-                  [t("storage.bucketLimit"), size(bucket.quotaGb)],
-                  [t("storage.actualUsage"), overview.data ? size(overview.data.usedGb) : t("storage.noUsageData")],
-                  [t("storage.objects"), overview.data?.objectCount ?? "—"],
-                  [t("common.project"), `${projectName(bucket.projectId)} · ${formatResourceId("prj", bucket.projectId || "")}`],
-                  [t("common.status"), t("common.active")],
-                  [t("storage.accessPolicy"), t("common." + bucket.access)],
-                  [
-                    t("storage.source"),
-                    t(
-                      bucket.attachedResourceUuid
-                        ? "storage.deploymentSource"
-                        : "storage.standaloneSource",
-                    ),
-                  ],
-                  [t("common.createdAt"), date(bucket.createdAt)],
-                ]}
-              />
+            <Panel
+              title={bucket.name}
+              action={
+                <Button
+                  onClick={() => void copy(formatResourceId("obj", bucket.id))}
+                >
+                  {t("storage.copyId")}
+                </Button>
+              }
+            >
+              <small className="resource-id">
+                {formatResourceId("obj", bucket.id)} ·{" "}
+                {projectName(bucket.projectId)} · {t("common." + bucket.region)}
+              </small>
             </Panel>
-            <Panel title={t("storage.accessDetails")}>
-              <KeyValues items={[
-                [t("storage.accessPolicy"), t("common." + bucket.access)],
-                [t("storage.attached"), bucket.references[0]?.name || t("storage.unattached")],
-                [t("storage.lifecycle"), String(bucket.lifecycle.length)],
-              ]} />
-            </Panel>
-            {bucket.references[0] && (
-              <Link to={bucket.references[0].href}>
-                {t("storage.attached")}: {bucket.references[0].name}
-              </Link>
-            )}
             <Panel
               title={t("storage.capacity")}
               action={
@@ -248,7 +438,8 @@ export default function StoragePage() {
                     !canWrite(role) ||
                     busy ||
                     bucket.objects.length > 0 ||
-                    bucket.references.length > 0
+                    bucket.references.length > 0 ||
+                    bucket.lifecycle.length > 0
                   }
                   onClick={async () => {
                     if (
@@ -268,7 +459,9 @@ export default function StoragePage() {
                 </Button>
               }
             >
-              {(bucket.objects.length > 0 || bucket.references.length > 0) && (
+              {(bucket.objects.length > 0 ||
+                bucket.references.length > 0 ||
+                bucket.lifecycle.length > 0) && (
                 <small>{t("storage.bucketDeleteHint")}</small>
               )}
               <div className="between">
@@ -287,7 +480,13 @@ export default function StoragePage() {
               <small>{t("storage.bucketLimitHint")}</small>
             </Panel>
             <Tabs
-              items={["objects", "lifecycle"].map((id) => ({
+              items={[
+                "objects",
+                "properties",
+                "permissions",
+                "management",
+                "monitoring",
+              ].map((id) => ({
                 id,
                 label: t("storage." + id),
               }))}
@@ -331,59 +530,266 @@ export default function StoragePage() {
                         type="file"
                         multiple
                         disabled={!canWrite(role)}
-                        onChange={(e) => void upload(e.target.files)}
+                        onChange={(e) => {
+                          void upload(e.target.files);
+                          e.target.value = "";
+                        }}
                       />
                     </label>
                   </div>
                 </div>
-                {objects.data?.prefixes.map((p) => (
-                  <Button key={p} onClick={() => setPrefix(p)}>
-                    📁 {p.slice(prefix.length)}
+                <div className="toolbar">
+                  <input
+                    className="input search"
+                    aria-label={t("common.search")}
+                    placeholder={t("storage.searchObjects")}
+                    value={objectSearch}
+                    onChange={(e) => {
+                      setObjectSearch(e.target.value);
+                      setObjectPage(1);
+                    }}
+                  />
+                  <input
+                    className="input"
+                    aria-label={t("storage.folderName")}
+                    placeholder={t("storage.folderName")}
+                    value={folderName}
+                    onChange={(e) => setFolderName(e.target.value)}
+                  />
+                  <Button
+                    disabled={
+                      !canWrite(role) ||
+                      busy ||
+                      !folderName.trim() ||
+                      folderName.includes("/")
+                    }
+                    onClick={() => void createFolder()}
+                  >
+                    {t("storage.createFolder")}
                   </Button>
-                ))}
-                {objects.data?.objects.length ? (
-                  grid ? (
-                    <div className="grid grid-3">
-                      {objects.data.objects.map((o) => (
-                        <button
-                          className="catalog-card"
-                          key={o.key}
-                          onClick={() => setSelected(o)}
-                        >
-                          <strong>{o.key.split("/").at(-1)}</strong>
-                          <small>{size(o.size / 1e9)}</small>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <DataTable
-                      data={objects.data.objects}
-                      onRow={setSelected}
-                      columns={[
-                        { accessorKey: "key", header: t("common.key") },
-                        {
-                          accessorKey: "size",
-                          header: t("common.size"),
-                          cell: ({ row }) => size(row.original.size / 1e9),
-                        },
-                        {
-                          accessorKey: "storageClass",
-                          header: t("common.type"),
-                        },
-                        {
-                          accessorKey: "updatedAt",
-                          header: t("common.updatedAt"),
-                          cell: ({ row }) => date(row.original.updatedAt),
-                        },
-                      ]}
-                    />
-                  )
+                </div>
+                {prefix &&
+                  bucket.objects.some((item) => item.key === prefix) && (
+                    <Button
+                      variant="danger"
+                      disabled={!canWrite(role) || busy}
+                      onClick={async () => {
+                        if (
+                          !(await confirmAction(
+                            t("storage.deleteFolderConfirm") + " " + prefix,
+                          ))
+                        )
+                          return;
+                        const result = await run(async () => {
+                          await remove(
+                            `${EP.buckets}/${id}/objects` +
+                              query({ key: prefix }),
+                          );
+                          return true;
+                        });
+                        if (result)
+                          setPrefix(
+                            prefix
+                              .split("/")
+                              .filter(Boolean)
+                              .slice(0, -1)
+                              .join("/") +
+                              (prefix.split("/").filter(Boolean).length > 1
+                                ? "/"
+                                : ""),
+                          );
+                      }}
+                    >
+                      {t("storage.deleteFolder")}
+                    </Button>
+                  )}
+                {objects.isPending ? (
+                  <Loading />
+                ) : objects.error ? (
+                  <ErrorState error={objects.error} />
                 ) : (
-                  <Empty text={t("storage.empty")} />
+                  <>
+                    {objects.data?.prefixes.map((p) => (
+                      <Button key={p} onClick={() => setPrefix(p)}>
+                        📁 {p.slice(prefix.length)}
+                      </Button>
+                    ))}
+                    {visibleObjects.length ? (
+                      grid ? (
+                        <div className="grid grid-3">
+                          {pageObjects.map((o) => (
+                            <button
+                              className="catalog-card"
+                              key={o.key}
+                              onClick={() => setSelected(o)}
+                            >
+                              <strong>{o.key.split("/").at(-1)}</strong>
+                              <small>{size(o.size / 1e9)}</small>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <DataTable
+                          data={pageObjects}
+                          onRow={setSelected}
+                          columns={[
+                            {
+                              accessorKey: "key",
+                              header: t("common.key"),
+                              cell: ({ row }) =>
+                                row.original.key.slice(prefix.length),
+                            },
+                            {
+                              id: "objectType",
+                              header: t("storage.objectType"),
+                              cell: ({ row }) =>
+                                row.original.key.endsWith("/")
+                                  ? t("storage.folder")
+                                  : row.original.contentType,
+                            },
+                            {
+                              accessorKey: "size",
+                              header: t("common.size"),
+                              cell: ({ row }) => size(row.original.size / 1e9),
+                            },
+                            {
+                              accessorKey: "storageClass",
+                              header: t("common.type"),
+                            },
+                            {
+                              id: "encryption",
+                              header: t("storage.encryption"),
+                              cell: ({ row }) =>
+                                row.original.encryption === "none"
+                                  ? t("storage.disabled")
+                                  : "SSE",
+                            },
+                            {
+                              accessorKey: "updatedAt",
+                              header: t("common.updatedAt"),
+                              cell: ({ row }) => date(row.original.updatedAt),
+                            },
+                          ]}
+                        />
+                      )
+                    ) : (
+                      <Empty
+                        text={t(
+                          objectSearch ? "common.noResults" : "storage.empty",
+                        )}
+                      />
+                    )}
+                    <div className="between">
+                      <small>
+                        {visibleObjects.length} {t("storage.objects")}
+                      </small>
+                      <div className="row">
+                        <select
+                          aria-label={t("storage.pageSize")}
+                          value={objectPageSize}
+                          onChange={(e) => {
+                            setObjectPageSize(Number(e.target.value));
+                            setObjectPage(1);
+                          }}
+                        >
+                          <option value={10}>10</option>
+                          <option value={25}>25</option>
+                          <option value={50}>50</option>
+                        </select>
+                        <Button
+                          disabled={objectPage <= 1}
+                          onClick={() => setObjectPage(objectPage - 1)}
+                        >
+                          {t("storage.prevPage")}
+                        </Button>
+                        <span>
+                          {Math.min(objectPage, pageCount)} / {pageCount}
+                        </span>
+                        <Button
+                          disabled={objectPage >= pageCount}
+                          onClick={() => setObjectPage(objectPage + 1)}
+                        >
+                          {t("storage.nextPage")}
+                        </Button>
+                      </div>
+                    </div>
+                  </>
                 )}
               </div>
-            ) : (
+            ) : tab === "management" ? (
               <div className="stack">
+                <Panel title={t("storage.versioning")}>
+                  <label className="row">
+                    <input
+                      type="checkbox"
+                      checked={settings.versioning}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          versioning: e.target.checked,
+                        })
+                      }
+                    />
+                    {t("storage.keepVersions")}
+                  </label>
+                  <small>{t("storage.versioningHint")}</small>
+                </Panel>
+                <Panel title={t("storage.tags")}>
+                  <div className="row">
+                    <input
+                      className="input"
+                      value={tagKey}
+                      placeholder="Key"
+                      onChange={(e) => setTagKey(e.target.value)}
+                    />
+                    <input
+                      className="input"
+                      value={tagValue}
+                      placeholder="Value"
+                      onChange={(e) => setTagValue(e.target.value)}
+                    />
+                    <Button
+                      disabled={!tagKey.trim() || !canWrite(role)}
+                      onClick={() => {
+                        setSettings({
+                          ...settings,
+                          tags: {
+                            ...settings.tags,
+                            [tagKey.trim()]: tagValue.trim(),
+                          },
+                        });
+                        setTagKey("");
+                        setTagValue("");
+                      }}
+                    >
+                      {t("storage.add")}
+                    </Button>
+                  </div>
+                  {Object.entries(settings.tags).map(([key, value]) => (
+                    <div className="between" key={key}>
+                      <span>
+                        {key}: {value}
+                      </span>
+                      <Button
+                        disabled={!canWrite(role)}
+                        onClick={() => {
+                          const tags = { ...settings.tags };
+                          delete tags[key];
+                          setSettings({ ...settings, tags });
+                        }}
+                      >
+                        {t("common.delete")}
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    variant="primary"
+                    disabled={!canWrite(role) || busy}
+                    onClick={() => void saveSettings()}
+                  >
+                    {t("common.save")}
+                  </Button>
+                </Panel>
                 <small>{t("storage.lifecycleHint")}</small>
                 <DataTable
                   data={bucket.lifecycle}
@@ -494,7 +900,137 @@ export default function StoragePage() {
                   </Button>
                 </div>
               </div>
-            )}
+            ) : tab === "properties" ? (
+              <div className="stack">
+                <Panel title={t("storage.bucketDetails")}>
+                  <KeyValues
+                    items={[
+                      ["ID", formatResourceId("obj", bucket.id)],
+                      [t("common.name"), bucket.name],
+                      [t("common.region"), t("common." + bucket.region)],
+                      [
+                        t("common.project"),
+                        `${projectName(bucket.projectId)} · ${formatResourceId("prj", bucket.projectId || "")}`,
+                      ],
+                      [
+                        t("storage.defaultClass"),
+                        bucket.storageClass || "STANDARD",
+                      ],
+                      [t("storage.bucketLimit"), size(bucket.quotaGb)],
+                      [
+                        t("storage.defaultEncryption"),
+                        t(
+                          bucket.defaultEncryption === false
+                            ? "storage.disabled"
+                            : "storage.enabled",
+                        ),
+                      ],
+                      [
+                        t("storage.versioning"),
+                        t(
+                          bucket.versioning
+                            ? "storage.enabled"
+                            : "storage.disabled",
+                        ),
+                      ],
+                      [t("common.createdAt"), date(bucket.createdAt)],
+                    ]}
+                  />
+                  <small>{t("storage.immutableProperties")}</small>
+                </Panel>
+                <Panel title={t("storage.tags")}>
+                  <KeyValues
+                    items={Object.entries(bucket.tags || {}).map(
+                      ([key, value]) => [key, value],
+                    )}
+                  />
+                  {!Object.keys(bucket.tags || {}).length && (
+                    <small>{t("storage.noTags")}</small>
+                  )}
+                </Panel>
+                {bucket.references[0] && (
+                  <Link to={bucket.references[0].href}>
+                    {t("storage.attached")}: {bucket.references[0].name}
+                  </Link>
+                )}
+              </div>
+            ) : tab === "permissions" ? (
+              <div className="stack">
+                <Panel title={t("storage.accessPolicy")}>
+                  <label className="row">
+                    <input
+                      type="checkbox"
+                      checked={settings.blockPublicAccess}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          blockPublicAccess: e.target.checked,
+                          access: e.target.checked
+                            ? "private"
+                            : settings.access,
+                        })
+                      }
+                    />
+                    {t("storage.blockPublicAccess")}
+                  </label>
+                  <Field label={t("storage.accessPolicy")}>
+                    <select
+                      value={settings.access}
+                      disabled={settings.blockPublicAccess}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          access: e.target.value as "private" | "public_read",
+                        })
+                      }
+                    >
+                      <option value="private">{t("common.private")}</option>
+                      <option value="public_read">
+                        {t("common.public_read")}
+                      </option>
+                    </select>
+                  </Field>
+                  <small>{t("storage.accessScopeHint")}</small>
+                </Panel>
+                <Panel title={t("storage.defaultEncryption")}>
+                  <label className="row">
+                    <input
+                      type="checkbox"
+                      checked={settings.defaultEncryption}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          defaultEncryption: e.target.checked,
+                        })
+                      }
+                    />
+                    {t("storage.encryptNewObjects")}
+                  </label>
+                  <small>{t("storage.encryptionScopeHint")}</small>
+                </Panel>
+                <Button
+                  variant="primary"
+                  disabled={!canWrite(role) || busy}
+                  onClick={() => void saveSettings()}
+                >
+                  {t("common.save")}
+                </Button>
+              </div>
+            ) : tab === "monitoring" ? (
+              <div className="stack">
+                <Panel title={t("storage.actualUsage")}>
+                  <KeyValues
+                    items={[
+                      [t("storage.objects"), overview.data.objectCount],
+                      [t("storage.actualUsage"), size(overview.data.usedGb)],
+                      [t("storage.bucketLimit"), size(overview.data.quotaGb)],
+                      [t("storage.measuredAt"), date(overview.data.measuredAt)],
+                      [t("storage.requests"), t("storage.noUsageData")],
+                    ]}
+                  />
+                </Panel>
+              </div>
+            ) : null}
           </div>
         ) : null}
       </Modal>
@@ -510,6 +1046,11 @@ export default function StoragePage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
+            {q.data?.some((item) => item.name === name.trim()) && (
+              <small className="field-error">
+                {t("storage.duplicateBucket")}
+              </small>
+            )}
           </Field>
           <div className="form-grid">
             <Field label={t("common.project")}>
@@ -552,14 +1093,67 @@ export default function StoragePage() {
               />
             </Field>
           </div>
+          <details
+            open={advancedOpen}
+            onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}
+          >
+            <summary>{t("storage.advancedConfig")}</summary>
+            <div className="stack" style={{ paddingTop: 12 }}>
+              <label className="row">
+                <input
+                  type="checkbox"
+                  checked={createBlockPublic}
+                  onChange={(e) => setCreateBlockPublic(e.target.checked)}
+                />
+                {t("storage.blockPublicAccess")}
+              </label>
+              <label className="row">
+                <input
+                  type="checkbox"
+                  checked={createEncryption}
+                  onChange={(e) => setCreateEncryption(e.target.checked)}
+                />
+                {t("storage.defaultEncryption")}
+              </label>
+              <label className="row">
+                <input
+                  type="checkbox"
+                  checked={createVersioning}
+                  onChange={(e) => setCreateVersioning(e.target.checked)}
+                />
+                {t("storage.versioning")}
+              </label>
+              <div className="form-grid">
+                <Field label={t("storage.tagKey")}>
+                  <input
+                    className="input"
+                    value={createTagKey}
+                    onChange={(e) => setCreateTagKey(e.target.value)}
+                  />
+                </Field>
+                <Field label={t("storage.tagValue")}>
+                  <input
+                    className="input"
+                    value={createTagValue}
+                    onChange={(e) => setCreateTagValue(e.target.value)}
+                  />
+                </Field>
+              </div>
+            </div>
+          </details>
+          <small>{t("storage.immutableProperties")}</small>
           <Button
             disabled={
               !/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(name) ||
+              !!q.data?.some((item) => item.name === name.trim()) ||
               busy ||
               quotaGb < 100 ||
               quotaGb > 1048500 ||
               quotaGb % 100 !== 0 ||
-              !bucketProject
+              !bucketProject ||
+              (!!createTagKey.trim() && createTagKey.trim().length > 128) ||
+              createTagValue.trim().length > 256 ||
+              (!!createTagValue.trim() && !createTagKey.trim())
             }
             onClick={async () => {
               const b = await run(
@@ -570,12 +1164,20 @@ export default function StoragePage() {
                     projectId: bucketProject,
                     storageClass,
                     quotaGb,
+                    blockPublicAccess: createBlockPublic,
+                    defaultEncryption: createEncryption,
+                    versioning: createVersioning,
+                    tags: createTagKey.trim()
+                      ? { [createTagKey.trim()]: createTagValue.trim() }
+                      : {},
                   }),
                 "success.created",
               );
               if (b) {
                 setNewOpen(false);
                 setId(b.id);
+                setTab("objects");
+                setName("");
               }
             }}
           >
@@ -598,9 +1200,59 @@ export default function StoragePage() {
                 ["Content-Type", selected.contentType],
                 ["ETag", selected.etag],
                 ["Storage Class", selected.storageClass],
+                [
+                  t("storage.encryption"),
+                  selected.encryption === "none"
+                    ? t("storage.disabled")
+                    : "SSE",
+                ],
+                [t("storage.versionId"), selected.versionId || "—"],
+                [
+                  t("storage.tags"),
+                  Object.entries(selected.tags || {})
+                    .map(([key, value]) => `${key}=${value}`)
+                    .join(", ") || "—",
+                ],
+                [t("storage.metadata"), selected.contentType],
                 [t("common.updatedAt"), date(selected.updatedAt)],
               ]}
             />
+            {!!selected.previousVersions?.length && (
+              <Panel title={t("storage.previousVersions")}>
+                {selected.previousVersions.map((version) => (
+                  <div className="between" key={version.versionId}>
+                    <span>
+                      {version.versionId.slice(0, 8)} ·{" "}
+                      {date(version.updatedAt)} · {size(version.size / 1e9)}
+                    </span>
+                    <Button
+                      onClick={() =>
+                        void run(async () => {
+                          const result = await api<{ url: string }>(
+                            `${EP.buckets}/${id}/sign` +
+                              query({
+                                key: selected.key,
+                                version_id: version.versionId,
+                                expires,
+                              }),
+                          );
+                          if (result.url.startsWith("data:")) {
+                            const a = document.createElement("a");
+                            a.href = result.url;
+                            a.download =
+                              selected.key.split("/").at(-1) || "object";
+                            a.click();
+                          }
+                          return result;
+                        })
+                      }
+                    >
+                      {t("common.download")}
+                    </Button>
+                  </div>
+                ))}
+              </Panel>
+            )}
             <Field label={t("storage.expiry")} hint="60–604800">
               <input
                 className="input"
@@ -620,6 +1272,9 @@ export default function StoragePage() {
               )}
             </Field>
             <div className="row">
+              <Button onClick={() => void copy(selected.key)}>
+                {t("storage.copyKey")}
+              </Button>
               <Button
                 disabled={
                   !Number.isInteger(expires) ||
@@ -648,7 +1303,7 @@ export default function StoragePage() {
                 onClick={async () => {
                   if (
                     !(await confirmAction(
-                      t("common.delete") + " " + selected.key,
+                      t("storage.deleteObjectConfirm") + " " + selected.key,
                     ))
                   )
                     return;

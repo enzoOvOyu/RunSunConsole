@@ -420,3 +420,42 @@ it("meters a standalone file system by configured capacity and shares the catalo
   expect((await request("/storage/products")).data.filter((item: { kind: string }) => item.kind === "object")
     .every((item: { usdGbMonth: number }) => item.usdGbMonth === 0)).toBe(true);
 });
+
+it("keeps Bucket security, versions, folders and actual quota in one data model", async () => {
+  const created = await request("/buckets", "POST", {
+    name: "secure-versioned-objects", region: "jp", projectId: db.projects[0].id,
+    storageClass: "STANDARD", quotaGb: 100, blockPublicAccess: true,
+    defaultEncryption: true, versioning: true, tags: { team: "gpu" },
+  });
+  expect(created.status).toBe(201);
+  const id = created.data.id;
+  expect(created.data).toMatchObject({ blockPublicAccess: true, defaultEncryption: true, versioning: true, tags: { team: "gpu" } });
+  const weakSettings = { blockPublicAccess: false, defaultEncryption: false, versioning: true, access: "public_read", tags: { team: "gpu" } };
+  expect((await request(`/buckets/${id}/settings`, "PUT", weakSettings)).status).toBe(422);
+  expect((await request(`/buckets/${id}/settings`, "PUT", { ...weakSettings, confirm: created.data.name })).status).toBe(200);
+  expect((await request(`/buckets/${id}/objects`, "POST", {
+    key: "models/", size: 0, contentType: "application/x-directory", content: "",
+  })).status).toBe(201);
+  const first = await request(`/buckets/${id}/objects`, "POST", {
+    key: "models/config.txt", size: 1_000_000, contentType: "text/plain", content: "data:text/plain;base64,QQ==",
+  });
+  expect(first.status).toBe(201);
+  expect(first.data.encryption).toBe("none");
+  const second = await request(`/buckets/${id}/objects`, "POST", {
+    key: "models/config.txt", size: 2_000_000, contentType: "text/plain", content: "data:text/plain;base64,Qg==",
+  });
+  expect(second.status).toBe(201);
+  expect(second.data.previousVersions).toHaveLength(1);
+  const listing = await request(`/buckets/${id}/objects?prefix=models%2F`);
+  expect(listing.data.objects).toHaveLength(1);
+  expect(listing.data.objects[0].size).toBe(2_000_000);
+  const summary = await request(`/buckets/${id}/overview`);
+  expect(summary.data.objectCount).toBe(2);
+  expect(summary.data.usedGb).toBeCloseTo(0.003);
+  expect(summary.data.requests).toBeNull();
+  const signedOld = await request(`/buckets/${id}/sign?key=models%2Fconfig.txt&version_id=${first.data.versionId}`);
+  expect(signedOld.status).toBe(200);
+  expect((await request(`/buckets/${id}`, "DELETE")).status).toBe(423);
+  expect((await fetch(`http://localhost/api/buckets/${id}/objects?key=models%2Fconfig.txt`, { method: "DELETE", headers: { "X-Role": "owner" } })).status).toBe(204);
+  expect((await request(`/buckets/${id}/overview`)).data.usedGb).toBe(0);
+});

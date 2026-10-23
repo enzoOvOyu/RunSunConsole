@@ -1,3 +1,4 @@
+import { bucketStoredBytes } from "../../lib/storage";
 import type { Bucket, Kind } from "../../types/domain";
 import type { ClusterView } from "../../types/monitoring";
 import type { StorageVolume } from "../../types/storage";
@@ -114,7 +115,7 @@ export function selectBucketRows(
       (!filters.projectId || bucket.projectId === filters.projectId) &&
       (!filters.storageClass ||
         (bucket.storageClass || "STANDARD") === filters.storageClass) &&
-      (!filters.status || bucket.status === filters.status)
+      (!filters.status || bucket.access === filters.status)
     );
   });
 }
@@ -124,10 +125,7 @@ export function bucketSummary(buckets: Bucket[]) {
     (summary, bucket) => {
       summary.limitGb += bucket.quotaGb;
       summary.objectCount += bucket.objects.length;
-      summary.actualBytes += bucket.objects.reduce(
-        (bytes, object) => bytes + object.size,
-        0,
-      );
+      summary.actualBytes += bucketStoredBytes(bucket);
       return summary;
     },
     { limitGb: 0, objectCount: 0, actualBytes: 0 },

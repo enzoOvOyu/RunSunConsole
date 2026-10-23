@@ -1,4 +1,4 @@
-import { isRegionalPoolVolume } from "../../lib/storage";
+import { bucketStoredBytes, objectStoredBytes, isRegionalPoolVolume } from "../../lib/storage";
 import type { FileAccessConfig } from "../../types/storage";
 import type { ElasticIp, SecurityRule, IpsecTunnel } from "../../types/network";
 import {
@@ -134,7 +134,7 @@ function storageQuotaBreakdown(region: Region, exclude?: string) {
                 bucket.region === region &&
                 (!exclude || bucket.attachedResourceUuid !== exclude),
             )
-            .reduce((total, bucket) => total + bucket.objects.reduce((bytes, object) => bytes + object.size, 0) / 1e9, 0)
+            .reduce((total, bucket) => total + bucketStoredBytes(bucket) / 1e9, 0)
         : db.volumes
             .filter(
               (volume) =>
@@ -3843,6 +3843,10 @@ async function dispatch(request: Request, settleBilling = true) {
           .parse(body.storageClass),
         attachedResourceUuid: null,
         access: "private" as const,
+        blockPublicAccess: z.boolean().default(true).parse(body.blockPublicAccess),
+        defaultEncryption: z.boolean().default(true).parse(body.defaultEncryption),
+        versioning: z.boolean().default(false).parse(body.versioning),
+        tags: z.record(z.string().min(1).max(128), z.string().max(256)).default({}).parse(body.tags),
         status: "active" as const,
         quotaGb,
         createdAt: new Date().toISOString(),
@@ -3856,7 +3860,7 @@ async function dispatch(request: Request, settleBilling = true) {
     }
   }
   const bm = path.match(
-    /^\/api\/buckets\/([^/]+)(?:\/(overview|objects|lifecycle|sign))?$/,
+    /^\/api\/buckets\/([^/]+)(?:\/(overview|objects|lifecycle|sign|settings))?$/,
   );
   if (bm) {
     const b = db.buckets.find((b) => b.id === bm[1]) || fail(404, "NOT_FOUND");
@@ -3873,6 +3877,9 @@ async function dispatch(request: Request, settleBilling = true) {
           continue;
         if (rule.action === "delete") {
           await deleteObject(`${b.id}:${object.key}`);
+          if (object.versionId) await deleteObject(`${b.id}:${object.key}:${object.versionId}`);
+          for (const version of object.previousVersions || [])
+            await deleteObject(`${b.id}:${object.key}:${version.versionId}`);
           b.objects = b.objects.filter((item) => item.key !== object.key);
         } else if (object.storageClass !== "IA") {
           object.storageClass = "IA";
@@ -3894,6 +3901,7 @@ async function dispatch(request: Request, settleBilling = true) {
             href: `/storage/object?drawer=${b.id}`,
           })),
         });
+      if (b.lifecycle.length) fail(409, "BUCKET_IN_USE", { rules: b.lifecycle.length });
       db.buckets = db.buckets.filter((x) => x.id !== b.id);
       return done();
     }
@@ -3901,14 +3909,10 @@ async function dispatch(request: Request, settleBilling = true) {
       return json({
         bucket: b,
         objectCount: b.objects.length,
-        usedGb: b.objects.reduce((a, o) => a + o.size, 0) / 1e9,
+        usedGb: bucketStoredBytes(b) / 1e9,
         quotaGb: b.quotaGb,
-        requests: Array.from({ length: 7 }, (_, i) => ({
-          date: new Date(Date.now() - (6 - i) * 86400000)
-            .toISOString()
-            .slice(0, 10),
-          value: b.objects.length * 120 + (i % 3) * 47,
-        })),
+        measuredAt: new Date().toISOString(),
+        requests: null,
       });
     if (part === "objects") {
       if (method === "GET") {
@@ -3926,47 +3930,61 @@ async function dispatch(request: Request, settleBilling = true) {
         return json({
           prefixes,
           objects: children.filter(
-            (o) => !o.key.slice(prefix.length).includes("/"),
+            (o) => o.key !== prefix && !o.key.slice(prefix.length).includes("/"),
           ),
         });
       }
       if (method === "POST") {
         const key = z.string().min(1).max(1024).parse(body.key);
+        if (key.startsWith("/") || key.includes("//")) fail(422, "VALIDATION_ERROR");
+        const folder = key.endsWith("/");
         const content = String(body.content || "");
-        const o: StorageObject = {
-          key,
-          size: z.number().nonnegative().parse(body.size),
-          contentType: String(body.contentType || "application/octet-stream"),
-          etag: crypto.randomUUID(),
-          storageClass: b.storageClass || "STANDARD",
-          updatedAt: new Date().toISOString(),
+        const objectSize = z.number().int().nonnegative().parse(body.size);
+        if (folder && (objectSize !== 0 || content)) fail(422, "VALIDATION_ERROR");
+        if (objectSize > 20_000_000) fail(422, "INVALID_FILE");
+        const previous = b.objects.find((item) => item.key === key);
+        if (folder && previous) fail(409, "VALIDATION_ERROR");
+        const archived = previous && (b.versioning || !!previous.versionId) ? {
+          versionId: previous.versionId || crypto.randomUUID(), size: previous.size,
+          contentType: previous.contentType, etag: previous.etag, storageClass: previous.storageClass,
+          updatedAt: previous.updatedAt, encryption: previous.encryption || "SSE" as const,
+          tags: previous.tags || {},
+        } : null;
+        const versionId = b.versioning ? crypto.randomUUID() : undefined;
+        const object: StorageObject = {
+          key, size: objectSize, contentType: folder ? "application/x-directory" : String(body.contentType || "application/octet-stream"),
+          etag: crypto.randomUUID(), storageClass: b.storageClass || "STANDARD",
+          updatedAt: new Date().toISOString(), encryption: b.defaultEncryption === false ? "none" : "SSE",
+          tags: {}, versionId,
+          previousVersions: [...(previous?.previousVersions || []), ...(archived ? [archived] : [])],
         };
-        if (o.size > 20_000_000) fail(422, "INVALID_FILE");
-        const previous = b.objects.find((x) => x.key === key)?.size || 0;
-        if (
-          b.objects.reduce((a, item) => a + item.size, 0) - previous + o.size >
-          b.quotaGb * 1e9
-        )
-          fail(409, "BUCKET_LIMIT_EXCEEDED");
-        const regionalBytes = db.buckets
-          .filter((bucket) => bucket.region === b.region)
-          .reduce((sum, bucket) => sum + bucket.objects.reduce((bytes, item) => bytes + item.size, 0), 0);
-        if (regionalBytes - previous + o.size > storageLimits[b.region].object * 1e9)
+        const nextBytes = bucketStoredBytes(b) - (previous ? objectStoredBytes(previous) : 0) + objectStoredBytes(object);
+        if (nextBytes > b.quotaGb * 1e9) fail(409, "BUCKET_LIMIT_EXCEEDED");
+        const regionalBytes = db.buckets.filter((bucket) => bucket.region === b.region)
+          .reduce((sum, bucket) => sum + bucketStoredBytes(bucket), 0);
+        if (regionalBytes - (previous ? objectStoredBytes(previous) : 0) + objectStoredBytes(object) > storageLimits[b.region].object * 1e9)
           fail(409, "QUOTA_EXCEEDED", { metric: "storage", kind: "object" });
         try {
+          if (archived) {
+            const oldContent = await getObject(`${b.id}:${key}`);
+            if (oldContent) await putObject(`${b.id}:${key}:${archived.versionId}`, oldContent);
+          }
           await putObject(`${b.id}:${key}`, content);
-        } catch {
-          fail(500, "INTERNAL");
-        }
-        b.objects = b.objects.filter((x) => x.key !== key);
-        b.objects.push(o);
+          if (versionId) await putObject(`${b.id}:${key}:${versionId}`, content);
+        } catch { fail(500, "INTERNAL"); }
+        b.objects = b.objects.filter((item) => item.key !== key);
+        b.objects.push(object);
         persist();
-        return json(o, 201);
+        return json(object, 201);
       }
       if (method === "DELETE") {
         const key = qs.get("key") || "";
-        b.objects = b.objects.filter((o) => o.key !== key);
+        const object = b.objects.find((item) => item.key === key) || fail(404, "NOT_FOUND");
+        b.objects = b.objects.filter((item) => item.key !== key);
         await deleteObject(`${b.id}:${key}`);
+        for (const version of object.previousVersions || [])
+          await deleteObject(`${b.id}:${key}:${version.versionId}`);
+        if (object.versionId) await deleteObject(`${b.id}:${key}:${object.versionId}`);
         return done();
       }
     }
@@ -3979,13 +3997,33 @@ async function dispatch(request: Request, settleBilling = true) {
         .min(60)
         .max(604800)
         .parse(qs.get("expires") || 3600);
-      const content = await getObject(`${b.id}:${key}`);
+      const versionId = qs.get("version_id");
+      if (versionId && versionId !== o.versionId && !o.previousVersions?.some((version) => version.versionId === versionId))
+        fail(404, "NOT_FOUND");
+      const content = await getObject(`${b.id}:${key}${versionId ? `:${versionId}` : ""}`);
       return json({
         url:
           content ||
           `https://s3.${b.region}.runsun.cloud/${b.name}/${encodeURIComponent(o.key)}?expires=${Math.floor(Date.now() / 1000) + expires}&signature=${crypto.randomUUID()}`,
         expires,
       });
+    }
+    if (part === "settings") {
+      if (method !== "PUT") fail(405, "METHOD_NOT_ALLOWED");
+      const config = z.object({
+        blockPublicAccess: z.boolean(), defaultEncryption: z.boolean(), versioning: z.boolean(),
+        access: z.enum(["private", "public_read"]),
+        tags: z.record(z.string().min(1).max(128), z.string().max(256)),
+      }).parse(body);
+      if (config.access === "public_read" && config.blockPublicAccess) fail(422, "VALIDATION_ERROR");
+      if ((b.blockPublicAccess !== false && !config.blockPublicAccess) ||
+          (b.defaultEncryption !== false && !config.defaultEncryption) ||
+          (b.access === "private" && config.access === "public_read")) {
+        if (body.confirm !== b.name) fail(422, "CONFIRM_MISMATCH");
+      }
+      Object.assign(b, config);
+      persist();
+      return json(b);
     }
     if (part === "lifecycle") {
       if (method === "PUT") {

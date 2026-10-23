@@ -549,6 +549,10 @@ export function restoreDatabase() {
         bucket.storageClass ??= "STANDARD";
         bucket.attachedResourceUuid ??= null;
         bucket.status ??= "active";
+        bucket.blockPublicAccess ??= true;
+        bucket.defaultEncryption ??= true;
+        bucket.versioning ??= false;
+        bucket.tags ??= {};
       }
       if (!data.storageAllocationMigrationVersion) {
         const existingIds = new Set(data.volumes.map((volume) => volume.id));

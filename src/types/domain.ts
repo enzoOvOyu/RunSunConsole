@@ -430,6 +430,16 @@ export interface Dataset {
   preview: Record<string, string | number>[];
   references: { id: string; name: string; href: string }[];
 }
+export interface StoredObjectVersion {
+  versionId: string;
+  size: number;
+  contentType: string;
+  etag: string;
+  storageClass: string;
+  updatedAt: string;
+  encryption: "SSE" | "none";
+  tags: Record<string, string>;
+}
 export interface StorageObject {
   key: string;
   size: number;
@@ -437,6 +447,10 @@ export interface StorageObject {
   etag: string;
   storageClass: string;
   updatedAt: string;
+  encryption?: "SSE" | "none";
+  tags?: Record<string, string>;
+  versionId?: string;
+  previousVersions?: StoredObjectVersion[];
 }
 export interface Bucket {
   id: string;
@@ -446,6 +460,10 @@ export interface Bucket {
   storageClass?: "STANDARD" | "IA";
   attachedResourceUuid?: ResourceUuid | null;
   access: "private" | "public_read";
+  blockPublicAccess?: boolean;
+  defaultEncryption?: boolean;
+  versioning?: boolean;
+  tags?: Record<string, string>;
   status: "active";
   quotaGb: number;
   createdAt: string;

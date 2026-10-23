@@ -3,15 +3,21 @@ import { formatResourceId } from "../../lib/ids";
 import { date } from "../../lib/date";
 import { size } from "../../lib/money";
 import { t } from "../../i18n";
-import { Badge, Button, DataTable } from "../../components/ui";
+import { Button, DataTable, copy } from "../../components/ui";
 
 type Props = {
   buckets: Bucket[];
   projectName: (id?: string) => string;
   onDetails: (bucket: Bucket) => void;
+  onManage: (bucket: Bucket) => void;
 };
 
-export function BucketTable({ buckets, projectName, onDetails }: Props) {
+export function BucketTable({
+  buckets,
+  projectName,
+  onDetails,
+  onManage,
+}: Props) {
   return (
     <DataTable
       data={buckets}
@@ -47,16 +53,6 @@ export function BucketTable({ buckets, projectName, onDetails }: Props) {
           ),
         },
         {
-          accessorKey: "storageClass",
-          header: t("storage.tier"),
-          cell: ({ row }) => row.original.storageClass || "STANDARD",
-        },
-        {
-          accessorKey: "quotaGb",
-          header: t("storage.bucketLimit"),
-          cell: ({ row }) => size(row.original.quotaGb),
-        },
-        {
           id: "count",
           header: t("storage.objects"),
           cell: ({ row }) => row.original.objects.length,
@@ -73,34 +69,45 @@ export function BucketTable({ buckets, projectName, onDetails }: Props) {
             ),
         },
         {
-          accessorKey: "createdAt",
-          header: t("common.createdAt"),
-          cell: ({ row }) => date(row.original.createdAt),
-        },
-        {
-          accessorKey: "status",
-          header: t("common.status"),
-          cell: ({ row }) => (
-            <Badge status={row.original.status} label={t("common.active")} />
-          ),
-        },
-        {
           accessorKey: "access",
           header: t("storage.accessPolicy"),
           cell: ({ row }) => t("common." + row.original.access),
         },
         {
+          accessorKey: "createdAt",
+          header: t("common.createdAt"),
+          cell: ({ row }) => date(row.original.createdAt),
+        },
+        {
           id: "operation",
           header: t("common.action"),
           cell: ({ row }) => (
-            <Button
-              onClick={(event) => {
-                event.stopPropagation();
-                onDetails(row.original);
-              }}
-            >
-              {t("common.details")}
-            </Button>
+            <div className="row">
+              <Button
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onDetails(row.original);
+                }}
+              >
+                {t("storage.browse")}
+              </Button>
+              <Button
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onManage(row.original);
+                }}
+              >
+                {t("storage.management")}
+              </Button>
+              <Button
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void copy(formatResourceId("obj", row.original.id));
+                }}
+              >
+                {t("storage.copyId")}
+              </Button>
+            </div>
           ),
         },
       ]}
