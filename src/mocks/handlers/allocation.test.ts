@@ -311,7 +311,7 @@ it("checks peak RAM allocation before admitting an elastic deployment", async ()
   const body = {
     kind: "gpu_vm",
     name: "memory-contract",
-    projectId: "default",
+    projectId: "training",
     region: "sg",
     nodePool: "H100_SXM",
     mode: "on_demand",

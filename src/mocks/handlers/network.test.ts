@@ -138,7 +138,7 @@ it("scopes real deployment options and rejects overlapping or cross-project subn
         zone: "jp-a",
       })
     ).data.code,
-  ).toBe("NETWORK_SCOPE_MISMATCH");
+  ).toBe("VALIDATION_ERROR");
   expect(
     (
       await request("/subnets", "POST", {

@@ -434,8 +434,7 @@ export function makeNetwork(
     ipSerial: 0,
   };
   for (const project of projects.filter((p) => !p.deletedAt))
-    for (const region of REGIONS)
-      ensureScope(n, { projectId: project.id, region });
+    ensureScope(n, { projectId: project.id, region: project.defaultRegion });
   for (const r of resources) {
     if (r.deletedAt) continue;
     if (r.kind === "gpu_baremetal") {

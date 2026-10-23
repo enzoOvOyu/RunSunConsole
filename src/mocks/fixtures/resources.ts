@@ -127,12 +127,7 @@ export function seedResources(): Resource[] {
       name: `${kind === "vgpu" ? "训练集群" : kind === "inference" ? "在线服务" : kind === "gpu_baremetal" ? "专属算力" : "开发环境"}-${region}-${i + 1}`,
       region,
       nodePool: code,
-      projectId:
-        kind === "inference"
-          ? "production"
-          : kind === "vgpu"
-            ? "training"
-            : "default",
+      projectId: region === "jp" ? "default" : region === "sg" ? "training" : "production",
       status,
       createdAt,
       runningSince: status === "running" ? createdAt : null,

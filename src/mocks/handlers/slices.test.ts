@@ -20,7 +20,7 @@ async function request(path: string, method = "GET", body?: unknown) {
   return { status: response.status, data: await response.json() };
 }
 function sliceOrder(count: number, name: string, sku = SLICE_SKUS[0], region: "jp" | "sg" | "us" = "jp") {
-  const project = db.projects.find((item) => item.isDefault)!;
+  const project = db.projects.find((item) => item.isDefault && item.defaultRegion === region)!;
   const vpc = db.network.vpcs.find((item) => item.projectId === project.id && item.region === region && !item.deletedAt && item.networkType === "standard")!;
   const subnet = db.network.subnets.find((item) => item.vpcId === vpc.id && !item.deletedAt)!;
   const spec = normalizeSpec({
@@ -86,7 +86,7 @@ it("returns reserved instances when provisioning fails", async () => {
 });
 
 it("offers a validated profile for every GPU pool and preserves saved allocations", async () => {
-  const projectId = db.projects.find((item) => item.isDefault)!.id;
+  const projectId = db.projects.find((item) => item.isDefault && item.defaultRegion === "us")!.id;
   const catalog = (await request(`/slices/catalog?region=us&project_id=${projectId}`)).data;
   expect(catalog).toHaveLength(poolsFor("us").length);
   for (const pool of poolsFor("us")) {

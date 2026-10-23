@@ -21,7 +21,7 @@ import {
 import { useAuth } from "../../stores/auth";
 import { useRegion } from "../../stores/region";
 import { canWrite, canManageOrg } from "../../lib/rbac";
-import { EP, post, patch, remove, query } from "../../lib/api-client";
+import { EP, post, patch, remove } from "../../lib/api-client";
 import { KIND_META, formatResourceId, resourceLink } from "../../lib/ids";
 import { date } from "../../lib/date";
 import { useAction, useData } from "../shared/hooks";
@@ -41,7 +41,6 @@ import {
   DataTable,
   Progress,
 } from "../../components/ui";
-import { RegionFilter } from "../shared/RegionFilter";
 const TrendChart = lazy(() => import("../../components/charts/TrendChart"));
 interface ProjectSummary extends Project {
   gpuTotal: number;
@@ -54,11 +53,8 @@ interface ProjectSummary extends Project {
 export default function ProjectsPage() {
   const [params, setParams] = useSearchParams();
   const region = useRegion((state) => state.region);
-  const setRegion = useRegion((state) => state.setRegion);
-  const q = useData<Project[]>(
-    ["projects", region],
-    EP.projects + query({ region }),
-  );
+  const selectedRegion = params.get("region");
+  const q = useData<Project[]>(["projects"], EP.projects);
   const [newOpen, setNewOpen] = useState(false);
   const [name, setName] = useState("");
   const [projectRegion, setProjectRegion] = useState<Region>(region);
@@ -85,7 +81,11 @@ export default function ProjectsPage() {
         }
       />
       <div className="toolbar">
-        <RegionFilter />
+        <select aria-label={t("common.region")} value={REGIONS.includes(selectedRegion as Region) ? selectedRegion! : "all"}
+          onChange={(event) => setParams((current) => { const next = new URLSearchParams(current); if (event.target.value === "all") next.delete("region"); else next.set("region", event.target.value); return next; }, { replace: true })}>
+          <option value="all">{t("common.allRegions")}</option>
+          {REGIONS.map((value) => <option key={value} value={value}>{t("common." + value)}</option>)}
+        </select>
         <input
           className="input search"
           placeholder={t("common.search")}
@@ -100,6 +100,7 @@ export default function ProjectsPage() {
       ) : q.data?.length ? (
         <div className="stack">
           {q.data
+            .filter((p) => !REGIONS.includes(selectedRegion as Region) || p.defaultRegion === selectedRegion)
             .filter((p) =>
               [dt(p.name), formatResourceId("prj", p.id)].some((value) =>
                 value.toLowerCase().includes(search.toLowerCase()),
@@ -149,10 +150,11 @@ export default function ProjectsPage() {
                 "success.created",
               );
               if (result) {
-                setRegion(projectRegion);
-                const next = new URLSearchParams(params);
-                next.set("region", projectRegion);
-                setParams(next, { replace: true });
+                if (REGIONS.includes(selectedRegion as Region) && selectedRegion !== projectRegion) {
+                  const next = new URLSearchParams(params);
+                  next.delete("region");
+                  setParams(next, { replace: true });
+                }
                 setNewOpen(false);
                 setName("");
                 setProjectRegion(projectRegion);
@@ -189,6 +191,7 @@ function ProjectCard({ project: p }: { project: Project }) {
             <small>{t("project.id")}: </small>
             <small className="resource-id">{formatResourceId("prj", p.id)}</small>
           </div>
+          <small>{t("common." + p.defaultRegion)}</small>
           {p.isDefault && (
             <span className="chip">{t("project.default")}</span>
           )}
@@ -572,25 +575,7 @@ export function ProjectDetail() {
             >
               {t("common.save")}
             </Button>
-            <Field label={t("common.region")}>
-              <select
-                value={p.defaultRegion}
-                disabled={!canManageOrg(role)}
-                onChange={(e) =>
-                  void run(() =>
-                    patch(`${EP.projects}/${p.id}`, {
-                      defaultRegion: e.target.value,
-                    }),
-                  )
-                }
-              >
-                {REGIONS.map((r) => (
-                  <option key={r} value={r}>
-                    {t("common." + r)}
-                  </option>
-                ))}
-              </select>
-            </Field>
+            <Field label={t("common.region")}><strong>{t("common." + p.defaultRegion)}</strong></Field>
             <Button
               variant="danger"
               disabled={!canManageOrg(role) || !!p.deletedAt || p.isDefault}

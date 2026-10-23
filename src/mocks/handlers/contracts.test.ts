@@ -223,7 +223,7 @@ it("creates an order and materializes one matching policy", async () => {
   const result = await request("/deployment-orders", "POST", {
     kind: "gpu_vm",
     name: "contract-server",
-    projectId: "default",
+    projectId: "training",
     region: "sg",
     nodePool: "H100_SXM",
     mode: "on_demand",
@@ -231,7 +231,7 @@ it("creates an order and materializes one matching policy", async () => {
     spec,
   });
   expect(result.status).toBe(201);
-  expect(result.data.order.projectId).toBe("default");
+  expect(result.data.order.projectId).toBe("training");
   expect(
     db.policies.filter(
       (p) => p.resourceUuid === result.data.resource.resourceUuid,
@@ -250,7 +250,7 @@ it("protects organization entities and scaling policy uniqueness", async () => {
     "DEFAULT_PROJECT",
   );
   expect((await request("/projects/training", "DELETE")).data.code).toBe(
-    "PROJECT_HAS_RESOURCES",
+    "DEFAULT_PROJECT",
   );
   expect((await request("/datasets/instructions", "DELETE")).data.code).toBe(
     "DATASET_IN_USE",
@@ -513,7 +513,7 @@ it("replays password orders without storing credentials or allocating twice", as
   const body = {
     kind: "gpu_vm",
     name: "password-order",
-    projectId: "default",
+    projectId: "training",
     region: "sg",
     nodePool: "H100_SXM",
     mode: "on_demand",
@@ -568,7 +568,7 @@ it("creates Windows GPU VMs with password-only RDP metadata and no browser conso
   spec.sshPubkey = "";
   spec.subnet = "sg-default";
   const body = {
-    kind: "gpu_vm", name: "windows-order", projectId: "default", region: "sg",
+    kind: "gpu_vm", name: "windows-order", projectId: "training", region: "sg",
     nodePool: "H100_SXM", mode: "on_demand", labels: [], spec,
     authPassword: "Strong-Windows-Password-42!",
   };
@@ -957,4 +957,26 @@ it("binds existing block storage and multi-zone subnets to a GPU cluster and sch
   expect(localWorkload.data.cluster.storage.pvcs.filter((pvc: { status: string }) => pvc.status === "Pending")).toHaveLength(1);
   expect((await request(`/resources/${cluster.resourceUuid}?confirm=${cluster.displayId}`, "DELETE")).status).toBe(200);
   expect(db.volumes.find((item) => item.id === createdVolume.data.id)).toMatchObject({ resourceUuid: null, role: "custom", deletedAt: null });
+});
+
+it("keeps regional default projects aligned across overview and project lists", async () => {
+  const projects = (await request("/projects")).data;
+  const overview = (await request("/overview")).data;
+  expect(projects).toHaveLength(3);
+  expect(overview.projects.map((project: { id: string }) => project.id).sort())
+    .toEqual(projects.map((project: { id: string }) => project.id).sort());
+  for (const region of ["jp", "sg", "us"]) {
+    const selected = projects.find((project: { defaultRegion: string }) => project.defaultRegion === region);
+    expect(selected?.isDefault).toBe(true);
+    expect((await request(`/projects?region=${region}`)).data.map((project: { id: string }) => project.id)).toEqual([selected.id]);
+    expect((await request(`/deployment-options?region=${region}&project_id=${selected.id}`)).status).toBe(200);
+  }
+  expect((await request("/deployment-options?region=us&project_id=default")).status).toBe(422);
+  const created = await request("/projects", "POST", { name: "Japanese project", defaultRegion: "jp" });
+  expect(created.status).toBe(201);
+  expect(created.data.isDefault).toBe(false);
+  expect(db.network.vpcs.filter((vpc) => vpc.projectId === created.data.id).every((vpc) => vpc.region === "jp")).toBe(true);
+  expect((await request(`/projects/${created.data.id}`, "PATCH", { defaultRegion: "us" })).status).toBe(409);
+  db.projects.find((project) => project.id === created.data.id)!.deletedAt = new Date().toISOString();
+  expect((await request("/overview")).data.projects).toHaveLength(3);
 });

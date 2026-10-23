@@ -138,7 +138,7 @@ export function seedStandaloneVolumes(resources: Resource[]): StorageVolume[] {
           tier: kind === "block" ? "essd_pl1" : "nas_capacity",
           role: "custom",
           sizeGb,
-          projectId: "default",
+          projectId: region === "jp" ? "default" : region === "sg" ? "training" : "production",
           region,
           zone: `${region}-a`,
           resourceUuid: null,

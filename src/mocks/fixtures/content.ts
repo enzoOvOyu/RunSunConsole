@@ -82,21 +82,16 @@ export const IMAGES: Image[] = [
   { id: "jupyter-cu130", name: "JupyterLab 4 · PyTorch 2.14", osFamily: "Linux container", osVersion: "CUDA 13.0", architectures: ["x86_64", "aarch64"], supportedGpuModels: allPools, compatibleOsFamilies: ["Ubuntu", "Rocky Linux", "Debian"], framework: "JupyterLab 4", frameworks: ["JupyterLab 4", "PyTorch 2.14"], cudaVersion: "13.0", driverVersion: null, sizeGb: 20, type: "container", source: "RunSun verified", description: "Notebook runtime with JupyterLab and PyTorch preinstalled; requires a Linux base OS." },
 ];
 
-export const PROJECTS: Project[] = ["default", "training", "production"].map(
-  (id, i) => ({
-    id,
-    name: ["默认项目", "模型训练", "生产推理"][i],
-    slug: id,
-    isDefault: i === 0,
-    defaultRegion: i === 2 ? "us" : "jp",
-    labels: [id],
-    createdAt: iso(25),
-    members: [
-      { userId: "enzoOvOyu", name: "enzoOvOyu", role: "owner" },
-      { userId: "team-ml", name: "ML Team", role: "member" },
-    ],
-  }),
-);
+export const PROJECTS: Project[] = (["jp", "sg", "us"] as const).map((region, i) => ({
+  id: ["default", "training", "production"][i],
+  name: "默认项目",
+  slug: `default-${region}`,
+  isDefault: true,
+  defaultRegion: region,
+  labels: [],
+  createdAt: iso(25),
+  members: [{ userId: "enzoOvOyu", name: "enzoOvOyu", role: "owner" }],
+}));
 export const DATASETS: Dataset[] = [
   {
     id: "instructions",
@@ -156,7 +151,7 @@ export const BUCKETS: Bucket[] = ["jp", "jp", "sg", "us"].map((region, i) => ({
   versioning: false,
   tags: {},
   status: "active",
-  projectId: "default",
+  projectId: region === "jp" ? "default" : region === "sg" ? "training" : "production",
   storageClass: "STANDARD",
   attachedResourceUuid: null,
   quotaGb: region === "us" ? 180_000 : 80_000,

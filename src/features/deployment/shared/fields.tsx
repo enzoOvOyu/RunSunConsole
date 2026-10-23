@@ -995,11 +995,12 @@ export function ProjectSelect({
   onCreate: () => void;
 }) {
   const form = useFormContext<WizardValues>();
+  const region = form.watch("region");
   return (
     <div className="row">
       <select aria-label={t("common.project")} {...form.register("projectId")}>
         <option value="">{t("common.project")}</option>
-        {projects.map((p) => (
+        {projects.filter((p) => !p.deletedAt && p.defaultRegion === region).map((p) => (
           <option key={p.id} value={p.id}>
             {dt(p.name)} · {formatResourceId("prj", p.id)}
           </option>

@@ -113,6 +113,8 @@ function fail(
 const resource = (id: string) =>
   db.resources.find((r) => r.resourceUuid === id) || fail(404, "NOT_FOUND");
 const live = () => db.resources.filter((r) => !r.deletedAt);
+const projectInRegion = (projectId: string, region: Region) =>
+  db.projects.some((project) => project.id === projectId && !project.deletedAt && project.defaultRegion === region);
 const sliceLimit = (projectId: string) => db.projects.find((project) => project.id === projectId)?.sliceQuota ?? 32;
 const sliceUsed = (projectId: string, region: Region) => live().filter((r) =>
   r.kind === "vgpu" && r.projectId === projectId && r.region === region &&
@@ -1019,7 +1021,7 @@ async function dispatchNetwork(
     const value = z
       .object({ projectId: z.string(), region: z.enum(REGIONS) })
       .parse(input);
-    if (!db.projects.some((p) => p.id === value.projectId && !p.deletedAt))
+    if (!projectInRegion(value.projectId, value.region))
       fail(422, "VALIDATION_ERROR");
     ensureScope(n, value);
     return value;
@@ -1763,8 +1765,8 @@ async function dispatch(request: Request, settleBilling = true) {
     return dispatchNetwork(path, method, qs, body, role);
   if (path === "/api/deployment-options") {
     const code = (region || "jp") as Region;
-    const projectId = qs.get("project_id") || db.projects.find((p) => p.isDefault && !p.deletedAt)?.id || db.projects.find((p) => !p.deletedAt)?.id || "";
-    if (!db.projects.some((p) => p.id === projectId && !p.deletedAt))
+    const projectId = qs.get("project_id") || db.projects.find((p) => p.isDefault && p.defaultRegion === code && !p.deletedAt)?.id || db.projects.find((p) => p.defaultRegion === code && !p.deletedAt)?.id || "";
+    if (!projectInRegion(projectId, code))
       fail(422, "VALIDATION_ERROR");
     ensureScope(db.network, { projectId, region: code });
     const requestedKind = qs.get("kind");
@@ -1845,9 +1847,7 @@ async function dispatch(request: Request, settleBilling = true) {
       const code = z.enum(REGIONS).parse(body.region);
       const projectId = z.string().min(1).parse(body.projectId);
       if (
-        !db.projects.some(
-          (project) => project.id === projectId && !project.deletedAt,
-        )
+        !projectInRegion(projectId, code)
       )
         fail(422, "VALIDATION_ERROR");
       const name = z.string().trim().min(3).max(63).parse(body.name);
@@ -2055,7 +2055,7 @@ async function dispatch(request: Request, settleBilling = true) {
   if (path === "/api/slices/catalog") {
     const selectedRegion = (region || "jp") as Region;
     const projectId = qs.get("project_id") || "";
-    if (!db.projects.some((item) => item.id === projectId && !item.deletedAt)) fail(422, "VALIDATION_ERROR");
+    if (!projectInRegion(projectId, selectedRegion)) fail(422, "VALIDATION_ERROR");
     return json(SLICE_SKUS.map((sku) => {
       const stock = sliceStock(sku.id, selectedRegion);
       return { ...sku, hourlyUsd: RATES.find((rate) => rate.kind === "vgpu" && rate.region === selectedRegion && rate.pool === sku.poolCode && rate.unit === "per_slice_hour")?.unitPrice ?? null,
@@ -2114,7 +2114,7 @@ async function dispatch(request: Request, settleBilling = true) {
       alerts: rs
         .filter((r) => r.status === "error")
         .map((r) => ({ id: r.resourceUuid, type: "error", resource: r })),
-      projects: db.projects.map((p) => ({ id: p.id, name: p.name })),
+      projects: db.projects.filter((p) => !p.deletedAt).map((p) => ({ id: p.id, name: p.name, defaultRegion: p.defaultRegion })),
       account: db.account,
     });
   }
@@ -2909,7 +2909,7 @@ async function dispatch(request: Request, settleBilling = true) {
         apiKey: null,
       });
     const parsed = orderSchema.parse(body);
-    if (!db.projects.some((p) => p.id === parsed.projectId && !p.deletedAt))
+    if (!projectInRegion(parsed.projectId, parsed.region))
       fail(422, "VALIDATION_ERROR");
     const spec = normalizeSpec(parsed.spec);
     const windowsOrder = "imageRef" in spec && isWindowsImage(IMAGES.find((image) => image.id === spec.imageRef));
@@ -3255,6 +3255,7 @@ async function dispatch(request: Request, settleBilling = true) {
           })),
       );
     if (method === "POST") {
+      const selectedRegion = z.enum(REGIONS).parse(body.defaultRegion || "jp");
       const name = z.string().min(2).max(63).parse(body.name);
       const slug =
         typeof body.slug === "string" && body.slug
@@ -3269,23 +3270,17 @@ async function dispatch(request: Request, settleBilling = true) {
         id: crypto.randomUUID(),
         name,
         slug,
-        isDefault: !db.projects.some((project) => !project.deletedAt),
-        defaultRegion:
-          body.defaultRegion === undefined
-            ? "jp"
-            : z.enum(REGIONS).parse(body.defaultRegion),
+        isDefault: !db.projects.some((project) => !project.deletedAt && project.defaultRegion === selectedRegion),
+        defaultRegion: selectedRegion,
         labels: [],
         createdAt: new Date().toISOString(),
         members: [{ userId: "enzoOvOyu", name: "enzoOvOyu", role }],
       };
-      for (const region of REGIONS) {
-        checkNetworkQuota(region, "vpc");
-        checkNetworkQuota(region, "subnet", 2);
-        checkNetworkQuota(region, "security_group", 4);
-      }
+      checkNetworkQuota(selectedRegion, "vpc", 2);
+      checkNetworkQuota(selectedRegion, "subnet", 4);
+      checkNetworkQuota(selectedRegion, "security_group", 6);
       db.projects.push(p);
-      for (const region of REGIONS)
-        ensureScope(db.network, { projectId: p.id, region });
+      ensureScope(db.network, { projectId: p.id, region: selectedRegion });
       persist();
       return json(p, 201);
     }
@@ -3382,8 +3377,7 @@ async function dispatch(request: Request, settleBilling = true) {
           .parse(body.members);
       } else {
         if (body.name) p.name = z.string().min(2).max(63).parse(body.name);
-        if (body.defaultRegion)
-          p.defaultRegion = z.enum(REGIONS).parse(body.defaultRegion);
+        if (body.defaultRegion && body.defaultRegion !== p.defaultRegion) fail(409, "PROJECT_REGION_IMMUTABLE");
         if (body.labels) p.labels = z.array(z.string()).parse(body.labels);
       }
       persist();
@@ -3960,9 +3954,7 @@ async function dispatch(request: Request, settleBilling = true) {
       const code = z.enum(REGIONS).parse(body.region);
       const projectId = z.string().min(1).parse(body.projectId);
       if (
-        !db.projects.some(
-          (project) => project.id === projectId && !project.deletedAt,
-        )
+        !projectInRegion(projectId, code)
       )
         fail(422, "VALIDATION_ERROR");
       const quotaGb = z

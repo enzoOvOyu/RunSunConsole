@@ -263,10 +263,10 @@ function WizardForm({
   const initial = (): WizardValues => {
     const availableProjects = context.projects.filter((item) => !item.deletedAt);
     const defaultProjectId =
-      availableProjects.find((item) => item.isDefault)?.id ||
-      availableProjects[0]?.id ||
+      availableProjects.find((item) => item.isDefault && item.defaultRegion === region)?.id ||
+      availableProjects.find((item) => item.defaultRegion === region)?.id ||
       "";
-    const initialProjectId = availableProjects.some((item) => item.id === project)
+    const initialProjectId = availableProjects.some((item) => item.id === project && item.defaultRegion === region)
       ? project
       : defaultProjectId;
     const base: WizardValues = {
@@ -286,8 +286,9 @@ function WizardForm({
         const draft = JSON.parse(stored) as WizardValues;
         if (kind === "gpu_vm") draft.spec = normalizeServerCompute(draft.spec);
         if (kind === "vgpu" && "nodePools" in draft.spec && draft.spec.deploymentMode === "slice") draft.mode = "on_demand";
-        if (!availableProjects.some((item) => item.id === draft.projectId))
-          draft.projectId = initialProjectId;
+        if (!availableProjects.some((item) => item.id === draft.projectId && item.defaultRegion === draft.region))
+          draft.projectId = availableProjects.find((item) => item.isDefault && item.defaultRegion === draft.region)?.id ||
+            availableProjects.find((item) => item.defaultRegion === draft.region)?.id || initialProjectId;
         return draft;
       }
     } catch {
@@ -546,6 +547,8 @@ function WizardForm({
                         onChange={(e) => {
                           const next = e.target.value as WizardValues["region"];
                           form.setValue("region", next, { shouldDirty: true });
+                          form.setValue("projectId", context.projects.find((item) => item.isDefault && item.defaultRegion === next && !item.deletedAt)?.id ||
+                            context.projects.find((item) => item.defaultRegion === next && !item.deletedAt)?.id || "", { shouldDirty: true });
                           const spec = form.getValues("spec");
                           if ("subnet" in spec)
                             form.setValue("spec", {
@@ -715,7 +718,7 @@ function WizardForm({
             disabled={projectName.length < 2 || busy}
             onClick={async () => {
               const p = await run(() =>
-                post<Project>(EP.projects, { name: projectName }),
+                post<Project>(EP.projects, { name: projectName, defaultRegion: values.region }),
               );
               if (p) {
                 form.setValue("projectId", p.id);
