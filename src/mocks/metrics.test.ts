@@ -96,3 +96,19 @@ it("selects requested metrics before generating points and returns a lightweight
     vi.useRealTimers();
   }
 });
+
+it("gives resources distinct, continuous workload shapes across chart windows", () => {
+  vi.useFakeTimers();
+  try {
+    vi.setSystemTime(new Date("2026-10-19T14:00:00Z"));
+    const resources = seedResources().filter((item) => item.kind === "gpu_vm" && item.status === "running").slice(0, 2);
+    expect(resources).toHaveLength(2);
+    const first = metricsFor(resources[0], "6h").find((series) => series.key === "gpu_utilization")!;
+    const second = metricsFor(resources[1], "6h").find((series) => series.key === "gpu_utilization")!;
+    expect(first.points.map((point) => point.value)).not.toEqual(second.points.map((point) => point.value));
+    const oneHour = metricsFor(resources[0], "1h").find((series) => series.key === "gpu_utilization")!;
+    expect(oneHour.points.at(-1)?.value).toBe(first.points.at(-1)?.value);
+  } finally {
+    vi.useRealTimers();
+  }
+});

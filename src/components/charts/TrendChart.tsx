@@ -22,11 +22,15 @@ export default function TrendChart({
   keys = ["amount"],
   currency = true,
   labels,
+  timeWindow,
+  unit,
 }: {
   data: Record<string, unknown>[];
   keys?: string[];
   currency?: boolean;
   labels?: Record<string, string>;
+  timeWindow?: string;
+  unit?: string;
 }) {
   const locale = useLocale((s) => s.locale);
   return (
@@ -48,10 +52,9 @@ export default function TrendChart({
             minTickGap={32}
             tickFormatter={(v) =>
               String(v).includes("T")
-                ? new Intl.DateTimeFormat(locale, {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  }).format(new Date(String(v)))
+                ? new Intl.DateTimeFormat(locale, timeWindow === "7d"
+                    ? { month: "2-digit", day: "2-digit" }
+                    : { hour: "2-digit", minute: "2-digit" }).format(new Date(String(v)))
                 : String(v).slice(5, 10)
             }
             stroke="var(--rs-text-secondary)"
@@ -68,13 +71,16 @@ export default function TrendChart({
             }
           />
           <Tooltip
+            labelFormatter={timeWindow ? (value) => new Intl.DateTimeFormat(locale, {
+              month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
+            }).format(new Date(String(value))) : undefined}
             contentStyle={{
               background: "var(--rs-bg)",
               border: "1px solid var(--rs-border)",
               borderRadius: 8,
             }}
             formatter={(v, name) => [
-              currency ? money(Number(v)) : number(Number(v), 1),
+              currency ? money(Number(v)) : `${number(Number(v), 1)}${unit ? ` ${unit}` : ""}`,
               labels?.[String(name)] || t(`common.${name}`),
             ]}
           />

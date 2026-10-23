@@ -44,8 +44,10 @@ const MONITOR_POLL_MS: Record<string, number> = {
 };
 const MetricCard = memo(function MetricCard({
   series,
+  window,
 }: {
   series: MetricSeries;
+  window: string;
 }) {
   useLocale((state) => state.locale);
   const lastPoint = series.points.at(-1);
@@ -93,6 +95,8 @@ const MetricCard = memo(function MetricCard({
           }))}
           keys={["value"]}
           currency={false}
+          timeWindow={window}
+          unit={series.unit}
         />
       </Suspense>
     </Panel>
@@ -189,7 +193,7 @@ export function MonitorPanel({
           ) : (
             <div className="grid grid-2">
               {data.data?.map((series) => (
-                <MetricCard key={series.key} series={series} />
+                <MetricCard key={series.key} series={series} window={window} />
               ))}
             </div>
           )}

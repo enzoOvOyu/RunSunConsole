@@ -211,6 +211,10 @@ export function metricsFor(
   const readyAt =
     new Date(r.createdAt).getTime() + provisioningSeconds(r, db.models) * 1000;
   const today = new Date(end).toISOString().slice(0, 10);
+  const resourceSeed = hash(`${import.meta.env.VITE_MOCK_SEED || 20261017}:${r.resourceUuid}:${nodeIndex ?? "all"}`);
+  const workloadPeriod = (19 + resourceSeed % 29) * 60000;
+  const slowPeriod = (7 + resourceSeed % 6) * 3600000;
+  const workloadPhase = (resourceSeed % 6283) / 1000;
   const sampleCount = options.latest ? 1 : count;
   const times = Array.from({ length: sampleCount }, (_, i) => {
     const ms = end - (sampleCount - 1 - i) * bucket;
@@ -220,14 +224,10 @@ export function metricsFor(
       at: timestamp.toISOString(),
       slot: Math.floor(ms / 10000),
       shape:
-        r.kind === "inference"
-          ? Math.sin(
-              ((timestamp.getUTCHours() + timestamp.getUTCMinutes() / 60) /
-                24) *
-                2 *
-                Math.PI,
-            ) * 0.06
-          : Math.sin(ms / 120000) * (r.kind === "gpu_vm" ? 0.35 : 0.04),
+        Math.sin((ms / workloadPeriod) * 2 * Math.PI + workloadPhase) * 0.095 +
+        Math.sin((ms / slowPeriod) * 2 * Math.PI + workloadPhase * 0.7) * 0.075 +
+        Math.sin((ms / 86400000) * 2 * Math.PI + workloadPhase) *
+          (r.kind === "inference" ? 0.1 : 0.045),
       missing:
         ms < readyAt ||
         (r.mode === "spot" &&
@@ -274,13 +274,12 @@ export function metricsFor(
       ...(name === "gpu_memory_used" ? { capacity: gpu.memoryGb } : {}),
       points: times.map((point) => {
         if (missing || point.missing) return { at: point.at, value: null };
+        const metricPeriod = (7 + seed % 13) * 60000;
+        const metricPhase = (seed % 6283) / 1000;
+        const metricShape = Math.sin((point.ms / metricPeriod) * 2 * Math.PI + metricPhase) * 0.035;
         const value = discrete.has(name)
           ? base!
-          : base! *
-            (1 +
-              point.shape +
-              (pointNoise(seed, point.slot) - 0.5) * 0.055 +
-              (point.slot % 113 === 0 ? 0.05 : 0));
+          : base! * (1 + point.shape + metricShape + (pointNoise(seed, point.slot) - 0.5) * 0.035);
         return {
           at: point.at,
           value:
