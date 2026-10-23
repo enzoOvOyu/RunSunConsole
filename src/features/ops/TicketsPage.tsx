@@ -31,6 +31,7 @@ import { useAuth } from "../../stores/auth";
 import { canWrite } from "../../lib/rbac";
 import { api, EP, patch, post, query } from "../../lib/api-client";
 import { formatResourceId, resourceLink } from "../../lib/ids";
+import { QUOTA_TICKET_METRICS, quotaTicketMetric } from "../../lib/quota-ticket";
 import { useAction, useData } from "../shared/hooks";
 import { useUrlState } from "../shared/useUrlState";
 import { RegionFilter } from "../shared/RegionFilter";
@@ -63,6 +64,8 @@ const priorities: TicketPriority[] = ["low", "normal", "high", "urgent"];
 const statuses: TicketStatus[] = ["open", "pending", "resolved", "closed"];
 const ticketTitlePreset = (category: TicketCategory) =>
   t(`tickets.titlePreset.${category}`);
+const quotaTitlePreset = (metric: string) =>
+  t("tickets.quotaTitlePreset", { resource: t(`tickets.contextValue.${metric}`) });
 const resourceKinds: Partial<Record<TicketCategory, Resource["kind"][]>> = {
   gpu_vm: ["gpu_vm"],
   gpu_baremetal: ["gpu_baremetal"],
@@ -223,6 +226,7 @@ export default function TicketsPage() {
   const [params, setParams] = useSearchParams();
   const quotaPreset = params.get("new") === "quota";
   const balancePreset = params.get("new") === "balance";
+  const initialQuotaMetric = quotaTicketMetric(params.get("metric"));
   const [createOpen, setCreateOpen] = useState(!!params.get("new"));
   const initialCategory: TicketCategory = quotaPreset
     ? "quota_access"
@@ -232,9 +236,7 @@ export default function TicketsPage() {
   const [category, setCategory] = useState<TicketCategory>(initialCategory);
   const [title, setTitle] = useState(() =>
     quotaPreset
-      ? [t("data.ticket.quota"), params.get("metric"), params.get("region") || region]
-          .filter(Boolean)
-          .join(" · ")
+      ? quotaTitlePreset(initialQuotaMetric)
       : balancePreset
         ? t("tickets.billingPreset")
         : ticketTitlePreset(initialCategory),
@@ -246,7 +248,7 @@ export default function TicketsPage() {
   const [context, setContext] = useState<Record<string, string>>({
     ...(quotaPreset
       ? {
-          quotaMetric: params.get("metric") || "gpu",
+          quotaMetric: initialQuotaMetric,
           ...(params.get("region") ? { region: params.get("region")! } : {}),
         }
       : {}),
@@ -296,6 +298,18 @@ export default function TicketsPage() {
       next.delete("drawer");
       return next;
     }, { replace: true });
+  const openCreate = () => {
+    setCategory("gpu_vm");
+    setTitle(ticketTitlePreset("gpu_vm"));
+    setTitleEdited(false);
+    setMessage("");
+    setPriority("normal");
+    setResourceUuid("");
+    setContext({});
+    setAttachments([]);
+    setAttempted(false);
+    setCreateOpen(true);
+  };
   const closeCreate = () => {
     setCreateOpen(false);
     setParams((current) => {
@@ -388,7 +402,7 @@ export default function TicketsPage() {
         title={t("nav.tickets")}
         subtitle={t("pageDescription.tickets")}
         actions={
-          <Button variant="primary" disabled={!canWrite(role)} onClick={() => setCreateOpen(true)}>
+          <Button variant="primary" disabled={!canWrite(role)} onClick={openCreate}>
             <Plus size={16} /> {t("tickets.new")}
           </Button>
         }
@@ -433,9 +447,10 @@ export default function TicketsPage() {
                 onChange={(event) => {
                   const next = event.target.value as TicketCategory;
                   setCategory(next);
-                  if (!titleEdited) setTitle(ticketTitlePreset(next));
+                  setTitle(next === "quota_access" ? quotaTitlePreset("gpu") : ticketTitlePreset(next));
+                  setTitleEdited(false);
                   setResourceUuid("");
-                  setContext({});
+                  setContext(next === "quota_access" ? { quotaMetric: "gpu" } : {});
                 }}
               >
                 {categories.map((value) => <option key={value} value={value}>{t(`tickets.category.${value}`)}</option>)}
@@ -485,8 +500,12 @@ export default function TicketsPage() {
                 </select>
               </Field>
               <Field label={t("tickets.quotaMetric")}>
-                <select value={context.quotaMetric || "gpu"} onChange={(event) => setContext({ ...context, quotaMetric: event.target.value })}>
-                  {["gpu", "vcpu", "memory", "storage", "ip"].map((value) => <option key={value} value={value}>{t(`quota.${value}`)}</option>)}
+                <select value={context.quotaMetric || "gpu"} onChange={(event) => {
+                  const metric = quotaTicketMetric(event.target.value);
+                  setContext({ ...context, quotaMetric: metric });
+                  if (!titleEdited) setTitle(quotaTitlePreset(metric));
+                }}>
+                  {QUOTA_TICKET_METRICS.map((value) => <option key={value} value={value}>{t(`tickets.contextValue.${value}`)}</option>)}
                 </select>
               </Field>
             </div>
