@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { z } from "zod";
 import type { DeploymentOptions, Pool, Image, VgpuSpec } from "../../types/domain";
-import { cidrContains, cidrOverlaps, cidrRange, ipv4String, privateCidr, subnetCapacity, suggestedClusterCidrs, vpcNetworkType } from "../../lib/network";
+import { cidrContains, cidrOverlaps, cidrRange, ipv4String, privateCidr, subnetCapacity, SUBNET_RESERVED_IPS, suggestedClusterCidrs, vpcNetworkType } from "../../lib/network";
 import { EP, post, query } from "../../lib/api-client";
 import { formatResourceId } from "../../lib/ids";
 import { storageSelectionsSchema, nodePoolSchema, vgpuSchema, isCidr } from "../../lib/schema";
@@ -235,7 +235,7 @@ function ClusterNetwork() {
             }} />
             <span><strong>{subnet.name}</strong><small>{formatResourceId("sub", subnet.id)}</small></span>
             <span><strong>{subnet.zone}</strong><small>{subnet.cidr}</small></span>
-            <span><strong>{t("eks.privateNodeSubnet")}</strong><small>{t("eks.fiveReservedIps", { total: subnetCapacity(subnet.cidr) })}</small></span>
+            <span><strong>{t("eks.privateNodeSubnet")}</strong><small>{t("eks.reservedIps", { total: subnetCapacity(subnet.cidr), count: SUBNET_RESERVED_IPS })}</small></span>
             <span><strong>{t("network.availableIp", { count: subnet.availableIps })}</strong><small>{index >= 0 ? t("eks.requiredIpInSubnet", { count: demand }) : t("eks.notSelected")}</small></span>
             {invalid && <small className="field-error">{t("eks.vpcSubnetConflict")}</small>}
           </label>;

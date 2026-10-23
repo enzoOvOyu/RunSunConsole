@@ -14,6 +14,7 @@ import {
   cidrContains,
   cidrOverlaps,
   subnetCapacity,
+  SUBNET_RESERVED_IPS,
   evaluateSecurityGroups,
   suggestedClusterCidrs,
 } from "../../lib/network";
@@ -72,6 +73,7 @@ it("validates canonical CIDRs, containment, overlap and five reserved subnet add
   expect(cidrRange("10.0.0.0/33")).toBeNull();
   expect(cidrContains("10.0.0.0/16", "10.0.1.0/24")).toBe(true);
   expect(cidrOverlaps("10.0.0.0/24", "10.0.0.128/25")).toBe(true);
+  expect(SUBNET_RESERVED_IPS).toBe(5);
   expect(subnetCapacity("10.0.0.0/29")).toBe(3);
 });
 it("rejects overlapping persisted subnets without rewriting their CIDRs", () => {

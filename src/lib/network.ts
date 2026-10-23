@@ -40,9 +40,11 @@ export function privateCidr(value: string) {
     cidrContains(p, value),
   );
 }
+export const SUBNET_RESERVED_IPS = 5;
+
 export function subnetCapacity(value: string) {
   const range = cidrRange(value);
-  return range ? Math.max(0, range.size - 5) : 0;
+  return range ? Math.max(0, range.size - SUBNET_RESERVED_IPS) : 0;
 }
 export function isPublicIpv4(value: string) {
   const ip = ipv4Number(value);

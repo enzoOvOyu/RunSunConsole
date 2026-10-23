@@ -3,6 +3,7 @@ import type { Project, Region } from "../../types/domain";
 import type { NetworkQuota, SubnetView, EipView } from "../../types/network";
 import { EP, query } from "../../lib/api-client";
 import { formatResourceId } from "../../lib/ids";
+import { SUBNET_RESERVED_IPS } from "../../lib/network";
 import { useData } from "../shared/hooks";
 import { t, dt } from "../../i18n";
 import { number } from "../../lib/money";
@@ -123,8 +124,8 @@ export function NetworkQuotas({ region }: { region: Region }) {
           </div>
         )}
       </Panel>
-      <Panel title={t("quota.privateAddresses")} hint={t("network.subnetHint")}>
-        <p className="muted">{t("quota.addressHint")}</p>
+      <Panel title={t("quota.privateAddresses")} hint={t("network.subnetHint", { count: SUBNET_RESERVED_IPS })}>
+        <p className="muted">{t("quota.addressHint", { count: SUBNET_RESERVED_IPS })}</p>
         {subnets.isPending ? (
           <Loading />
         ) : subnets.error ? (

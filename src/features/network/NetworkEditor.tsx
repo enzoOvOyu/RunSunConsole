@@ -6,6 +6,7 @@ import type {
 } from "../../types/network";
 import { EP, post, patch, query } from "../../lib/api-client";
 import { formatResourceId } from "../../lib/ids";
+import { SUBNET_RESERVED_IPS } from "../../lib/network";
 import { useAuth } from "../../stores/auth";
 import { useData, useAction } from "../shared/hooks";
 import { t, dt } from "../../i18n";
@@ -290,7 +291,7 @@ export function NetworkEditor({
                   cidr,
                   setCidr,
                   "text",
-                  t("network.subnetHint"),
+                  t("network.subnetHint", { count: SUBNET_RESERVED_IPS }),
                 )}
                 {select(
                   t("network.zone"),

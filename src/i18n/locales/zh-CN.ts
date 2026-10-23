@@ -1591,7 +1591,7 @@ export default {
   "network.vpcHint":
     "使用 RFC1918 私有 IPv4 网段，前缀长度 /8–/28。不同 VPC 默认隔离。",
   "network.subnetHint":
-    "必须位于 VPC 内且不与已有交换机重叠。每个网段保留 4 个地址。",
+    "必须位于 VPC 内且不与已有交换机重叠。每个网段预留 {count} 个地址。",
   "network.direction": "流量方向",
   "network.inbound": "入方向",
   "network.outbound": "出方向",
@@ -1741,7 +1741,7 @@ export default {
     "公网 IP 占用：虚机绑定 {vm} · 隧道网关 {tunnel} · 空闲保留 {idle}。",
   "quota.privateAddresses": "交换机地址用量",
   "quota.addressHint":
-    "按交换机查看设备与隧道占用的私网地址。可用地址已扣除 4 个保留地址；关机不释放私网地址，伸缩峰值另做容量预检。",
+    "按交换机查看设备与隧道占用的私网地址。可用地址已扣除 {count} 个预留地址；关机不释放私网地址，伸缩峰值另做容量预检。",
 
   "images.baseOperatingSystem": "基础操作系统",
   "images.runtimeTemplates": "AI 容器模板（可选）",
@@ -1924,7 +1924,7 @@ export default {
   "eks.nodeSubnetTitle": "子网与 GPU 节点网络",
   "eks.nodeSubnetHint": "控制面和 GPU 节点按所选子网轮询分配；HA 控制面需要跨两个可用区。",
   "eks.privateNodeSubnet": "节点私网子网",
-  "eks.fiveReservedIps": "可用地址上限 {total} · 预留 5 个",
+  "eks.reservedIps": "可用地址上限 {total} · 预留 {count} 个",
   "eks.requiredIpInSubnet": "本次需 {count} 个 IP",
   "eks.notSelected": "未选中",
   "eks.privateRouteHint": "当前 Mock 仅支持节点私网。未建模公网子网路由、NAT 或负载均衡出口；API Server 公网选项在项目步骤单独设置。",

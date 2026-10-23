@@ -1665,7 +1665,7 @@ export default {
   "network.vpcHint":
     "Use a private RFC1918 IPv4 CIDR, /8–/28. VPCs are isolated by default.",
   "network.subnetHint":
-    "Must be inside the VPC and not overlap existing vSwitches. Four addresses are reserved per subnet.",
+    "Must be inside the VPC and not overlap existing vSwitches. {count} addresses are reserved per subnet.",
   "network.direction": "Direction",
   "network.inbound": "Inbound",
   "network.outbound": "Outbound",
@@ -1827,7 +1827,7 @@ export default {
     "EIP allocation: VM-bound {vm} · tunnel gateways {tunnel} · idle retained {idle}.",
   "quota.privateAddresses": "vSwitch address usage",
   "quota.addressHint":
-    "Private address usage includes devices and tunnels. Available addresses exclude four reserved addresses. Stopping retains addresses; peak scaling capacity is checked separately.",
+    "Private address usage includes devices and tunnels. Available addresses exclude {count} reserved addresses. Stopping retains addresses; peak scaling capacity is checked separately.",
 
   "images.baseOperatingSystem": "Base operating system",
   "images.runtimeTemplates": "AI container templates (optional)",
@@ -2016,7 +2016,7 @@ export default {
   "eks.nodeSubnetTitle": "Subnets and GPU node network",
   "eks.nodeSubnetHint": "Control plane and GPU nodes are allocated round-robin across selected subnets; HA requires two zones.",
   "eks.privateNodeSubnet": "Private node subnet",
-  "eks.fiveReservedIps": "Capacity {total} · 5 addresses reserved",
+  "eks.reservedIps": "Capacity {total} · {count} addresses reserved",
   "eks.requiredIpInSubnet": "Needs {count} IPs",
   "eks.notSelected": "Not selected",
   "eks.privateRouteHint": "The current mock supports private node subnets only. Public subnet routes, NAT and load balancer egress are not modelled; public API Server access is configured in the project step.",
