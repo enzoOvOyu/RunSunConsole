@@ -19,22 +19,21 @@ async function request(path: string, method = "GET", body?: unknown) {
   });
   return { status: response.status, data: await response.json() };
 }
-function sliceOrder(count: number, name: string) {
+function sliceOrder(count: number, name: string, sku = SLICE_SKUS[0], region: "jp" | "sg" | "us" = "jp") {
   const project = db.projects.find((item) => item.isDefault)!;
-  const sku = SLICE_SKUS[0];
-  const vpc = db.network.vpcs.find((item) => item.projectId === project.id && item.region === "jp" && !item.deletedAt && item.networkType === "standard")!;
+  const vpc = db.network.vpcs.find((item) => item.projectId === project.id && item.region === region && !item.deletedAt && item.networkType === "standard")!;
   const subnet = db.network.subnets.find((item) => item.vpcId === vpc.id && !item.deletedAt)!;
   const spec = normalizeSpec({
     ...defaultSpec("vgpu", poolsFor("jp")[0]) as VgpuSpec,
     deploymentMode: "slice" as const,
-    slice: { skuId: sku.id, count }, nodePools: [], scaling: null,
+    slice: { skuId: sku.id, count }, k8sVersion: sku.k8sVersion, nodePools: [], scaling: null,
     apiServerPublic: false, ingressEnabled: false, rbacDefaultAdmin: false,
     podCidr: "", serviceCidr: "", controlPlaneTier: "standard" as const,
     storageMode: "dynamic_block" as const, storageClass: "ssd", defaultPvcGb: 100,
     localPvGb: 0, securityGroups: [], ports: [], vpc: vpc.id,
     subnet: subnet.id, subnets: [subnet.id],
   });
-  return { kind: "vgpu", region: "jp", projectId: project.id, name,
+  return { kind: "vgpu", region, projectId: project.id, name,
     nodePool: sku.poolCode, mode: "on_demand", labels: [], spec };
 }
 it("reserves slices, charges the slice SKU, and releases stock on deletion", async () => {
@@ -102,4 +101,15 @@ it("offers a validated profile for every GPU pool and preserves saved allocation
   const merged = reconcileSliceInventory(saved);
   expect(merged.find((item) => item.id === saved[0].id)?.resourceUuid).toBe("existing-resource");
   expect(new Set(merged.map((item) => item.skuId))).toEqual(new Set(SLICE_SKUS.map((sku) => sku.id)));
+});
+
+it("creates one slice workspace for each supported GPU model", async () => {
+  for (const sku of SLICE_SKUS) {
+    const order = sliceOrder(1, `slice-${sku.poolCode.toLowerCase().replaceAll("_", "-")}`, sku, "us");
+    const created = await request("/deployment-orders", "POST", order);
+    expect(created.status, `${sku.id}: ${JSON.stringify(created.data)}`).toBe(201);
+    expect(created.data.resource.spec.slice.profile).toBe(sku.profile);
+    expect(created.data.resource.spec.k8sVersion).toBe(sku.k8sVersion);
+    expect(created.data.order.price_snapshot.lines.find((line: { unit: string }) => line.unit === "per_slice_hour")?.unitPrice).toBe(sku.hourlyUsd);
+  }
 });
