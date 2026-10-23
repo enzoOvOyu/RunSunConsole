@@ -603,11 +603,10 @@ const useToast = create<{
     });
     const timer = timers.get(id);
     if (timer) clearTimeout(timer);
-    if (!error)
-      timers.set(
-        id,
-        setTimeout(() => get().remove(id), 4000),
-      );
+    timers.set(
+      id,
+      setTimeout(() => get().remove(id), error ? 3000 : 4000),
+    );
   },
   remove: (id) => {
     const timer = timers.get(id);
