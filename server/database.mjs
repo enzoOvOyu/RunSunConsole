@@ -143,6 +143,7 @@ const tables = [
     table: "billing_transactions",
     path: "transactions",
     id: "id",
+    orderBy: "at, id",
     fields: { resource_id: "resourceUuid", amount: "amount", at: "at" },
   },
 ];
@@ -205,7 +206,7 @@ export async function loadState(client) {
   const state = meta.rows[0].auxiliary;
   for (const config of tables) {
     const result = await client.query(
-      `SELECT data FROM ${config.table} ORDER BY id`,
+      `SELECT data FROM ${config.table} ORDER BY ${config.orderBy || "id"}`,
     );
     set(
       state,

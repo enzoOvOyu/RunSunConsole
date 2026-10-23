@@ -52,6 +52,7 @@ import {
   type Quota,
   type Usage,
   type Invoice,
+  type Transaction,
   type OperationLog,
   type ScalingPolicy,
   type StorageObject,
@@ -501,6 +502,23 @@ function findUsage(resourceUuid: string, hour: string, unit: string) {
   }
   return usageIndex.get(usageKey(resourceUuid, hour, unit));
 }
+function recordCharge(resourceUuid: Transaction["resourceUuid"], delta: number, referenceId: string, now: number) {
+  const amount = -round(delta, 4);
+  if (amount >= 0) return;
+  const index = db.transactions.findIndex((tx) => tx.type === "charge" && tx.referenceId === referenceId);
+  const previous = index >= 0 ? db.transactions.splice(index, 1)[0] : null;
+  db.transactions.push({
+    id: previous?.id || crypto.randomUUID(),
+    resourceUuid,
+    at: new Date(now).toISOString(),
+    type: "charge",
+    amount: round((previous?.amount || 0) + amount, 4),
+    balanceAfter: db.account.creditBalance,
+    referenceId,
+  });
+  if (db.transactions.length > 5000)
+    db.transactions.splice(0, db.transactions.length - 5000);
+}
 function settle(r: Resource) {
   const deadline = db.account.depletedAt
     ? new Date(db.account.depletedAt).getTime() +
@@ -610,18 +628,7 @@ function settle(r: Resource) {
       });
     }
     db.account.creditBalance = round(db.account.creditBalance - delta, 4);
-    if (round(delta, 4) > 0)
-      db.transactions.push({
-        id: crypto.randomUUID(),
-        resourceUuid: r.resourceUuid,
-        at: new Date(now).toISOString(),
-        type: "charge",
-        amount: -round(delta, 4),
-        balanceAfter: db.account.creditBalance,
-        referenceId: `usage-${r.resourceUuid}-${Math.floor(now / 3600000)}`,
-      });
-    if (db.transactions.length > 5000)
-      db.transactions.splice(0, db.transactions.length - 5000);
+    recordCharge(r.resourceUuid, delta, `usage-${r.resourceUuid}-${Math.floor(now / 3600000)}`, now);
     if (db.account.creditBalance < 0 && !db.account.depletedAt)
       db.account.depletedAt = new Date(now).toISOString();
   }
@@ -695,15 +702,7 @@ function settleEips() {
     db.billingCursors[e.id] = now;
     if (delta > 0) {
       db.account.creditBalance = round(db.account.creditBalance - delta, 4);
-      db.transactions.push({
-        id: crypto.randomUUID(),
-        resourceUuid: e.id,
-        at: new Date(now).toISOString(),
-        type: "charge",
-        amount: -round(delta, 4),
-        balanceAfter: db.account.creditBalance,
-        referenceId: `eip-${e.id}-${Math.floor(now / 3600000)}`,
-      });
+      recordCharge(e.id, delta, `eip-${e.id}-${Math.floor(now / 3600000)}`, now);
       if (db.account.creditBalance < 0 && !db.account.depletedAt)
         db.account.depletedAt = new Date(now).toISOString();
     }
@@ -750,9 +749,7 @@ function settleVolumes() {
     db.billingCursors[volume.id] = now;
     if (delta > 0) {
       db.account.creditBalance = round(db.account.creditBalance - delta, 4);
-      db.transactions.push({ id: crypto.randomUUID(), resourceUuid: volume.id as ResourceUuid, at: new Date(now).toISOString(),
-        type: "charge", amount: -round(delta, 4), balanceAfter: db.account.creditBalance,
-        referenceId: `volume-${volume.id}-${Math.floor(now / 3600000)}` });
+      recordCharge(volume.id as ResourceUuid, delta, `volume-${volume.id}-${Math.floor(now / 3600000)}`, now);
     }
   }
 }
@@ -819,7 +816,15 @@ function tick(settleBilling = true) {
       }
     }
   }
-  if (settleBilling) { settleEips(); settleVolumes(); }
+  if (settleBilling) {
+    settleEips();
+    settleVolumes();
+    const cutoffHour = Math.floor(Date.now() / 3600000) * 3600000 - 3600000;
+    for (const key of Object.keys(db.usageMeters)) {
+      const hour = key.match(/-(\d{13})-[^-]+$/)?.[1];
+      if (hour && Number(hour) < cutoffHour) delete db.usageMeters[key];
+    }
+  }
   if (lifecycleChanged) persist();
 }
 function summary(
