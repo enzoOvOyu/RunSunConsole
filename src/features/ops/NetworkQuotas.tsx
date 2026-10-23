@@ -30,7 +30,7 @@ export function NetworkQuotas({ region }: { region: Region }) {
     `${EP.network}/eips` + query({ region }),
     { poll: true },
   );
-  const projects = useData<Project[]>(["projects"], EP.projects);
+  const projects = useData<Project[]>(["projects", region], EP.projects + query({ region }));
   return (
     <div className="stack section-gap">
       <Panel

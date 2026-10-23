@@ -15,7 +15,7 @@ import {
 import { useRegion } from "../../../stores/region";
 import { useAuth } from "../../../stores/auth";
 import { canWrite } from "../../../lib/rbac";
-import { KIND_META, resourceLink } from "../../../lib/ids";
+import { KIND_META, formatResourceId, resourceLink } from "../../../lib/ids";
 import { EP, post, remove, query } from "../../../lib/api-client";
 import { useAction, useData, useDebounced } from "../../shared/hooks";
 import { t, dt, errorText } from "../../../i18n";
@@ -62,7 +62,7 @@ export function ResourceListShell<K extends Kind>({
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const { region, setRegion } = useRegion();
-  const { project, setProject, role } = useAuth();
+  const { setProject, role } = useAuth();
   const [search, setSearch] = useUrlState("q");
   const q = useDebounced(search);
   const urlRegion = params.get("region");
@@ -71,9 +71,24 @@ export function ResourceListShell<K extends Kind>({
     if (REGIONS.includes(urlRegion as typeof region))
       setRegion(urlRegion as typeof region);
   }, [urlRegion, setRegion]);
+  const projects = useData<Project[]>(
+    ["projects", region],
+    EP.projects + query({ region }),
+  );
+  const project = projects.data?.some((item) => item.id === urlProject && !item.deletedAt)
+    ? urlProject || ""
+    : "";
   useEffect(() => {
-    setProject(urlProject || "");
-  }, [urlProject, setProject]);
+    setProject(project);
+  }, [project, setProject]);
+  useEffect(() => {
+    if (!projects.data || !urlProject || project) return;
+    setParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete("project_id");
+      return next;
+    }, { replace: true });
+  }, [projects.data, urlProject, project, setParams]);
   const [released, setReleased] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [pageSize, setPageSize] = useState(10);
@@ -101,9 +116,8 @@ export function ResourceListShell<K extends Kind>({
         includeDeleted: released,
         size: 1000,
       }),
-    { poll: true },
+    { poll: true, enabled: !urlProject || !!projects.data },
   );
-  const projects = useData<Project[]>(["projects"], EP.projects);
   useEffect(() => {
     setSelected([]);
     setFacetValues({});
@@ -118,10 +132,10 @@ export function ResourceListShell<K extends Kind>({
     const fetched = resources.data?.items || [];
     const fetchedIds = new Set(fetched.map((resource) => resource.resourceUuid));
     const pending = transition.filter((resource) =>
-      resource.kind === kind && resource.region === region && !fetchedIds.has(resource.resourceUuid)
+      resource.kind === kind && resource.region === region && (!project || resource.projectId === project) && !fetchedIds.has(resource.resourceUuid)
     ) as Extract<Resource, { kind: K }>[];
     return [...fetched, ...pending];
-  }, [resources.data?.items, transition, kind, region]);
+  }, [resources.data?.items, transition, kind, region, project]);
   const shown = useMemo(() => items.filter((resource) =>
     facets.every((facet) => !facetValues[facet.id] || facet.value(resource) === facetValues[facet.id])
   ), [items, facets, facetValues]);
@@ -230,10 +244,12 @@ export function ResourceListShell<K extends Kind>({
           value={region}
           onChange={(e) => {
             setRegion(e.target.value as typeof region);
+            setProject("");
             setParams(
               (current) => {
                 const next = new URLSearchParams(current);
                 next.set("region", e.target.value);
+                next.delete("project_id");
                 return next;
               },
               { replace: true },
@@ -262,9 +278,9 @@ export function ResourceListShell<K extends Kind>({
           }}
         >
           <option value="">{t("common.allProjects")}</option>
-          {projects.data?.map((p) => (
+          {projects.data?.filter((p) => !p.deletedAt).map((p) => (
             <option key={p.id} value={p.id}>
-              {dt(p.name)}
+              {dt(p.name)} · {formatResourceId("prj", p.id)}
             </option>
           ))}
         </select>

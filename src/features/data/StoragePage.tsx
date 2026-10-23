@@ -81,7 +81,16 @@ export default function StoragePage() {
     ["buckets", region],
     EP.buckets + query({ region }),
   );
-  const projects = useData<Project[]>(["projects"], EP.projects);
+  const projects = useData<Project[]>(["projects", region], EP.projects + query({ region }));
+  const availableProjects = (projects.data || []).filter((project) => !project.deletedAt);
+  const selectedBucketProject = availableProjects.some((project) => project.id === bucketProject)
+    ? bucketProject
+    : availableProjects.find((project) => project.id === projectId)?.id ||
+      availableProjects.find((project) => project.isDefault)?.id ||
+      availableProjects[0]?.id || "";
+  const selectedProjectFilter = availableProjects.some((project) => project.id === projectFilter)
+    ? projectFilter : "";
+  useEffect(() => setProjectFilter(""), [region]);
   const quotas = useData<Quota[]>(
     ["storage-quotas", region],
     EP.quotas + query({ region }),
@@ -138,7 +147,7 @@ export default function StoragePage() {
     q.data || [],
     {
       search,
-      projectId: projectFilter,
+      projectId: selectedProjectFilter,
       storageClass: classFilter,
       status: statusFilter,
       fileInterface: fileFilter,
@@ -152,7 +161,7 @@ export default function StoragePage() {
   } = bucketSummary(bucketRows);
   const filterActive = !!(
     search ||
-    projectFilter ||
+    selectedProjectFilter ||
     classFilter ||
     statusFilter ||
     fileFilter
@@ -245,7 +254,7 @@ export default function StoragePage() {
             variant="primary"
             disabled={!canWrite(role)}
             onClick={() => {
-              setBucketProject(projectId);
+              setBucketProject(selectedBucketProject);
               setNewOpen(true);
             }}
           >
@@ -334,7 +343,7 @@ export default function StoragePage() {
         />
         <select
           aria-label={t("common.project")}
-          value={projectFilter}
+          value={selectedProjectFilter}
           onChange={(event) => setProjectFilter(event.target.value)}
         >
           <option value="">{t("common.allProjects")}</option>
@@ -1091,7 +1100,7 @@ export default function StoragePage() {
           <div className="form-grid">
             <Field label={t("common.project")}>
               <select
-                value={bucketProject}
+                value={selectedBucketProject}
                 onChange={(event) => setBucketProject(event.target.value)}
               >
                 {projects.data
@@ -1186,7 +1195,7 @@ export default function StoragePage() {
               quotaGb < 100 ||
               quotaGb > 1048500 ||
               quotaGb % 100 !== 0 ||
-              !bucketProject ||
+              !selectedBucketProject ||
               (!!createTagKey.trim() && createTagKey.trim().length > 128) ||
               createTagValue.trim().length > 256 ||
               (!!createTagValue.trim() && !createTagKey.trim())
@@ -1197,7 +1206,7 @@ export default function StoragePage() {
                   post<Bucket>(EP.buckets, {
                     name,
                     region,
-                    projectId: bucketProject,
+                    projectId: selectedBucketProject,
                     storageClass,
                     quotaGb,
                     blockPublicAccess: createBlockPublic,

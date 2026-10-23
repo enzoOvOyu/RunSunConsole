@@ -26,7 +26,7 @@ export default function CostPage() {
     ["cost-usage", region, period],
     EP.usage + query({ region, billing_period: period }),
   );
-  const projects = useData<Project[]>(["projects"], EP.projects);
+  const projects = useData<Project[]>(["projects", region], EP.projects + query({ region }));
   const analysis = useMemo(
     () => analyzeCostUsage(usage.data || [], period, dimension),
     [usage.data, period, dimension],

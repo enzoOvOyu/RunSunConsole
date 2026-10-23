@@ -71,17 +71,26 @@ export default function VolumePage() {
     ["storage-products"],
     EP.storageProducts,
   );
-  const projects = useData<Project[]>(["projects"], EP.projects);
+  const projects = useData<Project[]>(["projects", region], EP.projects + query({ region }));
+  const availableProjects = (projects.data || []).filter((project) => !project.deletedAt);
+  const selectedProjectId = availableProjects.some((project) => project.id === projectId)
+    ? projectId
+    : availableProjects.find((project) => project.id === activeProject)?.id ||
+      availableProjects.find((project) => project.isDefault)?.id ||
+      availableProjects[0]?.id || "";
+  const selectedProjectFilter = availableProjects.some((project) => project.id === projectFilter)
+    ? projectFilter : "";
+  useEffect(() => setProjectFilter(""), [region]);
   const resources = useData<{ items: Resource[] }>(
     [
       "storage-attachable-resources",
       region,
-      detail.data?.projectId || projectId,
+      detail.data?.projectId || selectedProjectId,
     ],
     EP.resources +
       query({
         region,
-        project_id: detail.data?.projectId || projectId,
+        project_id: detail.data?.projectId || selectedProjectId,
         size: 1000,
       }),
   );
@@ -91,8 +100,8 @@ export default function VolumePage() {
     { enabled: kind === "file" && !!id && detail.data?.resourceKind === "vgpu" },
   );
   const networkOptions = useData<DeploymentOptions>(
-    ["storage-network-options", region, detail.data?.projectId || projectId],
-    EP.options + query({ region, project_id: detail.data?.projectId || projectId, kind: "gpu_vm" }),
+    ["storage-network-options", region, detail.data?.projectId || selectedProjectId],
+    EP.options + query({ region, project_id: detail.data?.projectId || selectedProjectId, kind: "gpu_vm" }),
     { enabled: kind === "block" && !!id },
   );
   const quotas = useData<Quota[]>(
@@ -109,12 +118,6 @@ export default function VolumePage() {
   const capacity = quotas.data
     ?.find((quota) => quota.metric === "storage")
     ?.storageBreakdown?.find((item) => item.kind === kind);
-  const availableProjects = (projects.data || []).filter((project) => !project.deletedAt);
-  const selectedProjectId = availableProjects.some((project) => project.id === projectId)
-    ? projectId
-    : availableProjects.find((project) => project.id === activeProject)?.id ||
-      availableProjects.find((project) => project.isDefault)?.id ||
-      availableProjects[0]?.id || "";
   const fileNetwork = useData<DeploymentOptions>(
     ["storage-file-network", region, detail.data?.projectId || selectedProjectId],
     EP.options + query({ region, project_id: detail.data?.projectId || selectedProjectId, kind: "gpu_vm" }),
@@ -124,10 +127,10 @@ export default function VolumePage() {
     dt(projects.data?.find((project) => project.id === value)?.name || value);
   const { all: kindRows, visible: rows } = selectVolumeRows(
     list.data || [], kind,
-    { search, projectId: projectFilter, tier: tierFilter, status: statusFilter, zone: zoneFilter },
+    { search, projectId: selectedProjectFilter, tier: tierFilter, status: statusFilter, zone: zoneFilter },
     projectName,
   );
-  const filterActive = !!(search || projectFilter || tierFilter || statusFilter || zoneFilter);
+  const filterActive = !!(search || selectedProjectFilter || tierFilter || statusFilter || zoneFilter);
   const v = detail.data;
   const fileVpcs = (fileNetwork.data?.vpcs.filter((item) => vpcNetworkType(item) === "standard") || [])
     .sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || Number(b.subnets.length > 0) - Number(a.subnets.length > 0));
@@ -248,7 +251,7 @@ export default function VolumePage() {
         <input className="input search" aria-label={t("common.search")}
           placeholder={t("storage.searchVolumes")} value={search}
           onChange={(event) => setSearch(event.target.value)} />
-        <select aria-label={t("common.project")} value={projectFilter}
+        <select aria-label={t("common.project")} value={selectedProjectFilter}
           onChange={(event) => setProjectFilter(event.target.value)}>
           <option value="">{t("common.allProjects")}</option>
           {availableProjects.map((project) => <option key={project.id} value={project.id}>{dt(project.name)} · {formatResourceId("prj", project.id)}</option>)}

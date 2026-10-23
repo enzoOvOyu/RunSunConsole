@@ -61,24 +61,36 @@ function NetworkPage({ kind }: { kind: NetworkKind }) {
   const [includeReleased, setIncludeReleased] = useState(releasedParam);
   useEffect(() => setIncludeReleased(releasedParam), [releasedParam]);
   const id = params.get("drawer") || "";
-  const projects = useData<Project[]>(["projects"], EP.projects);
+  const projects = useData<Project[]>(["projects", region], EP.projects + query({ region }));
+  const selectedProjectId = projects.data?.some((p) => p.id === projectId && !p.deletedAt)
+    ? projectId
+    : "";
+  useEffect(() => {
+    if (!projects.data || !projectId || selectedProjectId) return;
+    setParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete("project_id");
+      return next;
+    }, { replace: true });
+  }, [projects.data, projectId, selectedProjectId, setParams]);
   const path = `${EP.network}/${kind}`;
   const q = useData<NetworkRecord[]>(
     [
       "network-list",
       kind,
       region,
-      projectId,
+      selectedProjectId,
       search,
       params.get("includeReleased"),
     ],
     path +
       query({
         region,
-        project_id: projectId,
+        project_id: selectedProjectId,
         q: search,
         includeReleased: params.get("includeReleased"),
       }),
+    { enabled: !projectId || !!projects.data },
   );
   const [editor, setEditor] = useState<EditorState | null>(null);
   const update = (key: string, value: string) =>
@@ -134,7 +146,7 @@ function NetworkPage({ kind }: { kind: NetworkKind }) {
         <RegionFilter />
         <select
           aria-label={t("common.project")}
-          value={projectId}
+          value={selectedProjectId}
           onChange={(e) => update("project_id", e.target.value)}
         >
           <option value="">{t("common.allProjects")}</option>
@@ -142,7 +154,7 @@ function NetworkPage({ kind }: { kind: NetworkKind }) {
             ?.filter((p) => !p.deletedAt)
             .map((p) => (
               <option key={p.id} value={p.id}>
-                {dt(p.name)}
+                {dt(p.name)} · {formatResourceId("prj", p.id)}
               </option>
             ))}
         </select>
@@ -203,10 +215,10 @@ function NetworkPage({ kind }: { kind: NetworkKind }) {
             <span>{t("network.resultCount", { count: items.length })}</span>
             <small>
               {t(`common.${region}`)} ·{" "}
-              {projectId
+              {selectedProjectId
                 ? dt(
-                    projects.data?.find((p) => p.id === projectId)?.name ||
-                      projectId,
+                    projects.data?.find((p) => p.id === selectedProjectId)?.name ||
+                      selectedProjectId,
                   )
                 : t("common.allProjects")}
             </small>
@@ -455,7 +467,7 @@ function NetworkPage({ kind }: { kind: NetworkKind }) {
           kind={kind}
           state={editor}
           region={region}
-          projectId={projectId}
+          projectId={selectedProjectId}
           projects={(projects.data || []).filter((p) => !p.deletedAt)}
           onClose={() => setEditor(null)}
         />

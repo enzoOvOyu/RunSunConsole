@@ -23,6 +23,8 @@ export function RegionFilter({ org = false }: { org?: boolean }) {
           (current) => {
             const next = new URLSearchParams(current);
             next.set("region", e.target.value);
+            next.delete("project_id");
+            next.delete("drawer");
             return next;
           },
           { replace: true },
