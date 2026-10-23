@@ -59,18 +59,16 @@ export const Sidebar = memo(function Sidebar({
             return (
               <div className={styles.navGroup} key={group.id}>
                 {group.direct ? (
-                  <Button asChild variant="ghost" className={styles.navLink}>
-                    <NavLink
-                      to={group.items[0].path}
-                      className={({ isActive, isPending }) =>
-                        isActive ? styles.active : isPending ? styles.pending : ""
-                      }
-                      onClick={onClose}
-                    >
-                      <Icon size={17} />
-                      {group.label()}
-                    </NavLink>
-                  </Button>
+                  <NavLink
+                    to={group.items[0].path}
+                    className={({ isActive, isPending }) =>
+                      `${styles.navLink} ${isActive ? styles.active : isPending ? styles.pending : ""}`
+                    }
+                    onClick={onClose}
+                  >
+                    <Icon size={17} />
+                    {group.label()}
+                  </NavLink>
                 ) : (
                   <>
                     <Button
@@ -111,28 +109,22 @@ export const Sidebar = memo(function Sidebar({
                         {group.items.map((item) => {
                           const ItemIcon = item.icon;
                           return (
-                            <Button
+                            <NavLink
                               key={item.path}
-                              asChild
-                              variant="ghost"
-                              className={styles.navLink}
+                              to={item.path}
+                              onClick={onClose}
+                              className={({ isActive, isPending }) =>
+                                `${styles.navLink} ${isActive ? styles.active : isPending ? styles.pending : ""}`
+                              }
                             >
-                              <NavLink
-                                to={item.path}
-                                onClick={onClose}
-                                className={({ isActive, isPending }) =>
-                                  isActive ? styles.active : isPending ? styles.pending : ""
-                                }
-                              >
-                                <ItemIcon
-                                  size={16}
-                                  strokeWidth={1.75}
-                                  aria-hidden="true"
-                                  style={{ color: item.color }}
-                                />
-                                {item.label()}
-                              </NavLink>
-                            </Button>
+                              <ItemIcon
+                                size={16}
+                                strokeWidth={1.75}
+                                aria-hidden="true"
+                                style={{ color: item.color }}
+                              />
+                              {item.label()}
+                            </NavLink>
                           );
                         })}
                       </div>
