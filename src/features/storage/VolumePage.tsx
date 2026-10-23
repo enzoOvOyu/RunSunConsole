@@ -18,7 +18,7 @@ import { confirmAction } from "../../components/ui/ConfirmAction";
 import { t, dt } from "../../i18n";
 import { date } from "../../lib/date";
 import { money } from "../../lib/money";
-import { cidrContains, vpcNetworkType } from "../../lib/network";
+import { cidrContains } from "../../lib/network";
 import {
   PageHeader,
   Button,
@@ -120,7 +120,7 @@ export default function VolumePage() {
     ?.storageBreakdown?.find((item) => item.kind === kind);
   const fileNetwork = useData<DeploymentOptions>(
     ["storage-file-network", region, detail.data?.projectId || selectedProjectId],
-    EP.options + query({ region, project_id: detail.data?.projectId || selectedProjectId, kind: "gpu_vm" }),
+    EP.options + query({ region, project_id: detail.data?.projectId || selectedProjectId }),
     { enabled: kind === "file" && !!(detail.data?.projectId || selectedProjectId) },
   );
   const projectName = (value: string) =>
@@ -132,7 +132,7 @@ export default function VolumePage() {
   );
   const filterActive = !!(search || selectedProjectFilter || tierFilter || statusFilter || zoneFilter);
   const v = detail.data;
-  const fileVpcs = (fileNetwork.data?.vpcs.filter((item) => vpcNetworkType(item) === "standard") || [])
+  const fileVpcs = (fileNetwork.data?.vpcs || [])
     .sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || Number(b.subnets.length > 0) - Number(a.subnets.length > 0));
   const fileVpc = fileAccess.vpcId
     ? fileVpcs.find((item) => item.id === fileAccess.vpcId)

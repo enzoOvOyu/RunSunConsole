@@ -1911,7 +1911,7 @@ async function dispatch(request: Request, settleBilling = true) {
     }).parse(input);
     const vpc = db.network.vpcs.find((item) =>
       item.id === access.vpcId && !item.deletedAt && item.projectId === projectId &&
-      item.region === code && vpcNetworkType(item) === "standard");
+      item.region === code);
     const subnet = db.network.subnets.find((item) =>
       item.id === access.subnetId && !item.deletedAt && item.vpcId === vpc?.id &&
       item.projectId === projectId && item.region === code);
