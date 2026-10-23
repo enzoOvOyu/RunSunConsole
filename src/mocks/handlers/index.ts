@@ -1704,7 +1704,7 @@ async function dispatch(request: Request, settleBilling = true) {
     return dispatchNetwork(path, method, qs, body, role);
   if (path === "/api/deployment-options") {
     const code = (region || "jp") as Region;
-    const projectId = qs.get("project_id") || "default";
+    const projectId = qs.get("project_id") || db.projects.find((p) => p.isDefault && !p.deletedAt)?.id || db.projects.find((p) => !p.deletedAt)?.id || "";
     if (!db.projects.some((p) => p.id === projectId && !p.deletedAt))
       fail(422, "VALIDATION_ERROR");
     ensureScope(db.network, { projectId, region: code });
@@ -3149,7 +3149,7 @@ async function dispatch(request: Request, settleBilling = true) {
         id: crypto.randomUUID(),
         name,
         slug,
-        isDefault: false,
+        isDefault: !db.projects.some((project) => !project.deletedAt),
         defaultRegion:
           body.defaultRegion === undefined
             ? "jp"

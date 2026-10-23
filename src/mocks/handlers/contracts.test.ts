@@ -268,6 +268,20 @@ it("protects organization entities and scaling policy uniqueness", async () => {
     (await request("/scaling/policies/" + policy.id, "DELETE")).data.code,
   ).toBe("POLICY_BOUND_RESOURCE_RUNNING");
 });
+it("makes the first recreated project the network default", async () => {
+  db.projects = [];
+  for (const key of ["vpcs", "subnets", "groups", "interfaces", "eips", "tunnels", "audit"] as const)
+    db.network[key] = [];
+  const created = await request("/projects", "POST", {
+    name: "Fresh demo", slug: "fresh-demo", defaultRegion: "jp",
+  });
+  expect(created.status).toBe(201);
+  expect(created.data.isDefault).toBe(true);
+  const options = await request("/deployment-options?region=jp");
+  expect(options.status).toBe(200);
+  expect(options.data.vpcs.some((vpc: { projectId: string }) => vpc.projectId === created.data.id)).toBe(true);
+});
+
 it("creates projects, updates names and blocks deletion while referenced", async () => {
   const result = await request("/projects", "POST", {
     name: "Evaluation Project",
