@@ -1,5 +1,5 @@
-import { formatReferenceId, formatResourceId } from "../../../lib/ids";
-import { lazy, memo, Suspense, useState } from "react";
+import { formatReferenceId, formatResourceId, resourceLink } from "../../../lib/ids";
+import { lazy, memo, Suspense, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import type {
   Resource,
@@ -15,7 +15,7 @@ import { t, dt } from "../../../i18n";
 import { useLocale } from "../../../stores/locale";
 import { EP, query } from "../../../lib/api-client";
 import { useData } from "../../shared/hooks";
-import { money, number, unitMoney } from "../../../lib/money";
+import { money, number, unitMoney, visibleTransaction } from "../../../lib/money";
 import { poolDisplayName } from "../../../lib/gpu-labels";
 import { date, duration } from "../../../lib/date";
 import {
@@ -460,15 +460,36 @@ export function BillingPanel({ resource: r }: { resource: Resource }) {
         />
       </Panel>
       <Panel title={t("common.transactions")}>
-        <TransactionTable rows={tx.data || []} />
+        <TransactionTable rows={tx.data || []} resource={r} usage={usage.data} />
       </Panel>
     </div>
   );
 }
-export function TransactionTable({ rows }: { rows: Transaction[] }) {
+export function TransactionTable({
+  rows,
+  usage = [],
+  resource,
+}: {
+  rows: Transaction[];
+  usage?: Usage[];
+  resource?: Resource;
+}) {
+  const resources = useData<{ items: Resource[] }>(
+    ["billing-resources"],
+    EP.resources + "?size=1000&includeDeleted=true",
+    { enabled: !resource },
+  );
+  const resourceById = useMemo(
+    () => new Map((resource ? [resource] : resources.data?.items || []).map((item) => [item.resourceUuid, item])),
+    [resource, resources.data],
+  );
+  const usageById = useMemo(
+    () => new Map(usage.map((item) => [item.resourceUuid, item])),
+    [usage],
+  );
   return (
     <DataTable
-      data={rows}
+      data={rows.filter((row) => visibleTransaction(row.type, row.amount))}
       columns={[
         {
           accessorKey: "id",
@@ -484,6 +505,31 @@ export function TransactionTable({ rows }: { rows: Transaction[] }) {
           accessorKey: "type",
           header: t("common.type"),
           cell: ({ row }) => t("billing." + row.original.type),
+        },
+        {
+          id: "resource",
+          header: t("billing.resource"),
+          cell: ({ row }) => {
+            const id = row.original.resourceUuid;
+            if (!id) return "—";
+            const linkedResource = resourceById.get(id);
+            const metering = usageById.get(id);
+            const label = linkedResource?.name || metering?.displayId || formatResourceId("res", id);
+            const displayId = linkedResource?.displayId || metering?.displayId;
+            const href = linkedResource
+              ? resourceLink(linkedResource)
+              : metering?.kind === "eip"
+                ? `/network/eips?drawer=${encodeURIComponent(id)}&region=${metering.region}&project_id=${encodeURIComponent(metering.projectId)}`
+                : metering?.kind === "storage"
+                  ? `/storage/${metering.displayId.startsWith("fil-") ? "file" : "block"}?drawer=${encodeURIComponent(id)}&region=${metering.region}`
+                  : null;
+            return (
+              <span style={{ display: "grid", gap: 2 }}>
+                {href ? <Link to={href}>{label}</Link> : <span>{label}</span>}
+                {displayId && displayId !== label && <small className="muted">{displayId}</small>}
+              </span>
+            );
+          },
         },
         {
           accessorKey: "amount",

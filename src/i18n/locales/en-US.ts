@@ -1119,6 +1119,7 @@ export default {
   "billing.issuedAt": "Issued at",
   "billing.invoiceDownload": "Download invoice",
   "billing.reference": "Reference",
+  "billing.resource": "Resource",
   "billing.balanceAfter": "Balance after",
   "billing.charge": "Charge",
   "billing.refund": "Refund",

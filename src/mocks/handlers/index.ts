@@ -79,7 +79,7 @@ import {
 } from "../../lib/schema";
 import { canWrite, canManageOrg } from "../../lib/rbac";
 import { displayId, formatResourceId, resourceLink } from "../../lib/ids";
-import { round } from "../../lib/money";
+import { round, visibleTransaction } from "../../lib/money";
 import { invoicePeriodForSelection } from "../../lib/billing-period";
 import { compatiblePrecisions, supportsChatInference } from "../../lib/inference-precision";
 import { STORAGE_PRODUCTS } from "../../lib/storage";
@@ -3429,7 +3429,7 @@ async function dispatch(request: Request, settleBilling = true) {
       transactions: db.transactions
         .filter((transaction) =>
           transaction.at.startsWith(billingPeriod) &&
-          (transaction.type !== "charge" || transaction.amount !== 0),
+          visibleTransaction(transaction.type, transaction.amount),
         )
         .sort((a, b) => b.at.localeCompare(a.at))
         .slice(0, 100),
@@ -3464,7 +3464,7 @@ async function dispatch(request: Request, settleBilling = true) {
       db.transactions
         .filter(
           (tx) =>
-            (tx.type !== "charge" || tx.amount !== 0) &&
+            visibleTransaction(tx.type, tx.amount) &&
             (!qs.get("resource_id") ||
               tx.resourceUuid === qs.get("resource_id")) &&
             (!qs.get("billing_period") ||

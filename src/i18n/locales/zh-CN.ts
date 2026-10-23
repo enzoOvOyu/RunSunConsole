@@ -1078,6 +1078,7 @@ export default {
   "billing.issuedAt": "开具时间",
   "billing.invoiceDownload": "下载发票",
   "billing.reference": "关联引用",
+  "billing.resource": "关联资源",
   "billing.balanceAfter": "交易后余额",
   "billing.charge": "扣费",
   "billing.refund": "退款",

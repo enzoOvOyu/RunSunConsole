@@ -103,7 +103,7 @@ export default function BillsPage() {
               totalAmount={report.data.grossAmount}
             />
             <Panel title={t("common.transactions")}>
-              <TransactionTable rows={report.data.transactions} />
+              <TransactionTable rows={report.data.transactions} usage={report.data.usage} />
             </Panel>
             <Panel title={t("billing.invoices")}>
               <small>

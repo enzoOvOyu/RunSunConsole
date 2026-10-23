@@ -77,3 +77,18 @@ it("maps January to the previous December and rejects future invoice periods", (
   expect(invoicePeriodForSelection("2025-12", "2026-01")).toBe("2025-12");
   expect(invoicePeriodForSelection("2026-02", "2026-01")).toBeNull();
 });
+
+it("hides charges displayed as zero while preserving bill totals and resource references", async () => {
+  const current = new Date().toISOString().slice(0, 7);
+  const at = `${current}-15T00:00:00.000Z`;
+  const seed = makeDatabase().transactions[0];
+  db.transactions = [
+    { ...seed, id: "subcent", at, type: "charge", amount: -0.0001, resourceUuid: "resource-a" as typeof seed.resourceUuid },
+    { ...seed, id: "cent", at, type: "charge", amount: -0.01, resourceUuid: "resource-a" as typeof seed.resourceUuid },
+  ];
+  const bill = await report(current);
+  expect(bill.transactions.map((transaction: { id: string }) => transaction.id)).toEqual(["cent"]);
+  expect(bill.transactions[0].resourceUuid).toBe("resource-a");
+  const response = await fetch(`http://localhost/api/billing/transactions?billing_period=${current}`);
+  expect((await response.json()).map((transaction: { id: string }) => transaction.id)).toEqual(["cent"]);
+});
