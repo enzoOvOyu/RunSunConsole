@@ -95,6 +95,16 @@ export function normalizeDisplayIds(state: Database): boolean {
       changed = true;
     }
   }
+  for (const bucket of state.buckets) {
+    if (bucket.blockPublicAccess === undefined) { bucket.blockPublicAccess = true; changed = true; }
+    if (bucket.defaultEncryption === undefined) { bucket.defaultEncryption = true; changed = true; }
+    if (bucket.versioning === undefined) { bucket.versioning = false; changed = true; }
+    if (bucket.tags === undefined) { bucket.tags = {}; changed = true; }
+    for (const object of bucket.objects) {
+      if (object.encryption === undefined) { object.encryption = "SSE"; changed = true; }
+      if (object.tags === undefined) { object.tags = {}; changed = true; }
+    }
+  }
   for (const ticket of state.tickets) {
     const expected = formatResourceId("tkt", ticket.id);
     if (ticket.caseNumber !== expected) {

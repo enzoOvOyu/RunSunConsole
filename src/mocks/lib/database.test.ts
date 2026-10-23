@@ -1,5 +1,5 @@
 import { expect, it, vi } from "vitest";
-import { makeDatabase, restoreDatabase } from "./database";
+import { makeDatabase, normalizeDisplayIds, restoreDatabase } from "./database";
 import { MODELS } from "../fixtures/content";
 
 it("resumes legacy error resources once without masking later failures", () => {
@@ -160,4 +160,20 @@ it("migrates legacy GPU VM and bare metal image references to split OS and runti
   } finally {
     vi.unstubAllGlobals();
   }
+});
+
+it("adds secure defaults to persisted Buckets and objects without changing their content", () => {
+  const state = makeDatabase();
+  const bucket = state.buckets[0];
+  delete bucket.blockPublicAccess;
+  delete bucket.defaultEncryption;
+  delete bucket.versioning;
+  delete bucket.tags;
+  delete bucket.objects[0].encryption;
+  delete bucket.objects[0].tags;
+  const originalSize = bucket.objects[0].size;
+  expect(normalizeDisplayIds(state)).toBe(true);
+  expect(bucket).toMatchObject({ blockPublicAccess: true, defaultEncryption: true, versioning: false, tags: {} });
+  expect(bucket.objects[0]).toMatchObject({ encryption: "SSE", tags: {}, size: originalSize });
+  expect(normalizeDisplayIds(state)).toBe(false);
 });
