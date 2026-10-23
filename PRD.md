@@ -373,7 +373,7 @@ RunSun 控制台
 | 5 | 插件与访问配置 | GPU Operator 统一托管驱动与 Device Plugin，NFD 提供节点标签；入口选择集群内部访问或模拟 NGINX Ingress Controller，复用已选 VPC/子网/安全组。默认最小权限，仅项目 Owner/Admin 可选择集群管理员授权。kubeconfig 演示文件在详情页集群就绪后提供。 |
 | 6 | 确认 | 汇总平台托管控制平面与 Worker 架构、Endpoint 策略、项目、网络、存储、节点容量、GPU 数量与费用，确认后创建。创建中的集群、节点及工作负载按已有生命周期展示，准备就绪后才能调度 Pod。 |
 
-**模式边界**：独占模式交付整台物理 GPU Worker 节点，创建页不提供 MIG Profile、时间切片或 MPS SKU。切片模式仅售卖已验证的 H100 1g.10gb 与 H200 1g.18gb 同构 MIG 布局；SKU、Profile、Kubernetes 扩展资源名、区域实例库存与小时价分别建模。切片模式固定使用共享池的 Kubernetes 1.31 软件栈、按需计费、租户 Namespace 与单份工作空间 PVC；不交付物理节点或宿主 OS，不提供本地 NVMe、独立控制面、宿主网卡、节点运维与真实工作负载操作。项目切片配额、空闲实例、预留、分配及释放从 Mock 数据层统一派生，失败回收预留；真实共享调度、租户隔离和 Kubernetes API 尚未接入。
+**模式边界**：独占模式交付整台物理 GPU Worker 节点，创建页不提供 MIG Profile、时间切片或 MPS SKU。切片模式按区域库存售卖 H100 1g.10gb、H200 1g.18gb、B200 1g.23gb、B300 1g.34gb 与 GB300 NVL72 1g.35gb 同构 MIG 布局；SKU、Profile、Kubernetes 扩展资源名、区域实例库存与小时价分别建模。切片模式固定使用共享池的 Kubernetes 1.31 软件栈、按需计费、租户 Namespace 与单份工作空间 PVC；不交付物理节点或宿主 OS，不提供本地 NVMe、独立控制面、宿主网卡、节点运维与真实工作负载操作。项目切片配额、空闲实例、预留、分配及释放从 Mock 数据层统一派生，失败回收预留；真实共享调度、租户隔离和 Kubernetes API 尚未接入。
 
 详情页从持久化的集群规格、节点组、网络接口及存储卷派生 Node、Pod、PV、PVC 和容量；创建/删除工作负载、节点组伸缩和节点停止/恢复调度会重新计算。未接入真实 Kubernetes API 的操作保留模拟标识。
 

@@ -63,6 +63,7 @@ export function SliceConfiguration() {
   const available = selected ? Math.max(0, Math.min(selected.free, selected.projectLimit - selected.projectUsed, 64)) : 0;
   const models = [...new Set(items.map((item) => item.gpuModel))];
   const profiles = [...new Set(items.map((item) => item.profile))];
+  const memoryOptions = [...new Set(items.map((item) => item.memoryGb))].sort((a, b) => a - b);
   const shown = items.filter((item) => (!model || item.gpuModel === model) && (!profile || item.profile === profile) &&
     (!memory || item.memoryGb >= Number(memory)) && (!availableOnly || item.free > 0));
   return <div className="stack">
@@ -71,7 +72,7 @@ export function SliceConfiguration() {
       <div className="form-grid">
         <Field label={t("slice.gpuModel")}><select value={model} onChange={(event) => setModel(event.target.value)}><option value="">{t("slice.all")}</option>{models.map((value) => <option key={value}>{value}</option>)}</select></Field>
         <Field label={t("slice.profile")}><select value={profile} onChange={(event) => setProfile(event.target.value)}><option value="">{t("slice.all")}</option>{profiles.map((value) => <option key={value}>{value}</option>)}</select></Field>
-        <Field label={t("slice.memory")}><select value={memory} onChange={(event) => setMemory(event.target.value)}><option value="">{t("slice.all")}</option>{[10, 18].map((value) => <option key={value} value={value}>{value} GB+</option>)}</select></Field>
+        <Field label={t("slice.memory")}><select value={memory} onChange={(event) => setMemory(event.target.value)}><option value="">{t("slice.all")}</option>{memoryOptions.map((value) => <option key={value} value={value}>{value} GB+</option>)}</select></Field>
       </div>
       <label className="row"><input type="checkbox" checked={availableOnly} onChange={(event) => setAvailableOnly(event.target.checked)} />{t("slice.availableOnly")}</label>
       <div className="grid grid-2">

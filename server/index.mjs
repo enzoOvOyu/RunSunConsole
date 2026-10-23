@@ -23,6 +23,7 @@ setPersistHook(() => {
   dirty = true;
 });
 const { quotaUse, provisioningSeconds } = await vite.ssrLoadModule("/src/mocks/lib/derive.ts");
+const { reconcileSliceInventory } = await vite.ssrLoadModule("/src/mocks/fixtures/slices.ts");
 setResourceAllocationDeriver((resource) => {
   const active = { ...resource, status: "running", deletedAt: null };
   return { vcpu: quotaUse(active, "vcpu"), memory: quotaUse(active, "memory") };
@@ -81,9 +82,11 @@ async function initialize() {
         await saveState(client, before, loaded.state, loaded.version + 1);
         loaded.version++;
       }
-      const beforeIds = structuredClone(loaded.state);
-      if (normalizeDisplayIds(loaded.state)) {
-        await saveState(client, beforeIds, loaded.state, loaded.version + 1);
+      const beforeUpgrade = structuredClone(loaded.state);
+      loaded.state.sliceInventory = reconcileSliceInventory(loaded.state.sliceInventory);
+      const idsChanged = normalizeDisplayIds(loaded.state);
+      if (idsChanged || JSON.stringify(beforeUpgrade.sliceInventory) !== JSON.stringify(loaded.state.sliceInventory)) {
+        await saveState(client, beforeUpgrade, loaded.state, loaded.version + 1);
         loaded.version++;
       }
     }

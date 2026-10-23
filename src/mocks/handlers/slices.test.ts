@@ -4,7 +4,7 @@ import { handlers } from "./index";
 import { db, makeDatabase } from "../lib/database";
 import { defaultSpec, normalizeSpec } from "../../lib/config";
 import { poolsFor } from "../fixtures/gpu-specs";
-import { SLICE_SKUS } from "../fixtures/slices";
+import { SLICE_SKUS, reconcileSliceInventory } from "../fixtures/slices";
 import type { VgpuSpec } from "../../types/domain";
 
 const server = setupServer(...handlers);
@@ -84,4 +84,22 @@ it("returns reserved instances when provisioning fails", async () => {
   const after = (await request(`/slices/catalog?region=jp&project_id=${order.projectId}`)).data[0];
   expect(after.free).toBe(freeBefore);
   expect(db.orders.find((item) => item.resourceUuid === resource.resourceUuid)?.status).toBe("failed");
+});
+
+it("offers a validated profile for every GPU pool and preserves saved allocations", async () => {
+  const projectId = db.projects.find((item) => item.isDefault)!.id;
+  const catalog = (await request(`/slices/catalog?region=us&project_id=${projectId}`)).data;
+  expect(catalog).toHaveLength(poolsFor("us").length);
+  for (const pool of poolsFor("us")) {
+    const sku = catalog.find((item: { poolCode: string }) => item.poolCode === pool.code);
+    expect(sku?.profile).toMatch(/^1g\./);
+    expect(sku?.free).toBeGreaterThan(0);
+    expect(sku?.hourlyUsd).toBeGreaterThan(0);
+  }
+  const saved = db.sliceInventory.filter((item) => item.skuId === SLICE_SKUS[0].id);
+  saved[0].state = "allocated";
+  saved[0].resourceUuid = "existing-resource";
+  const merged = reconcileSliceInventory(saved);
+  expect(merged.find((item) => item.id === saved[0].id)?.resourceUuid).toBe("existing-resource");
+  expect(new Set(merged.map((item) => item.skuId))).toEqual(new Set(SLICE_SKUS.map((sku) => sku.id)));
 });

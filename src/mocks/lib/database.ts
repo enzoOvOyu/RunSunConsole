@@ -27,7 +27,7 @@ import type {
   Voucher,
   Account,
 } from "../../types/domain";
-import { seedSliceInventory } from "../fixtures/slices";
+import { reconcileSliceInventory, seedSliceInventory } from "../fixtures/slices";
 import { seedResources, seedTime } from "../fixtures/resources";
 import {
   MODELS,
@@ -624,7 +624,7 @@ export function restoreDatabase() {
       );
       const restored = {
         ...data,
-        sliceInventory: data.sliceInventory || seedSliceInventory(),
+        sliceInventory: reconcileSliceInventory(data.sliceInventory),
         billingCursors: data.billingCursors || {},
         replicaRestarts: data.replicaRestarts || {},
         voucherPending: data.voucherPending || {},
