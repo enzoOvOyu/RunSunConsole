@@ -1,6 +1,6 @@
 import { useUrlState } from "../shared/useUrlState";
 import { useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Star, Box } from "lucide-react";
 import {
   ModelPublisherLogo,
@@ -8,7 +8,12 @@ import {
 } from "../../components/ModelPublisherLogo";
 import { poolDisplayName } from "../../lib/gpu-labels";
 import { compareFeaturedModels } from "../../lib/model-order";
-import { isWindowsImage, WINDOWS_LOGIN_USER, WINDOWS_MIN_SYSTEM_DISK_GB, WINDOWS_RDP_PORT } from "../../lib/windows-image";
+import {
+  isWindowsImage,
+  WINDOWS_LOGIN_USER,
+  WINDOWS_MIN_SYSTEM_DISK_GB,
+  WINDOWS_RDP_PORT,
+} from "../../lib/windows-image";
 import { supportsChatInference } from "../../lib/inference-precision";
 import type { Image, Model } from "../../types/domain";
 import { useAuth } from "../../stores/auth";
@@ -21,7 +26,6 @@ import {
   PageHeader,
   Button,
   Panel,
-  Tabs,
   Modal,
   KeyValues,
   Check,
@@ -57,8 +61,8 @@ function publisherName(model: Model) {
 }
 
 export default function ImagesPage() {
-  const [params] = useSearchParams();
-  const [tab, setTab] = useState(params.get("tab") || "models");
+  const location = useLocation();
+  const showImages = location.pathname.endsWith("/os-images");
   const [search, setSearch] = useUrlState("q");
   const [modality, setModality] = useUrlState("modality");
   const [license, setLicense] = useUrlState("license");
@@ -114,18 +118,12 @@ export default function ImagesPage() {
   return (
     <>
       <PageHeader
-        title={t("nav.images")}
-        subtitle={t("pageDescription.images")}
+        title={t(showImages ? "nav.os-images" : "nav.models")}
+        subtitle={t(
+          showImages ? "pageDescription.osImages" : "pageDescription.models",
+        )}
       />
-      <Tabs
-        items={["models", "images"].map((id) => ({
-          id,
-          label: t("images." + id),
-        }))}
-        value={tab}
-        onChange={setTab}
-      />
-      {tab === "models" && (
+      {!showImages && (
         <div className="model-catalog-summary">
           <div>
             <strong>{number(allModels.length)}</strong>
@@ -141,11 +139,13 @@ export default function ImagesPage() {
         <input
           className="input search"
           aria-label={t("common.search")}
-          placeholder={t("images.searchPlaceholder")}
+          placeholder={t(
+            showImages ? "common.search" : "images.searchPlaceholder",
+          )}
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         />
-        {tab === "models" && (
+        {!showImages && (
           <>
             <select
               aria-label={t("images.publisher")}
@@ -223,7 +223,7 @@ export default function ImagesPage() {
         <Loading />
       ) : models.error || images.error ? (
         <ErrorState error={models.error || images.error} />
-      ) : tab === "models" ? (
+      ) : !showImages ? (
         filtered.length ? (
           <div className="model-catalog-grid">
             {filtered.map((item) => (
@@ -424,7 +424,14 @@ export default function ImagesPage() {
                         ? item.frameworks.join(", ")
                         : t("images.noneIncluded")}
                     </small>
-                    {isWindowsImage(item) && <small>{t("images.windowsPasswordLogin", { user: WINDOWS_LOGIN_USER, port: WINDOWS_RDP_PORT })}</small>}
+                    {isWindowsImage(item) && (
+                      <small>
+                        {t("images.windowsPasswordLogin", {
+                          user: WINDOWS_LOGIN_USER,
+                          port: WINDOWS_RDP_PORT,
+                        })}
+                      </small>
+                    )}
                     <div className="model-catalog-tags">
                       {item.supportedGpuModels.map((gpu) => (
                         <span className="chip" key={gpu}>
@@ -604,15 +611,31 @@ export default function ImagesPage() {
                   ],
                   [t("common.size"), image.sizeGb + " GB"],
                   [t("common.source"), image.source],
-                  [t("common.description"), isWindowsImage(image) ? t("images.windowsDescription") : image.description],
-                  ...(isWindowsImage(image) ? [
-                    [t("images.windowsEdition"), t("images.desktopExperience")],
-                    [t("images.loginUser"), WINDOWS_LOGIN_USER],
-                    [t("field.authMethod"), t("wizard.password")],
-                    [t("images.remoteProtocol"), `RDP · TCP ${WINDOWS_RDP_PORT}`],
-                    [t("images.deployScope"), t("images.windowsVmOnly")],
-                    [t("images.systemDiskMinimum"), `${WINDOWS_MIN_SYSTEM_DISK_GB} GB`],
-                  ] as [string, string][] : []),
+                  [
+                    t("common.description"),
+                    isWindowsImage(image)
+                      ? t("images.windowsDescription")
+                      : image.description,
+                  ],
+                  ...(isWindowsImage(image)
+                    ? ([
+                        [
+                          t("images.windowsEdition"),
+                          t("images.desktopExperience"),
+                        ],
+                        [t("images.loginUser"), WINDOWS_LOGIN_USER],
+                        [t("field.authMethod"), t("wizard.password")],
+                        [
+                          t("images.remoteProtocol"),
+                          `RDP · TCP ${WINDOWS_RDP_PORT}`,
+                        ],
+                        [t("images.deployScope"), t("images.windowsVmOnly")],
+                        [
+                          t("images.systemDiskMinimum"),
+                          `${WINDOWS_MIN_SYSTEM_DISK_GB} GB`,
+                        ],
+                      ] as [string, string][])
+                    : []),
                 ]}
               />
             </Panel>

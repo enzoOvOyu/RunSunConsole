@@ -20,7 +20,8 @@ export default {
   "pageDescription.operationLogs":
     "按 CloudTrail 风格查看资源、网络与存储操作的操作者、时间、结果及请求详情。",
   "nav.notebooks": "Notebook / IDE",
-  "nav.images": "镜像商城 · 模型",
+  "nav.models": "模型",
+  "nav.os-images": "镜像",
   "nav.apps": "AI 应用模板",
   "nav.scaling": "弹性伸缩",
   "nav.ssh-keys": "SSH 公钥管理",
@@ -96,6 +97,10 @@ export default {
     "提交资源与平台问题，跟踪工单处理状态并补充沟通记录。",
   "pageDescription.notebooks":
     "在已运行的计算资源上创建并管理 Notebook 与 IDE 连接。",
+  "pageDescription.models":
+    "浏览模型目录，按厂商、参数规模、模态与部署能力筛选。",
+  "pageDescription.osImages":
+    "浏览可用于创建 GPU 云服务器的操作系统与运行时镜像。",
   "pageDescription.images":
     "浏览模型目录与系统镜像，按发布方、参数量、模态和可部署状态筛选。",
   "pageDescription.apps":
@@ -503,9 +508,12 @@ export default {
   "wizard.removePool": "移除此节点池",
   "wizard.license": "NVIDIA License 余量：{count}",
   "wizard.inferenceConfigGroup": "模型与算力配置",
-  "wizard.textModelsOnly": "支持文本及可生成文本的多模态模型；当前服务使用聊天接口。",
-  "wizard.eipReleasedAfterFailure": "实例创建失败，刚分配且未绑定的公网 IP 已自动释放。",
-  "wizard.eipCleanupFailed": "实例创建未完成；请到弹性公网 IP 页面核对刚分配地址的绑定与计费状态。",
+  "wizard.textModelsOnly":
+    "支持文本及可生成文本的多模态模型；当前服务使用聊天接口。",
+  "wizard.eipReleasedAfterFailure":
+    "实例创建失败，刚分配且未绑定的公网 IP 已自动释放。",
+  "wizard.eipCleanupFailed":
+    "实例创建未完成；请到弹性公网 IP 页面核对刚分配地址的绑定与计费状态。",
   "wizard.selectModel": "选择模型",
   "wizard.textModelRequired":
     "请选择可生成文本的模型；纯图像模型不能用于此聊天推理服务。",
@@ -543,8 +551,10 @@ export default {
   "wizard.vcpuHint": "每台 8–96 vCPU，按 8 的倍数选择。",
   "wizard.memoryForCpu": "内存 · GB",
   "wizard.memoryRatio": "按 vCPU × 2 GB 自动匹配，不能单独修改。",
-  "wizard.passwordRule": "密码需 12–128 位，至少包含大写字母、小写字母、数字、符号四类中的三类。",
-  "wizard.passwordRequired": "请输入密码：12–128 位，且至少包含大写字母、小写字母、数字、符号四类中的三类。",
+  "wizard.passwordRule":
+    "密码需 12–128 位，至少包含大写字母、小写字母、数字、符号四类中的三类。",
+  "wizard.passwordRequired":
+    "请输入密码：12–128 位，且至少包含大写字母、小写字母、数字、符号四类中的三类。",
   "wizard.sshKeyRequired": "请选择或导入有效的 SSH 公钥。",
   "wizard.selectSshKey": "选择已导入的 SSH 公钥",
   "wizard.noSshKey": "还没有可用公钥。",
@@ -604,9 +614,25 @@ export default {
   "scaling.zeroConfirm": "缩到 0 将导致冷启动和首 Token 延迟上升，我确认接受",
   "scaling.warmPool": "预热池规模",
   "scaling.cache": "权重缓存策略",
-  "scaling.readiness": "启用就绪门控",
   "scaling.maintenance": "维护窗口 UTC",
-  "scaling.changeSummary": "变更摘要",
+  "scaling.resource": "关联资源",
+  "scaling.targetValue": "触发阈值",
+  "scaling.minSize": "最小规模",
+  "scaling.maxSize": "最大规模",
+  "scaling.cooldown": "冷却时间",
+  "scaling.changeInfo": "变更信息",
+  "scaling.changeHistory": "变更记录",
+  "scaling.scaling_policy_created": "创建伸缩策略",
+  "scaling.scaling_policy_updated": "更新伸缩策略",
+  "scaling.scaling_policy_paused": "暂停伸缩策略",
+  "scaling.scaling_policy_resumed": "恢复伸缩策略",
+  "scaling.scaling_policy_deleted": "删除伸缩策略",
+  "scaling.changeCreated": "策略已创建",
+  "scaling.changeDeleted": "策略已删除",
+  "scaling.changePaused": "策略已暂停",
+  "scaling.changeResumed": "策略已恢复",
+  "scaling.changeNoDetails": "策略已更新",
+
   "scaling.pause": "暂停",
   "scaling.resume": "恢复",
   "scaling.events": "伸缩事件",
@@ -836,10 +862,12 @@ export default {
   "storage.kind.object": "对象存储",
   "storage.catalogError": "无法加载存储规格，请稍后重试。",
   "storage.additional": "附加存储",
-  "storage.deploymentBlockHint": "创建时仅附加云硬盘；交付后由用户在操作系统内分区、格式化和挂载。文件系统的权限与共享目录在文件存储中管理；对象 Bucket 在对象存储中管理。",
+  "storage.deploymentBlockHint":
+    "创建时仅附加云硬盘；交付后由用户在操作系统内分区、格式化和挂载。文件系统的权限与共享目录在文件存储中管理；对象 Bucket 在对象存储中管理。",
   "storage.manageFileStorage": "管理文件存储",
   "storage.manageObjectStorage": "管理对象存储",
-  "storage.legacySelectionHint": "旧草稿中的文件或对象存储不能在此创建，请移除此项并前往对应存储页面管理。",
+  "storage.legacySelectionHint":
+    "旧草稿中的文件或对象存储不能在此创建，请移除此项并前往对应存储页面管理。",
   "storage.osMountNote": "云硬盘已关联实例；请在操作系统内自行完成挂载。",
   "storage.add": "添加存储",
   "storage.item": "存储项 {count}",
@@ -854,22 +882,26 @@ export default {
   "storage.linkedFileSystems": "已关联文件系统",
   "storage.linkedFileSystemsHint": "当前筛选中已有计算资源关联",
   "storage.fileSharingTitle": "一个文件系统，面向多个工作负载",
-  "storage.fileSharingIntro": "文件系统通过 NFSv4.1 在 VPC 内共享；网络访问规则决定哪些客户端可连接，Kubernetes 使用 PV/PVC 将共享目录交给工作负载。",
+  "storage.fileSharingIntro":
+    "文件系统通过 NFSv4.1 在 VPC 内共享；网络访问规则决定哪些客户端可连接，Kubernetes 使用 PV/PVC 将共享目录交给工作负载。",
   "storage.fileSharingFlow": "文件系统到计算资源的共享关系",
   "storage.fileSystem": "文件系统",
   "storage.pvAndPvc": "NFSv4.1 · VPC 访问规则",
   "storage.computeConsumers": "授权客户端与集群工作负载",
   "storage.fileAccessTitle": "NFS 访问配置",
-  "storage.fileAccessIntro": "文件系统面向同一 VPC 内的多个客户端；此处配置网络访问范围和导出权限，不直接把文件系统挂到单台设备。",
+  "storage.fileAccessIntro":
+    "文件系统面向同一 VPC 内的多个客户端；此处配置网络访问范围和导出权限，不直接把文件系统挂到单台设备。",
   "storage.fileProtocol": "挂载协议",
   "storage.fileExportPath": "共享根目录",
-  "storage.fileLegacyHint": "这是旧版部署流程保留的客户端路径记录，不代表已创建 NFS 服务端挂载目标。",
+  "storage.fileLegacyHint":
+    "这是旧版部署流程保留的客户端路径记录，不代表已创建 NFS 服务端挂载目标。",
   "storage.fileLegacyAssociation": "既有部署关联",
   "storage.fileVpc": "访问 VPC",
   "storage.fileSubnet": "规划挂载目标子网",
   "storage.fileNoVpc": "当前项目没有可用 VPC",
   "storage.fileAllowedCidr": "允许访问的客户端网段",
-  "storage.fileAllowedCidrHint": "仅接受所选 VPC 内的 CIDR；建议限制到需要访问的子网。",
+  "storage.fileAllowedCidrHint":
+    "仅接受所选 VPC 内的 CIDR；建议限制到需要访问的子网。",
   "storage.fileCidrInvalid": "请输入所选 VPC 内的合法 CIDR。",
   "storage.fileAccessMode": "导出权限",
   "storage.fileReadWrite": "读写",
@@ -877,31 +909,37 @@ export default {
   "storage.fileRootSquash": "Root 映射",
   "storage.fileRootSquashOn": "开启 root squash（推荐）",
   "storage.fileRootSquashOff": "关闭 root squash",
-  "storage.fileMountPrerequisites": "客户端还需通过 TCP 2049 网络规则并具备相应 POSIX UID/GID 权限。实际 NFS 端点与挂载执行由存储后端提供。",
+  "storage.fileMountPrerequisites":
+    "客户端还需通过 TCP 2049 网络规则并具备相应 POSIX UID/GID 权限。实际 NFS 端点与挂载执行由存储后端提供。",
   "storage.fileCreateVpc": "创建 VPC",
   "storage.fileSaveAccess": "保存访问配置",
   "storage.fileManagedAccess": "平台托管关联",
   "storage.fileUnconfigured": "待配置访问",
   "storage.fileBindCluster": "关联 Kubernetes 集群",
-  "storage.fileBindClusterHint": "创建默认命名空间的 PV/PVC；集群节点子网须包含在允许访问的网段内，不直接挂载到节点。",
+  "storage.fileBindClusterHint":
+    "创建默认命名空间的 PV/PVC；集群节点子网须包含在允许访问的网段内，不直接挂载到节点。",
   "storage.fileSelectCluster": "选择同 VPC 的集群",
   "storage.fileNoCluster": "没有同项目、同区域、同 VPC 且运行中的集群。",
   "storage.fileCreatePvc": "创建 PV/PVC 关联",
   "storage.fileRemovePvc": "解除 PV/PVC 关联",
-  "storage.fileDetachConfirm": "确认解除此 PV/PVC 关联？正在使用该 PVC 的工作负载会阻止解除。",
+  "storage.fileDetachConfirm":
+    "确认解除此 PV/PVC 关联？正在使用该 PVC 的工作负载会阻止解除。",
   "storage.fileSystemList": "文件系统列表",
   "storage.linkedCompute": "关联计算资源",
   "storage.kubernetesCluster": "Kubernetes 集群",
   "storage.computeResource": "计算资源",
   "storage.accessPath": "挂载路径",
   "storage.fileMountRelations": "共享与挂载关系",
-  "storage.fileLinkedHint": "下方展示已有 PV/PVC 关联与实际引用该 PVC 的工作负载。",
-  "storage.fileUnlinkedHint": "尚未建立 Kubernetes PV/PVC 关联。配置 NFS 访问范围后，可选择同项目、同区域、同 VPC 的集群。",
+  "storage.fileLinkedHint":
+    "下方展示已有 PV/PVC 关联与实际引用该 PVC 的工作负载。",
+  "storage.fileUnlinkedHint":
+    "尚未建立 Kubernetes PV/PVC 关联。配置 NFS 访问范围后，可选择同项目、同区域、同 VPC 的集群。",
   "storage.nodePoolReach": "集群节点池",
   "storage.nodePools": "个节点池",
   "storage.runningPodMounts": "运行中的 Pod",
   "storage.consumerNodes": "实际运行节点",
-  "storage.fileNodePoolHint": "节点池数量表示此集群的共享范围；实际挂载以引用 PVC 且运行中的 Pod 为准。",
+  "storage.fileNodePoolHint":
+    "节点池数量表示此集群的共享范围；实际挂载以引用 PVC 且运行中的 Pod 为准。",
   "storage.volumeCount": "云硬盘数量",
   "storage.filteredResources": "当前筛选结果",
   "storage.configuredCapacity": "已配置容量",
@@ -926,11 +964,13 @@ export default {
   "storage.objectCount": "对象总数",
   "storage.regionalObjectQuota": "区域对象存储配额",
   "storage.regionalQuotaRemaining": "区域剩余配额",
-  "storage.regionQuotaUsesActual": "区域配额按对象实际字节数统计；Bucket 容量上限不预占区域配额。",
+  "storage.regionQuotaUsesActual":
+    "区域配额按对象实际字节数统计；Bucket 容量上限不预占区域配额。",
   "storage.bucketLimit": "Bucket 容量上限",
   "storage.accessPolicy": "访问权限",
   "storage.noUsageData": "暂无用量数据",
-  "storage.bucketLimitHint": "进度条表示对象实际使用量 / 此 Bucket 容量上限；不代表区域配额用量。",
+  "storage.bucketLimitHint":
+    "进度条表示对象实际使用量 / 此 Bucket 容量上限；不代表区域配额用量。",
   "storage.noBuckets": "当前区域暂无 Bucket。",
   "storage.profile.essd_pl0": "ESSD PL0 · 基础规格",
   "storage.profile.essd_pl1": "ESSD PL1 · 通用规格",
@@ -945,7 +985,8 @@ export default {
   "storage.nameInvalid": "名称去除首尾空格后须为 3–63 个字符。",
   "storage.useVolume": "使用此存储",
   "storage.selectTarget": "选择同项目、同区域的资源",
-  "storage.clusterFileBindingHint": "作为 Kubernetes 文件 PV/PVC 绑定，访问模式为 ReadWriteMany；不使用 Linux 挂载路径，且在工作负载引用 PVC 时不能卸载。",
+  "storage.clusterFileBindingHint":
+    "作为 Kubernetes 文件 PV/PVC 绑定，访问模式为 ReadWriteMany；不使用 Linux 挂载路径，且在工作负载引用 PVC 时不能卸载。",
   "storage.mountPathHint": "Linux 挂载路径，例如 /mnt/data。",
   "storage.attach": "挂载到资源",
   "storage.detach": "从资源卸载",
@@ -956,7 +997,8 @@ export default {
   "storage.attached": "已关联资源",
   "storage.volumeList": "存储卷列表",
   "storage.blockSubtitle": "管理云盘的规格、容量、项目归属和实例连接。",
-  "storage.fileSubtitle": "管理共享文件系统的 NFS 协议、VPC 访问范围、读写权限及 Kubernetes PV/PVC 关系。",
+  "storage.fileSubtitle":
+    "管理共享文件系统的 NFS 协议、VPC 访问范围、读写权限及 Kubernetes PV/PVC 关系。",
   "storage.allocatedCapacity": "区域已分配容量",
   "storage.availableCapacity": "区域剩余容量",
   "storage.unattached": "未关联",
@@ -990,7 +1032,8 @@ export default {
   "storage.defaultEncryption": "默认服务端加密",
   "storage.versioning": "版本控制",
   "storage.keepVersions": "保留对象覆盖前的版本",
-  "storage.versioningHint": "开启后，新上传覆盖同名对象时保留旧版本；永久删除对象时将删除全部版本。",
+  "storage.versioningHint":
+    "开启后，新上传覆盖同名对象时保留旧版本；永久删除对象时将删除全部版本。",
   "storage.enabled": "已启用",
   "storage.disabled": "未启用",
   "storage.tags": "标签",
@@ -998,10 +1041,12 @@ export default {
   "storage.tagValue": "标签 Value",
   "storage.noTags": "尚无标签",
   "storage.immutableProperties": "Bucket 名称、区域和项目创建后不可修改。",
-  "storage.accessScopeHint": "公开只读仅控制对象读取；此处为控制台模拟访问规则，尚未接入真实对象网关。",
+  "storage.accessScopeHint":
+    "公开只读仅控制对象读取；此处为控制台模拟访问规则，尚未接入真实对象网关。",
   "storage.encryptNewObjects": "对新上传对象启用服务端加密",
   "storage.encryptionScopeHint": "修改默认加密仅影响后续上传的对象。",
-  "storage.securityConfirm": "此操作会降低 Bucket 的访问或加密保护，请确认修改：",
+  "storage.securityConfirm":
+    "此操作会降低 Bucket 的访问或加密保护，请确认修改：",
   "storage.properties": "属性",
   "storage.permissions": "权限",
   "storage.management": "管理",
@@ -1029,22 +1074,27 @@ export default {
   "storage.accessDetails": "访问与关联",
   "storage.endpoint": "区域 Endpoint",
   "storage.bucketUrl": "存储桶地址",
-  "storage.bucketDeleteHint": "删除前需清空对象、移除生命周期规则并解除资源关联。",
+  "storage.bucketDeleteHint":
+    "删除前需清空对象、移除生命周期规则并解除资源关联。",
   "storage.s3-files": "S3 Files",
   "storage.s3FilesTitle": "S3 Files 文件接口",
   "storage.s3FilesSetup": "配置文件接口预览",
-  "storage.s3FilesVersioningRequired": "文件接口配置前需先开启 Bucket 版本控制，以便保留对象变更记录。",
+  "storage.s3FilesVersioningRequired":
+    "文件接口配置前需先开启 Bucket 版本控制，以便保留对象变更记录。",
   "storage.s3FilesEnableVersioning": "启用版本控制",
   "storage.s3FilesPrefix": "源前缀",
   "storage.s3FilesPrefixHint": "留空表示整个 Bucket；输入前缀时自动补 /。",
   "storage.s3FilesInvalidPrefix": "前缀不能含空路径段、.、.. 或超长路径。",
   "storage.s3FilesVpc": "访问 VPC",
-  "storage.s3FilesVpcHint": "仅显示同项目、同区域的标准 VPC。这里规划访问网络，不创建挂载目标。",
+  "storage.s3FilesVpcHint":
+    "仅显示同项目、同区域的标准 VPC。这里规划访问网络，不创建挂载目标。",
   "storage.s3FilesChooseVpc": "选择 VPC",
-  "storage.s3FilesSetupHint": "此处仅保存配置预览；实际 NFS 还需要服务端挂载目标、网络放行与身份权限。",
+  "storage.s3FilesSetupHint":
+    "此处仅保存配置预览；实际 NFS 还需要服务端挂载目标、网络放行与身份权限。",
   "storage.s3FilesCreatePreview": "保存文件接口预览",
   "storage.s3FilesConfiguration": "文件接口配置",
-  "storage.s3FilesRemoveConfirm": "删除文件接口预览配置？Bucket 和对象不会删除。",
+  "storage.s3FilesRemoveConfirm":
+    "删除文件接口预览配置？Bucket 和对象不会删除。",
   "storage.s3FilesPreviewOnly": "预览配置",
   "storage.s3FilesUnconfigured": "未配置",
   "storage.s3FilesAll": "全部文件接口",
@@ -1052,7 +1102,8 @@ export default {
   "storage.s3FilesMountTarget": "NFS 挂载目标",
   "storage.s3FilesSync": "双向同步",
   "storage.s3FilesNotProvisioned": "尚未接入",
-  "storage.s3FilesConfigHint": "此配置不会生成可用的 NFS 地址。Bucket 的对象、配额与生命周期继续按原有逻辑管理。",
+  "storage.s3FilesConfigHint":
+    "此配置不会生成可用的 NFS 地址。Bucket 的对象、配额与生命周期继续按原有逻辑管理。",
   "storage.s3FilesAccessibleObjects": "文件路径兼容性",
   "storage.s3FilesAccessible": "兼容对象",
   "storage.s3FilesIncompatible": "不兼容对象",
@@ -1066,11 +1117,16 @@ export default {
   "storage.s3FilesIssue.length": "对象键过长",
   "storage.s3FilesIssue.archive": "归档层需先恢复",
   "storage.s3FilesLimitations": "能力边界与使用限制",
-  "storage.s3FilesLimitPaths": "部分对象键无法转换为文件路径，例如含特殊目录名或过长名称；上方会标出不兼容对象。",
-  "storage.s3FilesLimitArchive": "归档或暂不可读的对象需要先恢复，才能用于文件访问。",
-  "storage.s3FilesLimitNfs": "文件挂载还依赖网络入口与权限服务；当前仅能配置和预览对象路径，暂不提供实际挂载。",
-  "storage.s3FilesLimitSync": "文件与对象之间的变更同步及冲突处理尚未接入；当前以 Bucket 对象记录为准。",
-  "storage.s3FilesLimitBilling": "文件访问层可能产生独立费用；目前未提供相应计量与价格，因此不展示费用估算。",
+  "storage.s3FilesLimitPaths":
+    "部分对象键无法转换为文件路径，例如含特殊目录名或过长名称；上方会标出不兼容对象。",
+  "storage.s3FilesLimitArchive":
+    "归档或暂不可读的对象需要先恢复，才能用于文件访问。",
+  "storage.s3FilesLimitNfs":
+    "文件挂载还依赖网络入口与权限服务；当前仅能配置和预览对象路径，暂不提供实际挂载。",
+  "storage.s3FilesLimitSync":
+    "文件与对象之间的变更同步及冲突处理尚未接入；当前以 Bucket 对象记录为准。",
+  "storage.s3FilesLimitBilling":
+    "文件访问层可能产生独立费用；目前未提供相应计量与价格，因此不展示费用估算。",
   "storage.objectSubtitle": "管理存储桶、对象访问、容量用量和生命周期规则。",
   "storage.lifecycleHint":
     "规则按对象最后更新时间计算；到期后，下一次访问存储桶时执行转换或删除。",
@@ -1612,13 +1668,15 @@ export default {
   "network.bindVm": "选择 GPU 云服务器",
   "network.vmEipOccupied": "所有网卡已绑定公网 IP",
   "network.vmNotReady": "实例尚未就绪",
-  "network.noEligibleEipVm": "当前项目和区域没有可绑定的 GPU 云服务器。已绑定公网 IP 或尚未就绪的实例不可选；请核对 EIP 的项目和区域。",
+  "network.noEligibleEipVm":
+    "当前项目和区域没有可绑定的 GPU 云服务器。已绑定公网 IP 或尚未就绪的实例不可选；请核对 EIP 的项目和区域。",
   "network.noEligible": "没有符合项目、区域及绑定条件的虚机设备。",
   "network.allocate": "分配弹性公网 IP",
   "network.includeReleased": "包含已释放地址",
   "network.resultCount": "共 {count} 项",
   "network.bindingFilter": "绑定状态",
-  "network.noAvailableEip": "当前项目及区域没有空闲公网 IP，可自动分配或先分配一个地址。",
+  "network.noAvailableEip":
+    "当前项目及区域没有空闲公网 IP，可自动分配或先分配一个地址。",
   "network.eipNameError": "名称须为 2–63 个字符。",
   "network.eipBandwidthError": "带宽上限须为 1–1000 Mbps 的整数。",
   "network.binding": "绑定对象",
@@ -1650,8 +1708,10 @@ export default {
   "network.release": "释放公网 IP",
   "network.releaseHint":
     "仅可释放未绑定地址。释放后停止计费，原 IP 会被回收，重新分配无法保证获得相同地址；历史账单保留。",
-  "network.eipReleaseBlocked": "此地址已绑定虚机。释放前须先解绑；解绑会中断该虚机的公网访问，地址会继续计费直至释放。",
-  "network.eipTunnelReleaseBlocked": "此地址是隧道网关。须先处理关联隧道才能释放；释放后原 IP 可能被重新分配。",
+  "network.eipReleaseBlocked":
+    "此地址已绑定虚机。释放前须先解绑；解绑会中断该虚机的公网访问，地址会继续计费直至释放。",
+  "network.eipTunnelReleaseBlocked":
+    "此地址是隧道网关。须先处理关联隧道才能释放；释放后原 IP 可能被重新分配。",
   "network.releaseInput": "输入 {id} 确认释放",
   "network.basic": "基本信息",
   "network.gateway": "网关公网地址",
@@ -1755,7 +1815,8 @@ export default {
   "images.vcpuPerInstance": "vCPU（单实例）",
   "images.memoryPerInstance": "主存（单实例）",
   "images.totalGpuCount": "GPU 总数",
-  "images.windowsDescription": "Windows Server Datacenter 桌面体验镜像，适用于兼容的 x86_64 GPU 云服务器；预装 NVIDIA 616.92 驱动与 CUDA 13.0，不包含 Linux 容器模板或 AI 框架。",
+  "images.windowsDescription":
+    "Windows Server Datacenter 桌面体验镜像，适用于兼容的 x86_64 GPU 云服务器；预装 NVIDIA 616.92 驱动与 CUDA 13.0，不包含 Linux 容器模板或 AI 框架。",
   "images.windowsEdition": "安装版本",
   "images.desktopExperience": "Datacenter · 桌面体验",
   "images.loginUser": "登录用户",
@@ -1764,13 +1825,19 @@ export default {
   "images.systemDiskMinimum": "系统盘最小容量",
   "images.windowsVmOnly": "兼容的 x86_64 GPU 云服务器",
   "images.windowsPasswordLogin": "{user} 密码登录 · RDP TCP {port}",
-  "images.windowsPasswordRule": "密码需 12–128 位，至少包含大写、小写、数字、符号四类中的三类。",
-  "images.windowsRuntimeHint": "Windows 基础镜像不支持当前 Linux 容器模板；AI 框架需在系统内自行安装。",
-  "images.windowsRdpHint": "按需在安全组放通 TCP 3389，仅允许可信来源；公网访问还需要为实例绑定弹性公网 IP。",
+  "images.windowsPasswordRule":
+    "密码需 12–128 位，至少包含大写、小写、数字、符号四类中的三类。",
+  "images.windowsRuntimeHint":
+    "Windows 基础镜像不支持当前 Linux 容器模板；AI 框架需在系统内自行安装。",
+  "images.windowsRdpHint":
+    "按需在安全组放通 TCP 3389，仅允许可信来源；公网访问还需要为实例绑定弹性公网 IP。",
   "images.windowsConnection": "Windows 远程连接",
-  "images.windowsNoConsole": "当前浏览器命令行控制台仅支持 Linux；Windows 请使用 RDP 客户端连接。",
-  "error.PASSWORD_WEAK": "密码需 12–128 位，且至少包含大写字母、小写字母、数字、符号四类中的三类。",
-  "error.WINDOWS_PASSWORD_WEAK": "Windows 密码不符合强度要求或登录方式不是密码。",
+  "images.windowsNoConsole":
+    "当前浏览器命令行控制台仅支持 Linux；Windows 请使用 RDP 客户端连接。",
+  "error.PASSWORD_WEAK":
+    "密码需 12–128 位，且至少包含大写字母、小写字母、数字、符号四类中的三类。",
+  "error.WINDOWS_PASSWORD_WEAK":
+    "Windows 密码不符合强度要求或登录方式不是密码。",
   "error.WINDOWS_CONSOLE_UNAVAILABLE": "Windows 不支持当前浏览器模拟控制台。",
   "images.operatingSystems": "操作系统",
   "images.cpuArchitecture": "CPU 架构",
@@ -1845,9 +1912,11 @@ export default {
   "eks.noSecurityGroup": "该 VPC 尚无安全组，无法保护节点网络接口。",
   "eks.manageSecurityGroup": "前往创建安全组",
   "eks.autoCidrs": "自动选择不冲突网段",
-  "eks.cidrExplainer": "Pod CIDR 为集群中容器分配 IP；Service CIDR 为 ClusterIP 服务分配虚拟 IP。两者必须采用规范网络地址，且不能与 VPC 或彼此重叠。保留建议值即可直接继续。",
+  "eks.cidrExplainer":
+    "Pod CIDR 为集群中容器分配 IP；Service CIDR 为 ClusterIP 服务分配虚拟 IP。两者必须采用规范网络地址，且不能与 VPC 或彼此重叠。保留建议值即可直接继续。",
   "eks.invalidPodCidr": "Pod CIDR 不是有效的规范网段（例如 172.20.0.0/16）。",
-  "eks.invalidServiceCidr": "Service CIDR 不是有效的规范网段（例如 172.21.0.0/16）。",
+  "eks.invalidServiceCidr":
+    "Service CIDR 不是有效的规范网段（例如 172.21.0.0/16）。",
   "eks.podServiceOverlap": "Pod CIDR 与 Service CIDR 重叠。",
   "eks.podVpcOverlap": "Pod CIDR 与当前项目的 VPC 网段重叠。",
   "eks.serviceVpcOverlap": "Service CIDR 与当前项目的 VPC 网段重叠。",
@@ -1875,7 +1944,8 @@ export default {
   "eks.ramGb": "内存 · GB",
   "eks.tolerate": "容忍",
   "eks.doNotTolerate": "不容忍",
-  "eks.schedulerHint": "模拟调度器仅在匹配的就绪节点有足够 GPU、CPU 和内存时放置 Pod；待调度 Pod 将显示原因。",
+  "eks.schedulerHint":
+    "模拟调度器仅在匹配的就绪节点有足够 GPU、CPU 和内存时放置 Pod；待调度 Pod 将显示原因。",
   "eks.physical": "物理容量",
   "eks.allocated": "已分配",
   "eks.readyNodes": "就绪节点",
@@ -1884,7 +1954,8 @@ export default {
   "eks.initializing": "初始化中",
   "eks.description": "描述",
   "eks.status": "状态",
-  "eks.clusterNameHint": "使用 3–63 位小写字母、数字或连字符，首尾为字母或数字。",
+  "eks.clusterNameHint":
+    "使用 3–63 位小写字母、数字或连字符，首尾为字母或数字。",
   "field.description": "描述",
   "field.podCidr": "Pod 网段",
   "field.serviceCidr": "Service 网段",
@@ -1903,10 +1974,12 @@ export default {
   "error.INVALID_CLUSTER_NAME": "集群名称须为 3–63 位 DNS 风格字符。",
   "error.CLUSTER_NAME_CONFLICT": "同项目同区域内已有同名集群。",
   "error.INVALID_GPU_MODEL": "所选 GPU 型号不属于此集群节点池。",
-  "error.INVALID_NODE_SELECTOR": "节点选择器的标签键和值必须同时填写且格式合法。",
+  "error.INVALID_NODE_SELECTOR":
+    "节点选择器的标签键和值必须同时填写且格式合法。",
   "error.WORKLOAD_NAME_CONFLICT": "此命名空间内已有同名工作负载。",
   "eks.managedControlPlaneTitle": "托管 Kubernetes 控制平面",
-  "eks.managedControlPlaneIntro": "平台管理 API Server、etcd 与调度控制组件；您无需创建或购买 Master 节点，只需配置 Worker 节点组及其网络、存储和工作负载。",
+  "eks.managedControlPlaneIntro":
+    "平台管理 API Server、etcd 与调度控制组件；您无需创建或购买 Master 节点，只需配置 Worker 节点组及其网络、存储和工作负载。",
   "eks.platformManaged": "平台托管",
   "eks.managedControlPlane": "控制平面",
   "eks.customerManaged": "客户配置",
@@ -1916,7 +1989,8 @@ export default {
   "eks.workerConfigLater": "节点规格和数量在第 4 步配置",
   "eks.managedTierSummary": "Kubernetes {version} · {tier} 托管档位",
   "eks.managedServiceTier": "托管控制面档位",
-  "eks.managedTierHint": "标准与 HA 表示平台控制面的可用性档位，不是可购买的 Master 节点规格或数量。",
+  "eks.managedTierHint":
+    "标准与 HA 表示平台控制面的可用性档位，不是可购买的 Master 节点规格或数量。",
   "eks.endpointNetworkPolicy": "API Endpoint 与控制面通信",
   "eks.endpointAccess": "API Endpoint 访问",
   "eks.publicAndPrivateEndpoint": "VPC 内访问 + 授权网段公网访问",
@@ -1926,79 +2000,104 @@ export default {
   "eks.controlPlaneNetwork": "控制面网络要求",
   "eks.haZoneRequirement": "HA 档位至少选择两个可用区的子网",
   "eks.standardZoneRequirement": "至少选择一个有效子网",
-  "eks.endpointWorkerCommunication": "平台托管控制平面通过所选 VPC/子网与 Worker 节点通信；请确保节点安全组允许集群所需流量。此处沿用第一步的 Endpoint 策略。",
-  "eks.workerOnlyNotice": "此步骤只配置客户管理的通用或 GPU Worker 节点组；控制平面由平台托管，不在这里购买 Master 节点。",
+  "eks.endpointWorkerCommunication":
+    "平台托管控制平面通过所选 VPC/子网与 Worker 节点通信；请确保节点安全组允许集群所需流量。此处沿用第一步的 Endpoint 策略。",
+  "eks.workerOnlyNotice":
+    "此步骤只配置客户管理的通用或 GPU Worker 节点组；控制平面由平台托管，不在这里购买 Master 节点。",
   "eks.managementMode": "控制平面管理模式",
   "eks.controlPlaneHealth": "控制平面健康",
   "eks.controlPlaneHealthy": "健康",
   "eks.controlPlaneInitializing": "初始化中",
   "eks.controlPlaneUnavailable": "暂不可用",
-  "eks.projectStepIntro": "选择集群所属项目、地域、名称、Kubernetes 版本和托管服务档位。",
+  "eks.projectStepIntro":
+    "选择集群所属项目、地域、名称、Kubernetes 版本和托管服务档位。",
   "eks.apiAccess": "API Server 访问",
   "eks.apiAccessHint": "私有访问使用所选 VPC；开启公网访问时必须限制授权网段。",
-  "eks.vpcSubnetConflict": "该 VPC 的子网地址超出 VPC 范围或与其他子网重叠；请在网络管理中修正，现有数据不会被自动改写。",
+  "eks.vpcSubnetConflict":
+    "该 VPC 的子网地址超出 VPC 范围或与其他子网重叠；请在网络管理中修正，现有数据不会被自动改写。",
   "eks.controlPlaneIpCount": "控制面预留 IP",
   "eks.currentGpuNodes": "当前 GPU 节点",
   "eks.peakIpDemand": "峰值所需 IP",
   "eks.nodeSubnetTitle": "子网与 GPU 节点网络",
-  "eks.nodeSubnetHint": "控制面和 GPU 节点按所选子网轮询分配；HA 控制面需要跨两个可用区。",
+  "eks.nodeSubnetHint":
+    "控制面和 GPU 节点按所选子网轮询分配；HA 控制面需要跨两个可用区。",
   "eks.privateNodeSubnet": "节点私网子网",
   "eks.reservedIps": "可用地址上限 {total} · 预留 {count} 个",
   "eks.requiredIpInSubnet": "本次需 {count} 个 IP",
   "eks.notSelected": "未选中",
-  "eks.privateRouteHint": "当前 Mock 仅支持节点私网。未建模公网子网路由、NAT 或负载均衡出口；API Server 公网选项在项目步骤单独设置。",
+  "eks.privateRouteHint":
+    "当前 Mock 仅支持节点私网。未建模公网子网路由、NAT 或负载均衡出口；API Server 公网选项在项目步骤单独设置。",
   "eks.kubernetesNetworkTitle": "Kubernetes 网络参数",
-  "eks.cniOverlayHint": "当前仅支持 Cilium 和 Calico 的独立 Pod 网段模拟；Pod CIDR 与 Service CIDR 均需私有且互不重叠。本平台尚未提供 VPC CNI。",
-  "eks.securityGroupScope": "安全组绑定控制面与 GPU 节点网卡；不等同于 Pod NetworkPolicy。",
+  "eks.cniOverlayHint":
+    "当前仅支持 Cilium 和 Calico 的独立 Pod 网段模拟；Pod CIDR 与 Service CIDR 均需私有且互不重叠。本平台尚未提供 VPC CNI。",
+  "eks.securityGroupScope":
+    "安全组绑定控制面与 GPU 节点网卡；不等同于 Pod NetworkPolicy。",
   "eks.cidrProposal": "建议网段",
   "eks.applyCidrs": "确认应用",
-  "eks.noCidrCandidate": "当前已知 VPC 网段下没有可用的候选 Pod / Service 地址。",
+  "eks.noCidrCandidate":
+    "当前已知 VPC 网段下没有可用的候选 Pod / Service 地址。",
   "eks.networkTopology": "网络拓扑预览",
   "eks.controlAndGpuNodes": "控制面 {control} · GPU 节点 {nodes}",
-  "eks.networkTopologyHint": "拓扑按当前 VPC、子网顺序、节点数量和 CNI 配置实时生成；不代表真实路由或 NAT 已下发。",
-  "eks.createVpcModalHint": "一次配置 VPC、可用区子网和默认安全组；创建后自动回到当前集群向导。",
+  "eks.networkTopologyHint":
+    "拓扑按当前 VPC、子网顺序、节点数量和 CNI 配置实时生成；不代表真实路由或 NAT 已下发。",
+  "eks.createVpcModalHint":
+    "一次配置 VPC、可用区子网和默认安全组；创建后自动回到当前集群向导。",
   "eks.newVpcOverlap": "新 VPC CIDR 与当前项目已有 VPC 重叠，请更换地址段。",
   "eks.invalidVpcPlan": "填写名称及规范的私有 VPC CIDR（前缀 /8–/28）。",
-  "eks.invalidSubnetPlan": "子网必须位于 VPC 内、彼此不重叠；HA 集群需跨两个可用区。",
+  "eks.invalidSubnetPlan":
+    "子网必须位于 VPC 内、彼此不重叠；HA 集群需跨两个可用区。",
   "eks.subnetNameIndex": "子网 {index} 名称",
-  "eks.vpcPlanSecurityGroup": "平台将同时创建属于新 VPC 的默认安全组，并在返回后自动选择。",
-  "eks.networkStepIntro": "沿用平台现有标准 VPC。选择承载控制面与 GPU 节点的子网；Pod 和 Service 地址段与 VPC 地址段分离。",
+  "eks.vpcPlanSecurityGroup":
+    "平台将同时创建属于新 VPC 的默认安全组，并在返回后自动选择。",
+  "eks.networkStepIntro":
+    "沿用平台现有标准 VPC。选择承载控制面与 GPU 节点的子网；Pod 和 Service 地址段与 VPC 地址段分离。",
   "eks.vpcConfig": "VPC 配置",
   "eks.existingVpc": "使用已有 VPC",
   "eks.createVpcHint": "在网络管理中创建后返回选择；配置草稿会保留。",
   "eks.availableZones": "可用区",
   "eks.subnetCount": "子网数",
   "eks.subnetConfig": "节点与控制面子网",
-  "eks.subnetHint": "每个子网映射到一个可用区。高可用控制面至少选择两个不同可用区；IP 余量覆盖控制面与节点。",
+  "eks.subnetHint":
+    "每个子网映射到一个可用区。高可用控制面至少选择两个不同可用区；IP 余量覆盖控制面与节点。",
   "eks.haNeedsTwoZones": "高可用控制面需选择两个不同可用区的子网。",
-  "eks.subnetIpsInsufficient": "所选子网可用 IP {available} 个，至少需要 {needed} 个。",
+  "eks.subnetIpsInsufficient":
+    "所选子网可用 IP {available} 个，至少需要 {needed} 个。",
   "eks.podNetwork": "Pod 与 Service 网络",
-  "eks.cniHint": "Cilium/Calico 使用平台模拟的 Pod 网段；安全组作用于节点网络接口，创建前会验证子网和 VPC 归属。",
+  "eks.cniHint":
+    "Cilium/Calico 使用平台模拟的 Pod 网段；安全组作用于节点网络接口，创建前会验证子网和 VPC 归属。",
   "eks.clusterStoragePolicy": "集群级存储能力",
   "eks.csiState": "CSI 插件",
   "eks.managedCsi": "平台托管 · 随节点就绪",
   "eks.defaultStorageClass": "默认 StorageClass",
   "eks.dynamicBlock": "动态云块存储",
-  "eks.clusterStoragePolicyHint": "CSI 提供云存储接入，StorageClass 决定供应方式；存储卷和 PV/PVC 由平台按最终节点池配置创建。",
+  "eks.clusterStoragePolicyHint":
+    "CSI 提供云存储接入，StorageClass 决定供应方式；存储卷和 PV/PVC 由平台按最终节点池配置创建。",
   "eks.chooseStorageScheme": "选择初始存储方案",
   "eks.storageMode.dynamic_block": "云块存储",
   "eks.storageMode.existing_block": "预置云硬盘",
   "eks.storageMode.local_nvme": "节点本地 NVMe",
   "eks.storageMode.shared_file": "共享文件存储",
-  "eks.storageModeHint.dynamic_block": "按每个 GPU 节点填写容量；平台通过 CSI 自动创建云硬盘、PV 和 PVC。",
-  "eks.storageModeHint.existing_block": "按每个 GPU 节点填写容量；平台预置云硬盘并自动完成 PV/PVC 绑定。",
-  "eks.storageModeHint.local_nvme": "从 GPU 节点本地盘预留容量，受节点调度约束。",
-  "eks.storageModeHint.shared_file": "填写集群共享容量；平台自动创建文件卷及可跨节点使用的 PV/PVC。",
-  "eks.fileRequiresVolume": "当前项目没有可用的独立文件卷；创建后可选择共享文件方案。",
+  "eks.storageModeHint.dynamic_block":
+    "按每个 GPU 节点填写容量；平台通过 CSI 自动创建云硬盘、PV 和 PVC。",
+  "eks.storageModeHint.existing_block":
+    "按每个 GPU 节点填写容量；平台预置云硬盘并自动完成 PV/PVC 绑定。",
+  "eks.storageModeHint.local_nvme":
+    "从 GPU 节点本地盘预留容量，受节点调度约束。",
+  "eks.storageModeHint.shared_file":
+    "填写集群共享容量；平台自动创建文件卷及可跨节点使用的 PV/PVC。",
+  "eks.fileRequiresVolume":
+    "当前项目没有可用的独立文件卷；创建后可选择共享文件方案。",
   "eks.openFileStorage": "前往文件存储",
   "eks.initialPvc": "初始 PVC",
   "eks.createInitialPvc": "创建初始数据 PVC",
   "eks.requestedCapacity": "申请容量",
   "eks.initialPvcUse": "用途",
   "eks.workloadData": "工作负载数据卷",
-  "eks.dynamicInitialHint": "可不预置 PVC，工作负载之后仍可按默认 StorageClass 申请。创建时申请则新增底层云硬盘和 PV；这里不是集群总存储容量。",
+  "eks.dynamicInitialHint":
+    "可不预置 PVC，工作负载之后仍可按默认 StorageClass 申请。创建时申请则新增底层云硬盘和 PV；这里不是集群总存储容量。",
   "eks.existingFilePv": "已有文件卷绑定",
-  "eks.fileBindingHint": "仅展示当前项目、地域中未关联且有容量的文件卷。创建集群时绑定静态 PV/PVC，已有文件卷保持独立计费。",
+  "eks.fileBindingHint":
+    "仅展示当前项目、地域中未关联且有容量的文件卷。创建集群时绑定静态 PV/PVC，已有文件卷保持独立计费。",
   "eks.noEligibleFile": "暂无符合条件的空闲文件卷。",
   "eks.existingFile": "已有文件卷",
   "eks.existingBlock": "已有云硬盘",
@@ -2006,7 +2105,8 @@ export default {
   "eks.rwx": "ReadWriteMany · 多节点读写",
   "eks.rwo": "ReadWriteOnce · 同节点读写",
   "eks.initialVolumeIndex": "初始卷 {index}",
-  "eks.fileAccessHint": "共享文件卷可由不同节点上的 Pod 使用；底层文件卷仍是现有存储资源。",
+  "eks.fileAccessHint":
+    "共享文件卷可由不同节点上的 Pod 使用；底层文件卷仍是现有存储资源。",
   "eks.nodeCount": "GPU 节点数",
   "eks.physicalLocalCapacity": "节点本地物理容量",
   "eks.availableLocalCapacity": "当前剩余可调度本地容量",
@@ -2017,39 +2117,53 @@ export default {
   "eks.staticBinding": "现有卷静态绑定",
   "eks.volumeZone": "卷可用区",
   "eks.storageRelationship": "资源关系预览",
-  "eks.storageRelationshipHint.dynamic_block": "每个 GPU 节点通过 CSI 生成一套云硬盘、PV 和 RWO PVC，容量随节点池数量变化。",
-  "eks.storageRelationshipHint.existing_block": "平台按节点预置云硬盘并生成静态 PV 和 RWO PVC；无需手动选择已有卷。",
-  "eks.storageRelationshipHint.local_nvme": "每个节点自动生成本地 PV/PVC，绑定该节点；释放节点后数据无法保留。",
-  "eks.storageRelationshipHint.shared_file": "平台创建一份文件卷及 RWX PV/PVC，所有节点池可共享。",
+  "eks.storageRelationshipHint.dynamic_block":
+    "每个 GPU 节点通过 CSI 生成一套云硬盘、PV 和 RWO PVC，容量随节点池数量变化。",
+  "eks.storageRelationshipHint.existing_block":
+    "平台按节点预置云硬盘并生成静态 PV 和 RWO PVC；无需手动选择已有卷。",
+  "eks.storageRelationshipHint.local_nvme":
+    "每个节点自动生成本地 PV/PVC，绑定该节点；释放节点后数据无法保留。",
+  "eks.storageRelationshipHint.shared_file":
+    "平台创建一份文件卷及 RWX PV/PVC，所有节点池可共享。",
   "eks.storageSummary": "本次存储配置",
   "eks.storageScheme": "存储方案",
   "eks.existingVolumeCapacity": "已绑定现有卷",
   "eks.noInitialPvc": "不预置",
-  "eks.notClusterTotalStorage": "初始 PVC 与现有卷容量分别计量，不代表集群全部可用存储。",
+  "eks.notClusterTotalStorage":
+    "初始 PVC 与现有卷容量分别计量，不代表集群全部可用存储。",
   "eks.newCloudDisk": "新云硬盘",
   "eks.gpuNode": "GPU 节点",
   "eks.capacityPerNode": "每节点云硬盘容量",
   "eks.sharedCapacity": "集群共享文件容量",
   "eks.generatedVolumeCount": "自动创建的 PV/PVC 数量",
   "eks.totalProvisionedCapacity": "本次申请总容量",
-  "eks.perNodeProvisionHint": "最终节点池数量变化时，云硬盘、PV/PVC 数量和费用将同步更新。",
-  "eks.sharedProvisionHint": "集群创建一份共享文件卷及 RWX PV/PVC，多个节点池复用同一容量。",
-  "eks.nodeCountRecalculatesStorage": "第四步调整节点池后，这里的卷数量、总容量与费用会按最终配置重新计算。",
+  "eks.perNodeProvisionHint":
+    "最终节点池数量变化时，云硬盘、PV/PVC 数量和费用将同步更新。",
+  "eks.sharedProvisionHint":
+    "集群创建一份共享文件卷及 RWX PV/PVC，多个节点池复用同一容量。",
+  "eks.nodeCountRecalculatesStorage":
+    "第四步调整节点池后，这里的卷数量、总容量与费用会按最终配置重新计算。",
   "eks.platformFileVolume": "平台创建文件卷",
   "eks.platformBlockVolume": "平台创建云硬盘",
-  "eks.storageStepIntro": "选择存储方案并填写容量；平台根据最终节点池数量自动创建存储卷和 PV/PVC。",
+  "eks.storageStepIntro":
+    "选择存储方案并填写容量；平台根据最终节点池数量自动创建存储卷和 PV/PVC。",
   "eks.dynamicPvc": "CSI 动态 PVC",
-  "eks.dynamicPvcHint": "容量为 0 时不预置 PVC。SSD/NVMe 对应块存储；共享文件类沿用现有文件存储。",
+  "eks.dynamicPvcHint":
+    "容量为 0 时不预置 PVC。SSD/NVMe 对应块存储；共享文件类沿用现有文件存储。",
   "eks.existingBlockPv": "已有块存储绑定",
-  "eks.blockBindingHint": "仅列出当前项目、地域、所选可用区中未挂载的块存储。创建时锁定卷，生成同名空间内的 RWO PVC；费用由已有卷承担。",
+  "eks.blockBindingHint":
+    "仅列出当前项目、地域、所选可用区中未挂载的块存储。创建时锁定卷，生成同名空间内的 RWO PVC；费用由已有卷承担。",
   "eks.noEligibleBlock": "没有符合条件的空闲块存储。",
   "eks.openBlockStorage": "打开块存储",
   "eks.blockVolume": "块存储卷",
-  "eks.rwoHint": "ReadWriteOnce：使用此 PVC 的 Pod 须调度到卷所在可用区，同一 PVC 的副本固定在同一节点。",
+  "eks.rwoHint":
+    "ReadWriteOnce：使用此 PVC 的 Pod 须调度到卷所在可用区，同一 PVC 的副本固定在同一节点。",
   "eks.localPv": "本地 PV",
   "eks.localPvPerNode": "每节点本地 PV 容量",
-  "eks.localPvHint": "本地 NVMe 容量按每节点填写，PV/PVC 由平台生成并绑定对应节点；节点释放后数据不可保留。",
-  "eks.nodeStepIntro": "配置客户管理的 Worker 节点组。机型与镜像来自当前地域的资源池；节点数量决定 GPU 容量和网络 IP 需求。",
+  "eks.localPvHint":
+    "本地 NVMe 容量按每节点填写，PV/PVC 由平台生成并绑定对应节点；节点释放后数据不可保留。",
+  "eks.nodeStepIntro":
+    "配置客户管理的 Worker 节点组。机型与镜像来自当前地域的资源池；节点数量决定 GPU 容量和网络 IP 需求。",
   "eks.perNodeCapacity": "单节点容量",
   "eks.localNvme": "本地 NVMe",
   "eks.nodePoolCapacity": "期望 {nodes} 节点，共 {gpus} 张 GPU。",
@@ -2062,24 +2176,31 @@ export default {
   "eks.nfdRole": "识别节点硬件特征并提供调度标签",
   "eks.deploymentPolicy": "部署策略",
   "eks.platformManagedWithNodes": "仅部署到 GPU 节点组；节点就绪后检查状态",
-  "eks.gpuRuntimeDependency": "NFD 提供节点特征；GPU Operator 统一管理驱动和 Device Plugin，不重复部署独立插件。",
+  "eks.gpuRuntimeDependency":
+    "NFD 提供节点特征；GPU Operator 统一管理驱动和 Device Plugin，不重复部署独立插件。",
   "eks.clusterEntryTitle": "集群访问入口",
   "eks.clusterEntryHint": "使用前一步已选的 VPC、子网与安全组",
   "eks.entryInternal": "仅集群内部访问",
-  "eks.entryInternalHint": "通过集群内 Service 访问工作负载，不部署入口控制器。",
+  "eks.entryInternalHint":
+    "通过集群内 Service 访问工作负载，不部署入口控制器。",
   "eks.entryIngress": "启用 Ingress",
-  "eks.entryIngressHint": "模拟部署平台托管 NGINX 控制器；路由规则在建群后创建。",
+  "eks.entryIngressHint":
+    "模拟部署平台托管 NGINX 控制器；路由规则在建群后创建。",
   "eks.ingressController": "Ingress Controller",
   "eks.platformManagedMock": "平台托管模拟",
   "eks.ingressResource": "Ingress 路由资源",
-  "eks.ingressCreatedAfterCluster": "创建集群后按工作负载配置；当前不自动生成路由",
-  "eks.ingressNetworkHint": "入口复用所选 VPC、子网与安全组；当前没有真实负载均衡器或公网入口。",
+  "eks.ingressCreatedAfterCluster":
+    "创建集群后按工作负载配置；当前不自动生成路由",
+  "eks.ingressNetworkHint":
+    "入口复用所选 VPC、子网与安全组；当前没有真实负载均衡器或公网入口。",
   "eks.ingressNeedsNetwork": "请先在网络步骤选择有效 VPC、子网和安全组。",
   "eks.internalAccessHint": "仅模拟集群内 Service 网络；不会分配公网入口。",
   "eks.clusterPermissionsTitle": "集群访问权限",
-  "eks.clusterPermissionsHint": "沿用当前项目身份角色，默认不授予集群管理员权限",
+  "eks.clusterPermissionsHint":
+    "沿用当前项目身份角色，默认不授予集群管理员权限",
   "eks.grantProjectAdmin": "向当前项目 Owner / Admin 授予集群管理员权限",
-  "eks.adminGrantScope": "仅作用于此集群；Mock 记录授权方案，真实 RBAC 仍需后端对接。",
+  "eks.adminGrantScope":
+    "仅作用于此集群；Mock 记录授权方案，真实 RBAC 仍需后端对接。",
   "eks.adminGrantUnavailable": "当前角色不能授予集群管理员权限。",
   "eks.initialAuthorization": "初始授权",
   "eks.projectAdminGranted": "项目 Owner / Admin：集群管理员",
@@ -2092,16 +2213,22 @@ export default {
   "eks.controllerDisabled": "未启用",
   "eks.noIngressRoutes": "尚无 Ingress 路由；入口流量为 0",
   "eks.connectionTitle": "集群连接信息",
-  "eks.connectionMockHint": "当前下载文件不含用户凭据，仅用于原型展示；接入真实 Kubernetes 后由后端签发。",
-  "eks.addonsStepIntro": "确认 GPU 托管组件、选择入口方案和初始授权；以下配置将在详情页同步展示。",
+  "eks.connectionMockHint":
+    "当前下载文件不含用户凭据，仅用于原型展示；接入真实 Kubernetes 后由后端签发。",
+  "eks.addonsStepIntro":
+    "确认 GPU 托管组件、选择入口方案和初始授权；以下配置将在详情页同步展示。",
   "eks.managedAddon": "平台托管，随节点就绪",
-  "eks.gpuAddonHint": "GPU Operator、Device Plugin 与 NFD 由平台随节点组初始化，不单独模拟安装。",
+  "eks.gpuAddonHint":
+    "GPU Operator、Device Plugin 与 NFD 由平台随节点组初始化，不单独模拟安装。",
   "eks.accessAndRbac": "访问与权限",
-  "eks.confirmStepIntro": "确认平台托管控制平面、API Endpoint、网络、存储与 Worker 节点组的配置。",
+  "eks.confirmStepIntro":
+    "确认平台托管控制平面、API Endpoint、网络、存储与 Worker 节点组的配置。",
   "eks.resourceSummary": "资源配置摘要",
   "eks.resourceChain": "资源关联与架构",
-  "error.INVALID_CLUSTER_SUBNETS": "子网必须属于所选 VPC；高可用控制面至少需要两个不同可用区。",
-  "error.INVALID_CLUSTER_VOLUME_BINDING": "块存储必须空闲且与项目、地域和所选可用区一致；PV/PVC 名称不可重复。",
+  "error.INVALID_CLUSTER_SUBNETS":
+    "子网必须属于所选 VPC；高可用控制面至少需要两个不同可用区。",
+  "error.INVALID_CLUSTER_VOLUME_BINDING":
+    "块存储必须空闲且与项目、地域和所选可用区一致；PV/PVC 名称不可重复。",
   "error.INVALID_CLUSTER_PVC": "工作负载所选 PVC 不属于当前命名空间或集群。",
   "error.INVALID_LOCAL_PV_SIZE": "本地 PV 容量超出所选节点的 NVMe 容量。",
   "wizard.clusterProject": "项目与区域",
@@ -2124,10 +2251,13 @@ export default {
   "eks.poolCount": "{pools} 个节点组 · {nodes} 个节点 · {gpus} 张 GPU",
   "slice.modeTitle": "部署模式",
   "slice.exclusive": "独占部署",
-  "slice.exclusiveHint": "整台物理 GPU 服务器作为专属 Worker 节点，按原有节点规则计费。",
+  "slice.exclusiveHint":
+    "整台物理 GPU 服务器作为专属 Worker 节点，按原有节点规则计费。",
   "slice.slice": "切片部署",
-  "slice.sliceHint": "从平台共享资源池购买 MIG 切片，使用隔离的工作空间，不交付物理宿主机。",
-  "slice.mockBoundary": "演示环境：库存、预留、Namespace 和 RBAC 为模拟状态；尚未接入生产共享集群或真实租户隔离。",
+  "slice.sliceHint":
+    "从平台共享资源池购买 MIG 切片，使用隔离的工作空间，不交付物理宿主机。",
+  "slice.mockBoundary":
+    "演示环境：库存、预留、Namespace 和 RBAC 为模拟状态；尚未接入生产共享集群或真实租户隔离。",
   "slice.skuTitle": "切片 SKU",
   "slice.gpuModel": "GPU 型号",
   "slice.profile": "MIG Profile",
@@ -2136,7 +2266,8 @@ export default {
   "slice.availableOnly": "仅显示有可用库存",
   "slice.layout": "验证布局",
   "slice.workloads": "适用负载",
-  "slice.inventory": "可用 {free} · 已预留 {reserved} · 已分配 {allocated} · 维护 {maintenance}",
+  "slice.inventory":
+    "可用 {free} · 已预留 {reserved} · 已分配 {allocated} · 维护 {maintenance}",
   "slice.noQuote": "暂无报价",
   "slice.noSku": "当前筛选下没有可用切片 SKU。",
   "slice.quantityTitle": "切片数量与可用性",
@@ -2148,11 +2279,14 @@ export default {
   "slice.maxRequest": "最大可申请",
   "slice.hourly": "切片每小时费用",
   "slice.hour": "切片·小时",
-  "slice.networkHint": "选择工作空间关联的 VPC 和子网；共享集群的 Pod 网络由平台管理，不配置独立控制平面或宿主机网卡。",
+  "slice.networkHint":
+    "选择工作空间关联的 VPC 和子网；共享集群的 Pod 网络由平台管理，不配置独立控制平面或宿主机网卡。",
   "slice.noVpc": "当前项目和区域没有可用 VPC，请先在网络管理中创建。",
   "slice.namespaceBoundary": "工作空间与访问边界",
-  "slice.networkIsolationMock": "工作空间通过 Namespace、资源配额和 RBAC 表达访问边界；网络策略在演示环境中仅展示配置关系。",
-  "slice.storageHint": "为切片工作空间申请单个 PVC。云块存储或共享文件存储由平台供应；不提供宿主机本地盘。",
+  "slice.networkIsolationMock":
+    "工作空间通过 Namespace、资源配额和 RBAC 表达访问边界；网络策略在演示环境中仅展示配置关系。",
+  "slice.storageHint":
+    "为切片工作空间申请单个 PVC。云块存储或共享文件存储由平台供应；不提供宿主机本地盘。",
   "slice.pvcCapacity": "工作空间 PVC 容量",
   "slice.capacityInvalid": "容量必须是 1–32768 GB 的整数。",
   "slice.pvcHint": "该容量属于工作空间 PVC，不会按切片数量重复创建。",
@@ -2162,9 +2296,11 @@ export default {
   "slice.devicePluginManaged": "平台管理的 MIG Device Plugin",
   "slice.ingress": "入口",
   "slice.internalOnly": "仅集群内部访问",
-  "slice.accessMock": "创建后展示工作空间标识与 Kubernetes 扩展资源名；实际认证、调度与隔离需后端接入。",
+  "slice.accessMock":
+    "创建后展示工作空间标识与 Kubernetes 扩展资源名；实际认证、调度与隔离需后端接入。",
   "slice.sharedWorkspaceTitle": "平台共享 GPU 工作空间",
-  "slice.sharedWorkspaceHint": "控制平面和物理 Worker 节点由平台管理；当前订单只分配 MIG 切片与租户工作空间。",
+  "slice.sharedWorkspaceHint":
+    "控制平面和物理 Worker 节点由平台管理；当前订单只分配 MIG 切片与租户工作空间。",
   "slice.workspace": "租户工作空间",
   "slice.inventoryAssignment": "切片分配与资源映射",
   "slice.assignedInstances": "已分配 MIG 实例",
@@ -2180,9 +2316,12 @@ export default {
   "slice.platformShared": "平台共享池",
   "error.INVALID_SLICE_SPEC": "切片配置与共享工作空间能力不匹配。",
   "error.SLICE_QUOTA_OR_SKU_INVALID": "切片 SKU 不可用或已超过项目切片配额。",
-  "error.INSUFFICIENT_SLICE_CAPACITY": "可用 MIG 切片实例不足，请减少数量或更换规格。",
-  "error.SLICE_WORKSPACE_MOCK_ONLY": "当前演示工作空间不支持物理节点或真实工作负载操作。",
+  "error.INSUFFICIENT_SLICE_CAPACITY":
+    "可用 MIG 切片实例不足，请减少数量或更换规格。",
+  "error.SLICE_WORKSPACE_MOCK_ONLY":
+    "当前演示工作空间不支持物理节点或真实工作负载操作。",
   "error.SLICE_SKU_NOT_FOUND": "未找到切片 SKU 报价。",
-  "slice.physicalAndCreated": "共享物理 GPU {gpus} 张 · 已创建 MIG 实例 {instances} 个",
+  "slice.physicalAndCreated":
+    "共享物理 GPU {gpus} 张 · 已创建 MIG 实例 {instances} 个",
   "slice.unitPrice": "切片小时单价",
 } as const;

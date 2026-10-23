@@ -12,7 +12,7 @@ import {
   ChartNoAxesCombined,
   Ticket,
   Container,
-  AppWindow,
+  Brain,
   Scaling,
   Files,
   HardDrive,
@@ -53,8 +53,8 @@ const itemIcons: Record<string, typeof LayoutDashboard> = {
   quotas: Gauge,
   cost: ChartNoAxesCombined,
   tickets: Ticket,
-  images: Container,
-  apps: AppWindow,
+  models: Brain,
+  "os-images": Container,
   scaling: Scaling,
   "ssh-keys": KeyRound,
   block: HardDrive,
@@ -117,7 +117,7 @@ export function buildGroups(role: Role): NavGroup[] {
       {
         id: "workbench",
         icon: Terminal,
-        items: ["images", "apps", "scaling", "ssh-keys"],
+        items: ["models", "os-images", "scaling", "ssh-keys"],
       },
       {
         id: "storage",

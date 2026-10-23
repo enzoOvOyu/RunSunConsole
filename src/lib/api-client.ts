@@ -31,6 +31,7 @@ export const EP = {
   apps: "/api/apps",
   policies: "/api/scaling/policies",
   scalingEvents: "/api/scaling/events",
+  scalingChanges: "/api/scaling/changes",
   datasets: "/api/datasets",
   buckets: "/api/buckets",
   storageProducts: "/api/storage/products",

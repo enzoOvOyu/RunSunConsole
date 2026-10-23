@@ -164,7 +164,7 @@ export const router = createBrowserRouter([
         }),
       },
       {
-        path: "workbench/images",
+        path: "workbench/models",
         lazy: async () => ({
           Component: withLocale(
             (await import("../features/workbench/ImagesPage")).default,
@@ -172,12 +172,20 @@ export const router = createBrowserRouter([
         }),
       },
       {
-        path: "workbench/apps",
+        path: "workbench/os-images",
         lazy: async () => ({
           Component: withLocale(
-            (await import("../features/workbench/AppsPage")).default,
+            (await import("../features/workbench/ImagesPage")).default,
           ),
         }),
+      },
+      {
+        path: "workbench/images",
+        element: <Navigate to="/workbench/models" replace />,
+      },
+      {
+        path: "workbench/apps",
+        element: <Navigate to="/workbench/models" replace />,
       },
       {
         path: "workbench/scaling",

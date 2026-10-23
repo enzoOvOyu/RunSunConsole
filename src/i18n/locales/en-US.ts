@@ -22,7 +22,8 @@ export default {
   "pageDescription.operationLogs":
     "Review who changed resources, networking, and storage, when it happened, the result, and request details.",
   "nav.notebooks": "Notebook / IDE",
-  "nav.images": "Images & models",
+  "nav.models": "Models",
+  "nav.os-images": "Images",
   "nav.apps": "AI applications",
   "nav.scaling": "Elastic scaling",
   "nav.ssh-keys": "SSH key management",
@@ -98,6 +99,10 @@ export default {
     "Report resource or platform issues, track ticket status and continue the discussion.",
   "pageDescription.notebooks":
     "Create and manage Notebook and IDE sessions on running compute resources.",
+  "pageDescription.models":
+    "Browse models by publisher, parameter size, modality, and deployment support.",
+  "pageDescription.osImages":
+    "Browse operating system and runtime images for GPU cloud servers.",
   "pageDescription.images":
     "Browse the model catalog and system images; filter by publisher, size, modality, and deployment readiness.",
   "pageDescription.apps":
@@ -518,12 +523,15 @@ export default {
   "wizard.inferenceConfigGroup": "Model and compute configuration",
   "wizard.textModelsOnly":
     "Supports text and text-generating multimodal models through the chat API.",
-  "wizard.eipReleasedAfterFailure": "Instance creation failed. The newly allocated, unbound EIP was released.",
-  "wizard.eipCleanupFailed": "Instance creation did not complete. Check the newly allocated EIP's binding and billing status in Network Management.",
+  "wizard.eipReleasedAfterFailure":
+    "Instance creation failed. The newly allocated, unbound EIP was released.",
+  "wizard.eipCleanupFailed":
+    "Instance creation did not complete. Check the newly allocated EIP's binding and billing status in Network Management.",
   "wizard.selectModel": "Select a model",
   "wizard.textModelRequired":
     "Select a model that generates text. Image-only models cannot use this chat inference service.",
-  "wizard.poolAutoChanged": "GPU model changed to a compatible option. Confirm it in the next step.",
+  "wizard.poolAutoChanged":
+    "GPU model changed to a compatible option. Confirm it in the next step.",
   "wizard.gpuPool": "GPU model",
   "wizard.gpuPerReplicaSummary":
     "{count} GPUs per replica · total GPUs scale with replica count",
@@ -562,7 +570,8 @@ export default {
     "Automatically set to vCPU × 2 GB; cannot be edited separately.",
   "wizard.passwordRule":
     "Use 12–128 characters and at least three of uppercase, lowercase, digits, and symbols.",
-  "wizard.passwordRequired": "Enter a password: 12–128 characters and at least three of uppercase, lowercase, digits, and symbols.",
+  "wizard.passwordRequired":
+    "Enter a password: 12–128 characters and at least three of uppercase, lowercase, digits, and symbols.",
   "wizard.sshKeyRequired": "Select or import a valid SSH public key.",
   "wizard.selectSshKey": "Select an imported SSH public key",
   "wizard.noSshKey": "No public keys are available yet.",
@@ -625,9 +634,25 @@ export default {
     "Scaling to zero adds cold start and TTFT latency. I accept this impact.",
   "scaling.warmPool": "Warm pool size",
   "scaling.cache": "Weight cache strategy",
-  "scaling.readiness": "Enable readiness gate",
   "scaling.maintenance": "Maintenance window UTC",
-  "scaling.changeSummary": "Change summary",
+  "scaling.resource": "Associated resource",
+  "scaling.targetValue": "Trigger threshold",
+  "scaling.minSize": "Minimum size",
+  "scaling.maxSize": "Maximum size",
+  "scaling.cooldown": "Cooldown",
+  "scaling.changeInfo": "Change information",
+  "scaling.changeHistory": "Change history",
+  "scaling.scaling_policy_created": "Policy created",
+  "scaling.scaling_policy_updated": "Policy updated",
+  "scaling.scaling_policy_paused": "Policy paused",
+  "scaling.scaling_policy_resumed": "Policy resumed",
+  "scaling.scaling_policy_deleted": "Policy deleted",
+  "scaling.changeCreated": "Policy created",
+  "scaling.changeDeleted": "Policy deleted",
+  "scaling.changePaused": "Policy paused",
+  "scaling.changeResumed": "Policy resumed",
+  "scaling.changeNoDetails": "Policy updated",
+
   "scaling.pause": "Pause",
   "scaling.resume": "Resume",
   "scaling.events": "Scaling events",
@@ -870,11 +895,14 @@ export default {
   "storage.catalogError":
     "Storage tiers could not be loaded. Please try again.",
   "storage.additional": "Additional storage",
-  "storage.deploymentBlockHint": "Only cloud block volumes can be added here. Partition, format and mount them in the guest OS after creation. Manage shared file access in File Storage and buckets in Object Storage.",
+  "storage.deploymentBlockHint":
+    "Only cloud block volumes can be added here. Partition, format and mount them in the guest OS after creation. Manage shared file access in File Storage and buckets in Object Storage.",
   "storage.manageFileStorage": "Manage file storage",
   "storage.manageObjectStorage": "Manage object storage",
-  "storage.legacySelectionHint": "This saved file or object storage selection is no longer created here. Remove it and use the relevant storage page.",
-  "storage.osMountNote": "The block volume is attached. Mount it in the guest OS.",
+  "storage.legacySelectionHint":
+    "This saved file or object storage selection is no longer created here. Remove it and use the relevant storage page.",
+  "storage.osMountNote":
+    "The block volume is attached. Mount it in the guest OS.",
   "storage.add": "Add storage",
   "storage.item": "Storage item {count}",
   "storage.formHint":
@@ -888,22 +916,26 @@ export default {
   "storage.linkedFileSystems": "Linked file systems",
   "storage.linkedFileSystemsHint": "Linked to compute in the current results",
   "storage.fileSharingTitle": "One file system, multiple workloads",
-  "storage.fileSharingIntro": "Share a file system over NFSv4.1 within a VPC. Network rules control client reachability; Kubernetes uses PV/PVC to expose the shared directory to workloads.",
+  "storage.fileSharingIntro":
+    "Share a file system over NFSv4.1 within a VPC. Network rules control client reachability; Kubernetes uses PV/PVC to expose the shared directory to workloads.",
   "storage.fileSharingFlow": "File system to compute sharing relationship",
   "storage.fileSystem": "File system",
   "storage.pvAndPvc": "NFSv4.1 · VPC access rules",
   "storage.computeConsumers": "Authorized clients and cluster workloads",
   "storage.fileAccessTitle": "NFS access configuration",
-  "storage.fileAccessIntro": "A file system serves multiple clients within a VPC. Configure network scope and export permissions here instead of attaching it to one machine.",
+  "storage.fileAccessIntro":
+    "A file system serves multiple clients within a VPC. Configure network scope and export permissions here instead of attaching it to one machine.",
   "storage.fileProtocol": "Mount protocol",
   "storage.fileExportPath": "Shared root",
-  "storage.fileLegacyHint": "This is a client path recorded by the earlier deployment flow. It does not mean an NFS server mount target has been created.",
+  "storage.fileLegacyHint":
+    "This is a client path recorded by the earlier deployment flow. It does not mean an NFS server mount target has been created.",
   "storage.fileLegacyAssociation": "Existing deployment link",
   "storage.fileVpc": "Access VPC",
   "storage.fileSubnet": "Planned mount target subnet",
   "storage.fileNoVpc": "No VPC available in this project",
   "storage.fileAllowedCidr": "Allowed client CIDR",
-  "storage.fileAllowedCidrHint": "Must be within the selected VPC. Limit it to the subnets that need access.",
+  "storage.fileAllowedCidrHint":
+    "Must be within the selected VPC. Limit it to the subnets that need access.",
   "storage.fileCidrInvalid": "Enter a valid CIDR within the selected VPC.",
   "storage.fileAccessMode": "Export permission",
   "storage.fileReadWrite": "Read and write",
@@ -911,31 +943,38 @@ export default {
   "storage.fileRootSquash": "Root mapping",
   "storage.fileRootSquashOn": "Enable root squash (recommended)",
   "storage.fileRootSquashOff": "Disable root squash",
-  "storage.fileMountPrerequisites": "Clients also need TCP 2049 network access and matching POSIX UID/GID permissions. The storage backend provides the actual NFS endpoint and mount operation.",
+  "storage.fileMountPrerequisites":
+    "Clients also need TCP 2049 network access and matching POSIX UID/GID permissions. The storage backend provides the actual NFS endpoint and mount operation.",
   "storage.fileCreateVpc": "Create VPC",
   "storage.fileSaveAccess": "Save access configuration",
   "storage.fileManagedAccess": "Platform-managed link",
   "storage.fileUnconfigured": "Access not configured",
   "storage.fileBindCluster": "Link Kubernetes cluster",
-  "storage.fileBindClusterHint": "Create a PV/PVC in the default namespace. All cluster node subnets must be in the allowed CIDR; this does not mount on a node.",
+  "storage.fileBindClusterHint":
+    "Create a PV/PVC in the default namespace. All cluster node subnets must be in the allowed CIDR; this does not mount on a node.",
   "storage.fileSelectCluster": "Select cluster in the same VPC",
-  "storage.fileNoCluster": "No running cluster in the same project, region, and VPC.",
+  "storage.fileNoCluster":
+    "No running cluster in the same project, region, and VPC.",
   "storage.fileCreatePvc": "Create PV/PVC link",
   "storage.fileRemovePvc": "Remove PV/PVC link",
-  "storage.fileDetachConfirm": "Remove this PV/PVC link? Workloads using the PVC will block removal.",
+  "storage.fileDetachConfirm":
+    "Remove this PV/PVC link? Workloads using the PVC will block removal.",
   "storage.fileSystemList": "File systems",
   "storage.linkedCompute": "Linked compute",
   "storage.kubernetesCluster": "Kubernetes cluster",
   "storage.computeResource": "Compute resource",
   "storage.accessPath": "Mount path",
   "storage.fileMountRelations": "Sharing and mount relationships",
-  "storage.fileLinkedHint": "Existing PV/PVC link and workloads that actually reference this PVC.",
-  "storage.fileUnlinkedHint": "No Kubernetes PV/PVC is linked. Configure NFS access, then select a cluster in the same project, region, and VPC.",
+  "storage.fileLinkedHint":
+    "Existing PV/PVC link and workloads that actually reference this PVC.",
+  "storage.fileUnlinkedHint":
+    "No Kubernetes PV/PVC is linked. Configure NFS access, then select a cluster in the same project, region, and VPC.",
   "storage.nodePoolReach": "Cluster node pools",
   "storage.nodePools": "node pools",
   "storage.runningPodMounts": "Running Pods",
   "storage.consumerNodes": "Active nodes",
-  "storage.fileNodePoolHint": "Node pools indicate cluster sharing scope. Actual mounts are Pods that reference the PVC and are running.",
+  "storage.fileNodePoolHint":
+    "Node pools indicate cluster sharing scope. Actual mounts are Pods that reference the PVC and are running.",
   "storage.volumeCount": "Cloud volume count",
   "storage.filteredResources": "Current filtered results",
   "storage.configuredCapacity": "Configured capacity",
@@ -950,8 +989,10 @@ export default {
   "storage.workload": "Workload",
   "storage.noPvcBinding": "No PVC binding",
   "storage.noWorkloadConsumer": "No workload currently references this PVC",
-  "storage.noCompatibleVmZone": "No running GPU VM is available in the same zone",
-  "storage.noAttachableResource": "No running attachable resource in this project and region",
+  "storage.noCompatibleVmZone":
+    "No running GPU VM is available in the same zone",
+  "storage.noAttachableResource":
+    "No running attachable resource in this project and region",
   "storage.totalBucketLimits": "Total Bucket limits",
   "storage.configuredLimit": "limit",
   "storage.bucketLimitIndependent": "Sum of Bucket limits; not actual usage",
@@ -960,11 +1001,13 @@ export default {
   "storage.objectCount": "Total object count",
   "storage.regionalObjectQuota": "Regional object storage quota",
   "storage.regionalQuotaRemaining": "Regional quota remaining",
-  "storage.regionQuotaUsesActual": "Regional quota uses actual object bytes. Bucket limits do not reserve regional quota.",
+  "storage.regionQuotaUsesActual":
+    "Regional quota uses actual object bytes. Bucket limits do not reserve regional quota.",
   "storage.bucketLimit": "Bucket limit",
   "storage.accessPolicy": "Access policy",
   "storage.noUsageData": "No usage data",
-  "storage.bucketLimitHint": "The bar shows actual object usage against this Bucket limit; it is not regional quota usage.",
+  "storage.bucketLimitHint":
+    "The bar shows actual object usage against this Bucket limit; it is not regional quota usage.",
   "storage.noBuckets": "No Buckets in this region.",
   "storage.profile.essd_pl0": "ESSD PL0 · Basic",
   "storage.profile.essd_pl1": "ESSD PL1 · General purpose",
@@ -980,7 +1023,8 @@ export default {
     "Name must be 3–63 characters after trimming whitespace.",
   "storage.useVolume": "Use this storage",
   "storage.selectTarget": "Select a resource in the same project and region",
-  "storage.clusterFileBindingHint": "Bind as a Kubernetes file PV/PVC with ReadWriteMany access. No Linux mount path is used, and a PVC referenced by a workload cannot be detached.",
+  "storage.clusterFileBindingHint":
+    "Bind as a Kubernetes file PV/PVC with ReadWriteMany access. No Linux mount path is used, and a PVC referenced by a workload cannot be detached.",
   "storage.mountPathHint": "Linux mount path, for example /mnt/data.",
   "storage.attach": "Attach to resource",
   "storage.detach": "Detach from resource",
@@ -992,7 +1036,8 @@ export default {
   "storage.volumeList": "Volumes",
   "storage.blockSubtitle":
     "Manage disk tiers, capacity, project ownership, and instance connections.",
-  "storage.fileSubtitle": "Manage NFS protocol, VPC access range, export permissions, and Kubernetes PV/PVC relationships for shared file systems.",
+  "storage.fileSubtitle":
+    "Manage NFS protocol, VPC access range, export permissions, and Kubernetes PV/PVC relationships for shared file systems.",
   "storage.allocatedCapacity": "Allocated regional capacity",
   "storage.availableCapacity": "Remaining regional capacity",
   "storage.unattached": "Not attached",
@@ -1026,18 +1071,23 @@ export default {
   "storage.defaultEncryption": "Default server-side encryption",
   "storage.versioning": "Versioning",
   "storage.keepVersions": "Keep versions before overwriting objects",
-  "storage.versioningHint": "When enabled, overwriting an object retains older versions. Permanently deleting an object removes all versions.",
+  "storage.versioningHint":
+    "When enabled, overwriting an object retains older versions. Permanently deleting an object removes all versions.",
   "storage.enabled": "Enabled",
   "storage.disabled": "Disabled",
   "storage.tags": "Tags",
   "storage.tagKey": "Tag key",
   "storage.tagValue": "Tag value",
   "storage.noTags": "No tags",
-  "storage.immutableProperties": "Bucket name, region and project cannot be changed after creation.",
-  "storage.accessScopeHint": "Public read only controls object reads. This is a console-simulated access rule; no real object gateway is connected.",
+  "storage.immutableProperties":
+    "Bucket name, region and project cannot be changed after creation.",
+  "storage.accessScopeHint":
+    "Public read only controls object reads. This is a console-simulated access rule; no real object gateway is connected.",
   "storage.encryptNewObjects": "Encrypt newly uploaded objects",
-  "storage.encryptionScopeHint": "Changing default encryption only affects future uploads.",
-  "storage.securityConfirm": "This reduces Bucket access or encryption protection. Confirm the change:",
+  "storage.encryptionScopeHint":
+    "Changing default encryption only affects future uploads.",
+  "storage.securityConfirm":
+    "This reduces Bucket access or encryption protection. Confirm the change:",
   "storage.properties": "Properties",
   "storage.permissions": "Permissions",
   "storage.management": "Management",
@@ -1054,11 +1104,14 @@ export default {
   "storage.nextPage": "Next page",
   "storage.versionId": "Version ID",
   "storage.previousVersions": "Previous versions",
-  "storage.deleteObjectConfirm": "Permanently delete this object and all its versions:",
+  "storage.deleteObjectConfirm":
+    "Permanently delete this object and all its versions:",
   "storage.browse": "Browse",
-  "storage.duplicateBucket": "A Bucket with this name already exists here. Names must be unique platform-wide.",
+  "storage.duplicateBucket":
+    "A Bucket with this name already exists here. Names must be unique platform-wide.",
   "storage.deleteFolder": "Delete current folder",
-  "storage.deleteFolderConfirm": "Delete the folder marker; its objects will remain:",
+  "storage.deleteFolderConfirm":
+    "Delete the folder marker; its objects will remain:",
   "storage.moreActions": "More actions",
   "storage.bucketCount": "Buckets",
   "storage.bucketDetails": "Bucket overview",
@@ -1070,18 +1123,24 @@ export default {
   "storage.s3-files": "S3 Files",
   "storage.s3FilesTitle": "S3 Files interface",
   "storage.s3FilesSetup": "Configure file-interface preview",
-  "storage.s3FilesVersioningRequired": "Enable bucket versioning before configuring file access so object changes are retained.",
+  "storage.s3FilesVersioningRequired":
+    "Enable bucket versioning before configuring file access so object changes are retained.",
   "storage.s3FilesEnableVersioning": "Enable versioning",
   "storage.s3FilesPrefix": "Source prefix",
-  "storage.s3FilesPrefixHint": "Leave empty for the full bucket; a trailing slash is added to prefixes.",
-  "storage.s3FilesInvalidPrefix": "The prefix contains empty, dot or oversized path components.",
+  "storage.s3FilesPrefixHint":
+    "Leave empty for the full bucket; a trailing slash is added to prefixes.",
+  "storage.s3FilesInvalidPrefix":
+    "The prefix contains empty, dot or oversized path components.",
   "storage.s3FilesVpc": "Access VPC",
-  "storage.s3FilesVpcHint": "Only standard VPCs in the same project and region are shown. This plans access; it does not create mount targets.",
+  "storage.s3FilesVpcHint":
+    "Only standard VPCs in the same project and region are shown. This plans access; it does not create mount targets.",
   "storage.s3FilesChooseVpc": "Select a VPC",
-  "storage.s3FilesSetupHint": "This saves a configuration preview. Real NFS requires server mount targets, network access and identity permissions.",
+  "storage.s3FilesSetupHint":
+    "This saves a configuration preview. Real NFS requires server mount targets, network access and identity permissions.",
   "storage.s3FilesCreatePreview": "Save file-interface preview",
   "storage.s3FilesConfiguration": "File-interface configuration",
-  "storage.s3FilesRemoveConfirm": "Remove the file-interface preview? The bucket and objects will remain.",
+  "storage.s3FilesRemoveConfirm":
+    "Remove the file-interface preview? The bucket and objects will remain.",
   "storage.s3FilesPreviewOnly": "Preview configured",
   "storage.s3FilesUnconfigured": "Not configured",
   "storage.s3FilesAll": "All file interfaces",
@@ -1089,7 +1148,8 @@ export default {
   "storage.s3FilesMountTarget": "NFS mount target",
   "storage.s3FilesSync": "Bidirectional sync",
   "storage.s3FilesNotProvisioned": "Not provisioned",
-  "storage.s3FilesConfigHint": "This configuration does not provide a usable NFS address. Existing bucket object, quota and lifecycle behavior remains in effect.",
+  "storage.s3FilesConfigHint":
+    "This configuration does not provide a usable NFS address. Existing bucket object, quota and lifecycle behavior remains in effect.",
   "storage.s3FilesAccessibleObjects": "File-path compatibility",
   "storage.s3FilesAccessible": "compatible objects",
   "storage.s3FilesIncompatible": "incompatible objects",
@@ -1103,11 +1163,16 @@ export default {
   "storage.s3FilesIssue.length": "Object key is too long",
   "storage.s3FilesIssue.archive": "Restore archive object first",
   "storage.s3FilesLimitations": "Capability boundary and limits",
-  "storage.s3FilesLimitPaths": "Some object keys cannot map to file paths, such as special directory names or overly long names. Incompatible objects are identified above.",
-  "storage.s3FilesLimitArchive": "Archived or temporarily unreadable objects must be restored before file access.",
-  "storage.s3FilesLimitNfs": "File mounting also depends on network and permission services. This console currently provides configuration and path preview only.",
-  "storage.s3FilesLimitSync": "Change synchronization and conflict handling between files and objects are not connected yet; the bucket object records are currently authoritative.",
-  "storage.s3FilesLimitBilling": "A file access layer may incur separate costs. Metering and pricing are not available here yet, so no cost estimate is shown.",
+  "storage.s3FilesLimitPaths":
+    "Some object keys cannot map to file paths, such as special directory names or overly long names. Incompatible objects are identified above.",
+  "storage.s3FilesLimitArchive":
+    "Archived or temporarily unreadable objects must be restored before file access.",
+  "storage.s3FilesLimitNfs":
+    "File mounting also depends on network and permission services. This console currently provides configuration and path preview only.",
+  "storage.s3FilesLimitSync":
+    "Change synchronization and conflict handling between files and objects are not connected yet; the bucket object records are currently authoritative.",
+  "storage.s3FilesLimitBilling":
+    "A file access layer may incur separate costs. Metering and pricing are not available here yet, so no cost estimate is shown.",
   "storage.objectSubtitle":
     "Manage buckets, object access, capacity usage, and lifecycle rules.",
   "storage.lifecycleHint":
@@ -1686,16 +1751,19 @@ export default {
   "network.bindVm": "Select GPU virtual machine",
   "network.vmEipOccupied": "All interfaces have EIPs",
   "network.vmNotReady": "Instance is not ready",
-  "network.noEligibleEipVm": "No eligible GPU VM in this project and region. VMs with EIPs on every interface or those not ready cannot be selected. Check the EIP project and region.",
+  "network.noEligibleEipVm":
+    "No eligible GPU VM in this project and region. VMs with EIPs on every interface or those not ready cannot be selected. Check the EIP project and region.",
   "network.noEligible":
     "No VM devices meet the project, region and binding requirements.",
   "network.allocate": "Allocate Elastic IP",
   "network.includeReleased": "Include released addresses",
   "network.resultCount": "{count} items",
   "network.bindingFilter": "Binding status",
-  "network.noAvailableEip": "No idle EIP in this project and region. Allocate one here or use automatic allocation.",
+  "network.noAvailableEip":
+    "No idle EIP in this project and region. Allocate one here or use automatic allocation.",
   "network.eipNameError": "Name must contain 2–63 characters.",
-  "network.eipBandwidthError": "Bandwidth must be an integer from 1 to 1000 Mbps.",
+  "network.eipBandwidthError":
+    "Bandwidth must be an integer from 1 to 1000 Mbps.",
   "network.binding": "Bound resource",
   "network.bound": "Bound",
   "network.unbound": "Unbound",
@@ -1729,8 +1797,10 @@ export default {
   "network.release": "Release EIP",
   "network.releaseHint":
     "Only unbound addresses can be released. Billing stops on release. The IP returns to the pool and cannot be guaranteed on reallocation; historical charges remain.",
-  "network.eipReleaseBlocked": "This EIP is bound to a VM. Unbind it before release; public access will stop, and billing continues until release.",
-  "network.eipTunnelReleaseBlocked": "This EIP is a tunnel gateway. Resolve the linked tunnel before release; the IP may be reassigned afterward.",
+  "network.eipReleaseBlocked":
+    "This EIP is bound to a VM. Unbind it before release; public access will stop, and billing continues until release.",
+  "network.eipTunnelReleaseBlocked":
+    "This EIP is a tunnel gateway. Resolve the linked tunnel before release; the IP may be reassigned afterward.",
   "network.releaseInput": "Enter {id} to confirm release",
   "network.basic": "Basic information",
   "network.gateway": "Gateway public IP",
@@ -1842,7 +1912,8 @@ export default {
   "images.vcpuPerInstance": "vCPU (per instance)",
   "images.memoryPerInstance": "System memory (per instance)",
   "images.totalGpuCount": "Total GPU count",
-  "images.windowsDescription": "Windows Server Datacenter with Desktop Experience for compatible x86_64 GPU VMs. Includes NVIDIA driver 616.92 and CUDA 13.0; Linux container templates and AI frameworks are not included.",
+  "images.windowsDescription":
+    "Windows Server Datacenter with Desktop Experience for compatible x86_64 GPU VMs. Includes NVIDIA driver 616.92 and CUDA 13.0; Linux container templates and AI frameworks are not included.",
   "images.windowsEdition": "Edition",
   "images.desktopExperience": "Datacenter · Desktop Experience",
   "images.loginUser": "Login user",
@@ -1851,14 +1922,21 @@ export default {
   "images.systemDiskMinimum": "Minimum system disk",
   "images.windowsVmOnly": "Compatible x86_64 GPU VMs",
   "images.windowsPasswordLogin": "{user} password login · RDP TCP {port}",
-  "images.windowsPasswordRule": "Use 12–128 characters and at least three of uppercase, lowercase, digits, and symbols.",
-  "images.windowsRuntimeHint": "The current Linux container templates cannot run on this Windows base image. Install AI frameworks in the guest OS as needed.",
-  "images.windowsRdpHint": "Allow TCP 3389 in the security group only from trusted sources. Public access also requires an EIP bound to the VM.",
+  "images.windowsPasswordRule":
+    "Use 12–128 characters and at least three of uppercase, lowercase, digits, and symbols.",
+  "images.windowsRuntimeHint":
+    "The current Linux container templates cannot run on this Windows base image. Install AI frameworks in the guest OS as needed.",
+  "images.windowsRdpHint":
+    "Allow TCP 3389 in the security group only from trusted sources. Public access also requires an EIP bound to the VM.",
   "images.windowsConnection": "Windows remote access",
-  "images.windowsNoConsole": "The browser command console currently supports Linux only. Use an RDP client for Windows.",
-  "error.PASSWORD_WEAK": "Password must be 12–128 characters and contain at least three of uppercase, lowercase, digits, and symbols.",
-  "error.WINDOWS_PASSWORD_WEAK": "Windows password strength is insufficient or password login is not selected.",
-  "error.WINDOWS_CONSOLE_UNAVAILABLE": "The browser simulation console is unavailable for Windows.",
+  "images.windowsNoConsole":
+    "The browser command console currently supports Linux only. Use an RDP client for Windows.",
+  "error.PASSWORD_WEAK":
+    "Password must be 12–128 characters and contain at least three of uppercase, lowercase, digits, and symbols.",
+  "error.WINDOWS_PASSWORD_WEAK":
+    "Windows password strength is insufficient or password login is not selected.",
+  "error.WINDOWS_CONSOLE_UNAVAILABLE":
+    "The browser simulation console is unavailable for Windows.",
   "images.operatingSystems": "Operating systems",
   "images.cpuArchitecture": "CPU architecture",
   "images.allArchitectures": "All architectures",
@@ -1931,20 +2009,26 @@ export default {
   "eks.gpuTaint": "GPU taint · NoSchedule",
   "eks.podCidr": "Pod CIDR",
   "eks.serviceCidr": "Service CIDR",
-  "eks.noVpcSubnets": "This VPC has no subnets for control plane and GPU nodes.",
+  "eks.noVpcSubnets":
+    "This VPC has no subnets for control plane and GPU nodes.",
   "eks.manageVpcSubnets": "Create a subnet",
   "eks.chooseSubnet": "Select at least one subnet with available IPs.",
-  "eks.noSecurityGroup": "This VPC has no security group for node network interfaces.",
+  "eks.noSecurityGroup":
+    "This VPC has no security group for node network interfaces.",
   "eks.manageSecurityGroup": "Create a security group",
   "eks.autoCidrs": "Choose nonconflicting CIDRs",
-  "eks.cidrExplainer": "Pod CIDR assigns IPs to containers; Service CIDR assigns virtual ClusterIP addresses. Use canonical network ranges that do not overlap the VPC or each other. Keep the suggested values to continue.",
-  "eks.invalidPodCidr": "Pod CIDR is not a canonical network range (for example, 172.20.0.0/16).",
-  "eks.invalidServiceCidr": "Service CIDR is not a canonical network range (for example, 172.21.0.0/16).",
+  "eks.cidrExplainer":
+    "Pod CIDR assigns IPs to containers; Service CIDR assigns virtual ClusterIP addresses. Use canonical network ranges that do not overlap the VPC or each other. Keep the suggested values to continue.",
+  "eks.invalidPodCidr":
+    "Pod CIDR is not a canonical network range (for example, 172.20.0.0/16).",
+  "eks.invalidServiceCidr":
+    "Service CIDR is not a canonical network range (for example, 172.21.0.0/16).",
   "eks.podServiceOverlap": "Pod CIDR overlaps Service CIDR.",
   "eks.podVpcOverlap": "Pod CIDR overlaps a VPC in this project.",
   "eks.serviceVpcOverlap": "Service CIDR overlaps a VPC in this project.",
   "eks.cidrSuggestion": "Suggested: Pod {podCidr}, Service {serviceCidr}.",
-  "eks.cidrConflict": "Pod and Service CIDRs must be valid, non-overlapping network ranges.",
+  "eks.cidrConflict":
+    "Pod and Service CIDRs must be valid, non-overlapping network ranges.",
   "eks.gpuModel": "GPU model",
   "eks.createWorkload": "Create workload",
   "eks.gpuCapacity": "GPU capacity",
@@ -1967,7 +2051,8 @@ export default {
   "eks.ramGb": "RAM · GB",
   "eks.tolerate": "Tolerate",
   "eks.doNotTolerate": "Do not tolerate",
-  "eks.schedulerHint": "The mock scheduler places Pods only when a matching ready node has enough GPU, CPU and memory. Pending Pods show the reason.",
+  "eks.schedulerHint":
+    "The mock scheduler places Pods only when a matching ready node has enough GPU, CPU and memory. Pending Pods show the reason.",
   "eks.physical": "Physical capacity",
   "eks.allocated": "Allocated",
   "eks.readyNodes": "Ready nodes",
@@ -1976,29 +2061,40 @@ export default {
   "eks.initializing": "Initializing",
   "eks.description": "Description",
   "eks.status": "Status",
-  "eks.clusterNameHint": "Use 3–63 lowercase letters, digits or hyphens; start with a letter and end with a letter or digit.",
+  "eks.clusterNameHint":
+    "Use 3–63 lowercase letters, digits or hyphens; start with a letter and end with a letter or digit.",
   "field.description": "Description",
   "field.podCidr": "Pod CIDR",
   "field.serviceCidr": "Service CIDR",
   "eks.nodeSelector": "Node selector label",
   "eks.selectorValue": "Selector value",
   "eks.clusterNotRunning": "Cluster is not running",
-  "eks.noMatchingNode": "No node matches the pool selector, labels, taint tolerance and scheduling state",
-  "eks.insufficientNodeCapacity": "Matching nodes have insufficient GPU, CPU or memory",
+  "eks.noMatchingNode":
+    "No node matches the pool selector, labels, taint tolerance and scheduling state",
+  "eks.insufficientNodeCapacity":
+    "Matching nodes have insufficient GPU, CPU or memory",
   "error.INVALID_NODE_TARGET": "Invalid node target.",
   "error.NODE_NOT_FOUND": "Node not found. Refresh the page.",
   "error.INVALID_NODE_STATE": "The node is already in this scheduling state.",
   "error.INVALID_NODE_POOL": "The selected node pool does not exist.",
-  "error.INVALID_NODE_POOL_RANGE": "Node count must be within the node pool minimum and maximum.",
-  "error.CLUSTER_CIDR_CONFLICT": "Pod, Service and VPC CIDRs must be valid and non-overlapping.",
-  "error.INVALID_NODE_IMAGE": "Node image is incompatible with the GPU model or CPU architecture.",
-  "error.INVALID_CLUSTER_NAME": "Cluster name must be 3–63 DNS-style characters.",
-  "error.CLUSTER_NAME_CONFLICT": "A cluster with this name already exists in the project and region.",
+  "error.INVALID_NODE_POOL_RANGE":
+    "Node count must be within the node pool minimum and maximum.",
+  "error.CLUSTER_CIDR_CONFLICT":
+    "Pod, Service and VPC CIDRs must be valid and non-overlapping.",
+  "error.INVALID_NODE_IMAGE":
+    "Node image is incompatible with the GPU model or CPU architecture.",
+  "error.INVALID_CLUSTER_NAME":
+    "Cluster name must be 3–63 DNS-style characters.",
+  "error.CLUSTER_NAME_CONFLICT":
+    "A cluster with this name already exists in the project and region.",
   "error.INVALID_GPU_MODEL": "The selected GPU model is not in this cluster.",
-  "error.INVALID_NODE_SELECTOR": "Node selector key and value must both be valid.",
-  "error.WORKLOAD_NAME_CONFLICT": "A workload with this name already exists in the namespace.",
+  "error.INVALID_NODE_SELECTOR":
+    "Node selector key and value must both be valid.",
+  "error.WORKLOAD_NAME_CONFLICT":
+    "A workload with this name already exists in the namespace.",
   "eks.managedControlPlaneTitle": "Managed Kubernetes control plane",
-  "eks.managedControlPlaneIntro": "The platform operates API Server, etcd and scheduling components. You do not create or purchase Master nodes; configure Worker groups, networking, storage and workloads instead.",
+  "eks.managedControlPlaneIntro":
+    "The platform operates API Server, etcd and scheduling components. You do not create or purchase Master nodes; configure Worker groups, networking, storage and workloads instead.",
   "eks.platformManaged": "Platform managed",
   "eks.managedControlPlane": "Control plane",
   "eks.customerManaged": "Customer configured",
@@ -2008,89 +2104,120 @@ export default {
   "eks.workerConfigLater": "Configure node sizes and counts in step 4",
   "eks.managedTierSummary": "Kubernetes {version} · {tier} managed tier",
   "eks.managedServiceTier": "Managed control plane tier",
-  "eks.managedTierHint": "Standard and HA describe platform control plane availability, not purchasable Master node sizes or counts.",
+  "eks.managedTierHint":
+    "Standard and HA describe platform control plane availability, not purchasable Master node sizes or counts.",
   "eks.endpointNetworkPolicy": "API Endpoint and control plane connectivity",
   "eks.endpointAccess": "API Endpoint access",
-  "eks.publicAndPrivateEndpoint": "VPC access + public access from authorized CIDR",
+  "eks.publicAndPrivateEndpoint":
+    "VPC access + public access from authorized CIDR",
   "eks.privateEndpoint": "Selected VPC only",
   "eks.authorizedNetworks": "Allowed networks",
   "eks.selectedVpcNetwork": "Selected VPC private network",
   "eks.controlPlaneNetwork": "Control plane network requirement",
   "eks.haZoneRequirement": "HA requires subnets in at least two zones",
   "eks.standardZoneRequirement": "Select at least one valid subnet",
-  "eks.endpointWorkerCommunication": "The managed control plane communicates with Workers through the selected VPC/subnets. Allow required cluster traffic in the node security group. This uses the Endpoint policy from step 1.",
-  "eks.workerOnlyNotice": "Configure customer managed General or GPU Worker groups here. The platform runs the control plane; no Master nodes are purchased here.",
+  "eks.endpointWorkerCommunication":
+    "The managed control plane communicates with Workers through the selected VPC/subnets. Allow required cluster traffic in the node security group. This uses the Endpoint policy from step 1.",
+  "eks.workerOnlyNotice":
+    "Configure customer managed General or GPU Worker groups here. The platform runs the control plane; no Master nodes are purchased here.",
   "eks.managementMode": "Control plane management",
   "eks.controlPlaneHealth": "Control plane health",
   "eks.controlPlaneHealthy": "Healthy",
   "eks.controlPlaneInitializing": "Initializing",
   "eks.controlPlaneUnavailable": "Unavailable",
-  "eks.projectStepIntro": "Choose the cluster project, region, name, Kubernetes version and managed service tier.",
+  "eks.projectStepIntro":
+    "Choose the cluster project, region, name, Kubernetes version and managed service tier.",
   "eks.apiAccess": "API Server access",
-  "eks.apiAccessHint": "Private access uses the selected VPC. Public access requires an authorized CIDR.",
-  "eks.vpcSubnetConflict": "A subnet is outside this VPC or overlaps another subnet. Correct it in Network Management; existing data is not rewritten.",
+  "eks.apiAccessHint":
+    "Private access uses the selected VPC. Public access requires an authorized CIDR.",
+  "eks.vpcSubnetConflict":
+    "A subnet is outside this VPC or overlaps another subnet. Correct it in Network Management; existing data is not rewritten.",
   "eks.controlPlaneIpCount": "Control plane IPs",
   "eks.currentGpuNodes": "Current GPU nodes",
   "eks.peakIpDemand": "Peak IP demand",
   "eks.nodeSubnetTitle": "Subnets and GPU node network",
-  "eks.nodeSubnetHint": "Control plane and GPU nodes are allocated round-robin across selected subnets; HA requires two zones.",
+  "eks.nodeSubnetHint":
+    "Control plane and GPU nodes are allocated round-robin across selected subnets; HA requires two zones.",
   "eks.privateNodeSubnet": "Private node subnet",
   "eks.reservedIps": "Capacity {total} · {count} addresses reserved",
   "eks.requiredIpInSubnet": "Needs {count} IPs",
   "eks.notSelected": "Not selected",
-  "eks.privateRouteHint": "The current mock supports private node subnets only. Public subnet routes, NAT and load balancer egress are not modelled; public API Server access is configured in the project step.",
+  "eks.privateRouteHint":
+    "The current mock supports private node subnets only. Public subnet routes, NAT and load balancer egress are not modelled; public API Server access is configured in the project step.",
   "eks.kubernetesNetworkTitle": "Kubernetes network parameters",
-  "eks.cniOverlayHint": "Only overlay Pod networks with Cilium or Calico are simulated. Pod and Service CIDRs must be private and non-overlapping. VPC CNI is not supported.",
-  "eks.securityGroupScope": "The security group applies to control plane and GPU node interfaces; it is not a Pod NetworkPolicy.",
+  "eks.cniOverlayHint":
+    "Only overlay Pod networks with Cilium or Calico are simulated. Pod and Service CIDRs must be private and non-overlapping. VPC CNI is not supported.",
+  "eks.securityGroupScope":
+    "The security group applies to control plane and GPU node interfaces; it is not a Pod NetworkPolicy.",
   "eks.cidrProposal": "Suggested CIDRs",
   "eks.applyCidrs": "Apply suggestion",
-  "eks.noCidrCandidate": "No Pod / Service CIDR candidate is available outside known VPC ranges.",
+  "eks.noCidrCandidate":
+    "No Pod / Service CIDR candidate is available outside known VPC ranges.",
   "eks.networkTopology": "Network topology preview",
   "eks.controlAndGpuNodes": "Control plane {control} · GPU nodes {nodes}",
-  "eks.networkTopologyHint": "This preview follows the selected VPC, subnet order, node count and CNI; it does not represent real routes or NAT.",
-  "eks.createVpcModalHint": "Plan VPC, zone subnets and the default security group together, then return to this cluster wizard.",
-  "eks.newVpcOverlap": "The new VPC CIDR overlaps an existing project VPC. Choose another range.",
+  "eks.networkTopologyHint":
+    "This preview follows the selected VPC, subnet order, node count and CNI; it does not represent real routes or NAT.",
+  "eks.createVpcModalHint":
+    "Plan VPC, zone subnets and the default security group together, then return to this cluster wizard.",
+  "eks.newVpcOverlap":
+    "The new VPC CIDR overlaps an existing project VPC. Choose another range.",
   "eks.invalidVpcPlan": "Enter a name and canonical private VPC CIDR (/8–/28).",
-  "eks.invalidSubnetPlan": "Subnets must be inside the VPC and non-overlapping; HA clusters require two zones.",
+  "eks.invalidSubnetPlan":
+    "Subnets must be inside the VPC and non-overlapping; HA clusters require two zones.",
   "eks.subnetNameIndex": "Subnet {index} name",
-  "eks.vpcPlanSecurityGroup": "The platform also creates a default security group in the new VPC and selects it on return.",
-  "eks.networkStepIntro": "Use an existing standard VPC. Select subnets for the control plane and GPU nodes; Pod and Service CIDRs are separate from the VPC range.",
+  "eks.vpcPlanSecurityGroup":
+    "The platform also creates a default security group in the new VPC and selects it on return.",
+  "eks.networkStepIntro":
+    "Use an existing standard VPC. Select subnets for the control plane and GPU nodes; Pod and Service CIDRs are separate from the VPC range.",
   "eks.vpcConfig": "VPC configuration",
   "eks.existingVpc": "Use an existing VPC",
-  "eks.createVpcHint": "Create it in Network Management, then return to select it. Your draft is retained.",
+  "eks.createVpcHint":
+    "Create it in Network Management, then return to select it. Your draft is retained.",
   "eks.availableZones": "Availability zones",
   "eks.subnetCount": "Subnets",
   "eks.subnetConfig": "Node and control plane subnets",
-  "eks.subnetHint": "Each subnet maps to one zone. HA needs at least two zones; available IPs must cover the control plane and nodes.",
-  "eks.haNeedsTwoZones": "HA control plane needs subnets in two different zones.",
-  "eks.subnetIpsInsufficient": "Selected subnets have {available} available IPs; at least {needed} are required.",
+  "eks.subnetHint":
+    "Each subnet maps to one zone. HA needs at least two zones; available IPs must cover the control plane and nodes.",
+  "eks.haNeedsTwoZones":
+    "HA control plane needs subnets in two different zones.",
+  "eks.subnetIpsInsufficient":
+    "Selected subnets have {available} available IPs; at least {needed} are required.",
   "eks.podNetwork": "Pod and Service networking",
-  "eks.cniHint": "Cilium/Calico use the simulated Pod CIDR. Security groups apply to node interfaces; VPC and subnet scope is validated before creation.",
+  "eks.cniHint":
+    "Cilium/Calico use the simulated Pod CIDR. Security groups apply to node interfaces; VPC and subnet scope is validated before creation.",
   "eks.clusterStoragePolicy": "Cluster storage capability",
   "eks.csiState": "CSI driver",
   "eks.managedCsi": "Platform managed · ready with nodes",
   "eks.defaultStorageClass": "Default StorageClass",
   "eks.dynamicBlock": "Dynamic cloud block storage",
-  "eks.clusterStoragePolicyHint": "CSI connects cloud storage and StorageClass controls provisioning; the platform creates volumes and PVs/PVCs from the final node pools.",
+  "eks.clusterStoragePolicyHint":
+    "CSI connects cloud storage and StorageClass controls provisioning; the platform creates volumes and PVs/PVCs from the final node pools.",
   "eks.chooseStorageScheme": "Choose initial storage scheme",
   "eks.storageMode.dynamic_block": "Cloud block storage",
   "eks.storageMode.existing_block": "Pre-provisioned cloud disks",
   "eks.storageMode.local_nvme": "Node local NVMe",
   "eks.storageMode.shared_file": "Shared file storage",
-  "eks.storageModeHint.dynamic_block": "Enter capacity per GPU node; the platform creates disks, PVs and PVCs through CSI.",
-  "eks.storageModeHint.existing_block": "Enter capacity per GPU node; the platform pre-provisions disks and binds PVs/PVCs.",
-  "eks.storageModeHint.local_nvme": "Reserve local capacity on GPU nodes, subject to node scheduling.",
-  "eks.storageModeHint.shared_file": "Enter shared cluster capacity; the platform creates a file volume and cross-node PV/PVC.",
-  "eks.fileRequiresVolume": "This project has no available standalone file volume. Create one to enable shared file storage.",
+  "eks.storageModeHint.dynamic_block":
+    "Enter capacity per GPU node; the platform creates disks, PVs and PVCs through CSI.",
+  "eks.storageModeHint.existing_block":
+    "Enter capacity per GPU node; the platform pre-provisions disks and binds PVs/PVCs.",
+  "eks.storageModeHint.local_nvme":
+    "Reserve local capacity on GPU nodes, subject to node scheduling.",
+  "eks.storageModeHint.shared_file":
+    "Enter shared cluster capacity; the platform creates a file volume and cross-node PV/PVC.",
+  "eks.fileRequiresVolume":
+    "This project has no available standalone file volume. Create one to enable shared file storage.",
   "eks.openFileStorage": "Open File Storage",
   "eks.initialPvc": "Initial PVC",
   "eks.createInitialPvc": "Create an initial data PVC",
   "eks.requestedCapacity": "Requested capacity",
   "eks.initialPvcUse": "Purpose",
   "eks.workloadData": "Workload data volume",
-  "eks.dynamicInitialHint": "You can leave the cluster without a PVC and request one later using the default StorageClass. An initial PVC creates a backing cloud disk and PV; this is not total cluster storage.",
+  "eks.dynamicInitialHint":
+    "You can leave the cluster without a PVC and request one later using the default StorageClass. An initial PVC creates a backing cloud disk and PV; this is not total cluster storage.",
   "eks.existingFilePv": "Existing file volume binding",
-  "eks.fileBindingHint": "Only unattached file volumes with capacity in this project and region are shown. Cluster creation binds a static PV/PVC; the existing file volume keeps its own billing.",
+  "eks.fileBindingHint":
+    "Only unattached file volumes with capacity in this project and region are shown. Cluster creation binds a static PV/PVC; the existing file volume keeps its own billing.",
   "eks.noEligibleFile": "No eligible free file volume.",
   "eks.existingFile": "Existing file volume",
   "eks.existingBlock": "Existing cloud disk",
@@ -2098,7 +2225,8 @@ export default {
   "eks.rwx": "ReadWriteMany · cross-node",
   "eks.rwo": "ReadWriteOnce · same-node",
   "eks.initialVolumeIndex": "Initial volume {index}",
-  "eks.fileAccessHint": "Pods on different nodes can use the shared file volume; the backing file volume remains an existing storage resource.",
+  "eks.fileAccessHint":
+    "Pods on different nodes can use the shared file volume; the backing file volume remains an existing storage resource.",
   "eks.nodeCount": "GPU nodes",
   "eks.physicalLocalCapacity": "Physical node-local capacity",
   "eks.availableLocalCapacity": "Currently available local capacity",
@@ -2109,39 +2237,53 @@ export default {
   "eks.staticBinding": "Static binding to existing volume",
   "eks.volumeZone": "Volume zone",
   "eks.storageRelationship": "Resource relationship",
-  "eks.storageRelationshipHint.dynamic_block": "CSI provisions one cloud disk, PV and RWO PVC per GPU node; capacity follows node pool size.",
-  "eks.storageRelationshipHint.existing_block": "The platform pre-provisions a disk per node with a static PV and RWO PVC; no manual volume selection.",
-  "eks.storageRelationshipHint.local_nvme": "A local PV/PVC is created per node and pinned there; data is lost when the node is released.",
-  "eks.storageRelationshipHint.shared_file": "The platform creates one file volume and RWX PV/PVC shared across node pools.",
+  "eks.storageRelationshipHint.dynamic_block":
+    "CSI provisions one cloud disk, PV and RWO PVC per GPU node; capacity follows node pool size.",
+  "eks.storageRelationshipHint.existing_block":
+    "The platform pre-provisions a disk per node with a static PV and RWO PVC; no manual volume selection.",
+  "eks.storageRelationshipHint.local_nvme":
+    "A local PV/PVC is created per node and pinned there; data is lost when the node is released.",
+  "eks.storageRelationshipHint.shared_file":
+    "The platform creates one file volume and RWX PV/PVC shared across node pools.",
   "eks.storageSummary": "Storage configuration summary",
   "eks.storageScheme": "Storage scheme",
   "eks.existingVolumeCapacity": "Bound existing volumes",
   "eks.noInitialPvc": "None pre-provisioned",
-  "eks.notClusterTotalStorage": "Initial PVC and existing volume capacities are counted separately; neither is total cluster storage.",
+  "eks.notClusterTotalStorage":
+    "Initial PVC and existing volume capacities are counted separately; neither is total cluster storage.",
   "eks.newCloudDisk": "New cloud disk",
   "eks.gpuNode": "GPU node",
   "eks.capacityPerNode": "Cloud disk capacity per node",
   "eks.sharedCapacity": "Shared file capacity for cluster",
   "eks.generatedVolumeCount": "PV/PVC sets created",
   "eks.totalProvisionedCapacity": "Total requested capacity",
-  "eks.perNodeProvisionHint": "Disk, PV/PVC counts and cost update with the final node pool size.",
-  "eks.sharedProvisionHint": "One shared file volume and RWX PV/PVC serve every node pool.",
-  "eks.nodeCountRecalculatesStorage": "Changing node pools in step four recalculates volume count, capacity and cost.",
+  "eks.perNodeProvisionHint":
+    "Disk, PV/PVC counts and cost update with the final node pool size.",
+  "eks.sharedProvisionHint":
+    "One shared file volume and RWX PV/PVC serve every node pool.",
+  "eks.nodeCountRecalculatesStorage":
+    "Changing node pools in step four recalculates volume count, capacity and cost.",
   "eks.platformFileVolume": "Platform-created file volume",
   "eks.platformBlockVolume": "Platform-created cloud disk",
-  "eks.storageStepIntro": "Choose a storage scheme and capacity. The platform creates volumes and PVs/PVCs from the final node pool size.",
+  "eks.storageStepIntro":
+    "Choose a storage scheme and capacity. The platform creates volumes and PVs/PVCs from the final node pool size.",
   "eks.dynamicPvc": "CSI dynamic PVC",
-  "eks.dynamicPvcHint": "A capacity of 0 provisions no PVC. SSD/NVMe use block storage; shared-fs uses the existing file product.",
+  "eks.dynamicPvcHint":
+    "A capacity of 0 provisions no PVC. SSD/NVMe use block storage; shared-fs uses the existing file product.",
   "eks.existingBlockPv": "Existing block volume binding",
-  "eks.blockBindingHint": "Only unattached block volumes in the current project, region and selected zones are listed. Creation binds each volume to a static PV and namespaced RWO PVC; the existing volume retains its billing.",
+  "eks.blockBindingHint":
+    "Only unattached block volumes in the current project, region and selected zones are listed. Creation binds each volume to a static PV and namespaced RWO PVC; the existing volume retains its billing.",
   "eks.noEligibleBlock": "No eligible unattached block volume.",
   "eks.openBlockStorage": "Open Block Storage",
   "eks.blockVolume": "Block volume",
-  "eks.rwoHint": "ReadWriteOnce: Pods using this PVC must run in the volume zone; replicas sharing it stay on one node.",
+  "eks.rwoHint":
+    "ReadWriteOnce: Pods using this PVC must run in the volume zone; replicas sharing it stay on one node.",
   "eks.localPv": "Local PV",
   "eks.localPvPerNode": "Local PV capacity per node",
-  "eks.localPvHint": "Enter local NVMe capacity per node. The platform creates node-bound PVs/PVCs; data is lost when the node is released.",
-  "eks.nodeStepIntro": "Configure customer managed Worker groups. Sizes and images come from regional pools; node counts determine GPU capacity and network IP demand.",
+  "eks.localPvHint":
+    "Enter local NVMe capacity per node. The platform creates node-bound PVs/PVCs; data is lost when the node is released.",
+  "eks.nodeStepIntro":
+    "Configure customer managed Worker groups. Sizes and images come from regional pools; node counts determine GPU capacity and network IP demand.",
   "eks.perNodeCapacity": "Per-node capacity",
   "eks.localNvme": "Local NVMe",
   "eks.nodePoolCapacity": "Desired {nodes} nodes, {gpus} GPUs total.",
@@ -2150,52 +2292,77 @@ export default {
   "eks.gpuTargets": "Target node pools",
   "eks.noGpuPool": "No GPU node pool",
   "eks.operatorRole": "Manages driver and Device Plugin together",
-  "eks.devicePluginRole": "Deployed by GPU Operator; exposes GPU resources to the scheduler",
+  "eks.devicePluginRole":
+    "Deployed by GPU Operator; exposes GPU resources to the scheduler",
   "eks.nfdRole": "Detects node hardware and publishes scheduling labels",
   "eks.deploymentPolicy": "Deployment policy",
-  "eks.platformManagedWithNodes": "GPU node pools only; status follows node readiness",
-  "eks.gpuRuntimeDependency": "NFD publishes node features. GPU Operator manages driver and Device Plugin; no duplicate standalone plugin.",
+  "eks.platformManagedWithNodes":
+    "GPU node pools only; status follows node readiness",
+  "eks.gpuRuntimeDependency":
+    "NFD publishes node features. GPU Operator manages driver and Device Plugin; no duplicate standalone plugin.",
   "eks.clusterEntryTitle": "Cluster entry",
-  "eks.clusterEntryHint": "Uses the VPC, subnets and security group selected earlier",
+  "eks.clusterEntryHint":
+    "Uses the VPC, subnets and security group selected earlier",
   "eks.entryInternal": "Cluster-internal access only",
-  "eks.entryInternalHint": "Use in-cluster Services; no ingress controller is deployed.",
+  "eks.entryInternalHint":
+    "Use in-cluster Services; no ingress controller is deployed.",
   "eks.entryIngress": "Enable Ingress",
-  "eks.entryIngressHint": "Simulate a managed NGINX controller; create routes after the cluster is ready.",
+  "eks.entryIngressHint":
+    "Simulate a managed NGINX controller; create routes after the cluster is ready.",
   "eks.ingressController": "Ingress controller",
   "eks.platformManagedMock": "Platform-managed simulation",
   "eks.ingressResource": "Ingress route resource",
-  "eks.ingressCreatedAfterCluster": "Configured for workloads after cluster creation; no route is generated now",
-  "eks.ingressNetworkHint": "Entry reuses the selected VPC, subnets and security group. No real load balancer or public endpoint is provisioned.",
-  "eks.ingressNeedsNetwork": "Select a valid VPC, subnet and security group in the network step.",
-  "eks.internalAccessHint": "Only in-cluster Service networking is simulated; no public endpoint is allocated.",
+  "eks.ingressCreatedAfterCluster":
+    "Configured for workloads after cluster creation; no route is generated now",
+  "eks.ingressNetworkHint":
+    "Entry reuses the selected VPC, subnets and security group. No real load balancer or public endpoint is provisioned.",
+  "eks.ingressNeedsNetwork":
+    "Select a valid VPC, subnet and security group in the network step.",
+  "eks.internalAccessHint":
+    "Only in-cluster Service networking is simulated; no public endpoint is allocated.",
   "eks.clusterPermissionsTitle": "Cluster access permissions",
-  "eks.clusterPermissionsHint": "Uses existing project roles; cluster administrator access is off by default",
-  "eks.grantProjectAdmin": "Grant cluster administrator access to current project Owner / Admin roles",
-  "eks.adminGrantScope": "Applies only to this cluster. The mock records the policy; real RBAC requires backend integration.",
-  "eks.adminGrantUnavailable": "Your current role cannot grant cluster administrator access.",
+  "eks.clusterPermissionsHint":
+    "Uses existing project roles; cluster administrator access is off by default",
+  "eks.grantProjectAdmin":
+    "Grant cluster administrator access to current project Owner / Admin roles",
+  "eks.adminGrantScope":
+    "Applies only to this cluster. The mock records the policy; real RBAC requires backend integration.",
+  "eks.adminGrantUnavailable":
+    "Your current role cannot grant cluster administrator access.",
   "eks.initialAuthorization": "Initial authorization",
   "eks.projectAdminGranted": "Project Owner / Admin: cluster administrator",
-  "eks.projectReadOnly": "No extra cluster administrator grant; operations follow platform permissions",
+  "eks.projectReadOnly":
+    "No extra cluster administrator grant; operations follow platform permissions",
   "eks.kubeconfigAccess": "Connection information",
-  "eks.kubeconfigAfterCreate": "Get the demo kubeconfig from cluster details after readiness",
-  "eks.kubeconfigDemo": "Demo kubeconfig (no credentials; cannot connect to a real cluster)",
+  "eks.kubeconfigAfterCreate":
+    "Get the demo kubeconfig from cluster details after readiness",
+  "eks.kubeconfigDemo":
+    "Demo kubeconfig (no credentials; cannot connect to a real cluster)",
   "eks.pluginReady": "Ready (simulated)",
   "eks.pluginPending": "Waiting for nodes",
   "eks.controllerDisabled": "Disabled",
   "eks.noIngressRoutes": "No Ingress routes; entry traffic is zero",
   "eks.connectionTitle": "Cluster connection",
-  "eks.connectionMockHint": "The current download has no user credentials and is for prototype use. A real Kubernetes backend must issue it.",
-  "eks.addonsStepIntro": "Review managed GPU components, choose an entry scheme and initial authorization. Cluster details reflect these settings.",
+  "eks.connectionMockHint":
+    "The current download has no user credentials and is for prototype use. A real Kubernetes backend must issue it.",
+  "eks.addonsStepIntro":
+    "Review managed GPU components, choose an entry scheme and initial authorization. Cluster details reflect these settings.",
   "eks.managedAddon": "Platform managed; ready with nodes",
-  "eks.gpuAddonHint": "GPU Operator, Device Plugin and NFD initialize with node groups; no separate installation is simulated.",
+  "eks.gpuAddonHint":
+    "GPU Operator, Device Plugin and NFD initialize with node groups; no separate installation is simulated.",
   "eks.accessAndRbac": "Access and permissions",
-  "eks.confirmStepIntro": "Review the managed control plane, API Endpoint, network, storage and Worker groups.",
+  "eks.confirmStepIntro":
+    "Review the managed control plane, API Endpoint, network, storage and Worker groups.",
   "eks.resourceSummary": "Resource configuration summary",
   "eks.resourceChain": "Resource relationships",
-  "error.INVALID_CLUSTER_SUBNETS": "Subnets must belong to the VPC; HA needs at least two zones.",
-  "error.INVALID_CLUSTER_VOLUME_BINDING": "Block volumes must be unattached and match the project, region and selected zones; PV/PVC names must be unique.",
-  "error.INVALID_CLUSTER_PVC": "The selected PVC is not in this cluster and namespace.",
-  "error.INVALID_LOCAL_PV_SIZE": "Local PV capacity exceeds node NVMe capacity.",
+  "error.INVALID_CLUSTER_SUBNETS":
+    "Subnets must belong to the VPC; HA needs at least two zones.",
+  "error.INVALID_CLUSTER_VOLUME_BINDING":
+    "Block volumes must be unattached and match the project, region and selected zones; PV/PVC names must be unique.",
+  "error.INVALID_CLUSTER_PVC":
+    "The selected PVC is not in this cluster and namespace.",
+  "error.INVALID_LOCAL_PV_SIZE":
+    "Local PV capacity exceeds node NVMe capacity.",
   "wizard.clusterProject": "Project & Region",
   "wizard.clusterNetwork": "Network",
   "wizard.clusterStorage": "Storage",
@@ -2208,18 +2375,23 @@ export default {
   "eks.stepHint4": "GPU model, nodes, scheduling",
   "eks.stepHint5": "GPU runtime, entry and permissions",
   "eks.stepHint6": "Review and create",
-  "eks.authorizedCidrInvalid": "Public API Server access requires a valid authorized CIDR.",
+  "eks.authorizedCidrInvalid":
+    "Public API Server access requires a valid authorized CIDR.",
   "eks.pvcNotBound": "PVC is not bound to an available block volume",
-  "eks.localPvInsufficient": "Matching nodes have insufficient local PV capacity",
+  "eks.localPvInsufficient":
+    "Matching nodes have insufficient local PV capacity",
   "eks.noPvc": "No PVC",
   "eks.localStoragePerPod": "Local storage per Pod · GB",
   "eks.poolCount": "{pools} node pools · {nodes} nodes · {gpus} GPUs",
   "slice.modeTitle": "Deployment mode",
   "slice.exclusive": "Dedicated deployment",
-  "slice.exclusiveHint": "A physical GPU server is an exclusive Worker node, billed under the existing node rules.",
+  "slice.exclusiveHint":
+    "A physical GPU server is an exclusive Worker node, billed under the existing node rules.",
   "slice.slice": "MIG slice deployment",
-  "slice.sliceHint": "Buy MIG slices from a platform pool for an isolated workspace; no host machine is delivered.",
-  "slice.mockBoundary": "Demo environment: stock, reservations, Namespace, and RBAC are simulated; no production shared cluster or tenant isolation is connected.",
+  "slice.sliceHint":
+    "Buy MIG slices from a platform pool for an isolated workspace; no host machine is delivered.",
+  "slice.mockBoundary":
+    "Demo environment: stock, reservations, Namespace, and RBAC are simulated; no production shared cluster or tenant isolation is connected.",
   "slice.skuTitle": "Slice SKU",
   "slice.gpuModel": "GPU model",
   "slice.profile": "MIG profile",
@@ -2228,7 +2400,8 @@ export default {
   "slice.availableOnly": "Show available stock only",
   "slice.layout": "Validated layout",
   "slice.workloads": "Typical workloads",
-  "slice.inventory": "Free {free} · reserved {reserved} · allocated {allocated} · maintenance {maintenance}",
+  "slice.inventory":
+    "Free {free} · reserved {reserved} · allocated {allocated} · maintenance {maintenance}",
   "slice.noQuote": "No quote",
   "slice.noSku": "No slice SKU matches these filters.",
   "slice.quantityTitle": "Slice quantity and availability",
@@ -2240,23 +2413,30 @@ export default {
   "slice.maxRequest": "Maximum request",
   "slice.hourly": "Hourly slice cost",
   "slice.hour": "slice-hour",
-  "slice.networkHint": "Choose the workspace VPC and subnet. The platform manages shared Pod networking; no separate control plane or host NIC is configured.",
-  "slice.noVpc": "No VPC is available in this project and region. Create one in Network Management.",
+  "slice.networkHint":
+    "Choose the workspace VPC and subnet. The platform manages shared Pod networking; no separate control plane or host NIC is configured.",
+  "slice.noVpc":
+    "No VPC is available in this project and region. Create one in Network Management.",
   "slice.namespaceBoundary": "Workspace and access boundary",
-  "slice.networkIsolationMock": "Namespace, resource quota, and RBAC describe the workspace boundary. Network policy is represented only as a demo configuration.",
-  "slice.storageHint": "Request one PVC for the slice workspace. The platform provisions cloud block or shared file storage; host-local disks are unavailable.",
+  "slice.networkIsolationMock":
+    "Namespace, resource quota, and RBAC describe the workspace boundary. Network policy is represented only as a demo configuration.",
+  "slice.storageHint":
+    "Request one PVC for the slice workspace. The platform provisions cloud block or shared file storage; host-local disks are unavailable.",
   "slice.pvcCapacity": "Workspace PVC capacity",
   "slice.capacityInvalid": "Capacity must be an integer from 1 to 32768 GB.",
-  "slice.pvcHint": "This capacity belongs to one workspace PVC and is not multiplied by slice count.",
+  "slice.pvcHint":
+    "This capacity belongs to one workspace PVC and is not multiplied by slice count.",
   "slice.accessScope": "Access scope",
   "slice.namespaceRbac": "Tenant Namespace and least-privilege RBAC",
   "slice.gpuResource": "GPU resource mapping",
   "slice.devicePluginManaged": "Platform-managed MIG Device Plugin",
   "slice.ingress": "Entry",
   "slice.internalOnly": "Internal cluster access only",
-  "slice.accessMock": "The created resource shows workspace identity and the Kubernetes extended resource name. Real authentication, scheduling, and isolation require backend integration.",
+  "slice.accessMock":
+    "The created resource shows workspace identity and the Kubernetes extended resource name. Real authentication, scheduling, and isolation require backend integration.",
   "slice.sharedWorkspaceTitle": "Platform shared GPU workspace",
-  "slice.sharedWorkspaceHint": "The platform manages the control plane and physical Worker nodes. This order allocates only MIG slices and a tenant workspace.",
+  "slice.sharedWorkspaceHint":
+    "The platform manages the control plane and physical Worker nodes. This order allocates only MIG slices and a tenant workspace.",
   "slice.workspace": "Tenant workspace",
   "slice.inventoryAssignment": "Slice allocation and resource mapping",
   "slice.assignedInstances": "Allocated MIG instances",
@@ -2270,11 +2450,16 @@ export default {
   "slice.state.releasing": "Releasing",
   "slice.state.released": "Released",
   "slice.platformShared": "Platform shared pool",
-  "error.INVALID_SLICE_SPEC": "Slice configuration does not match the shared workspace capabilities.",
-  "error.SLICE_QUOTA_OR_SKU_INVALID": "The slice SKU is unavailable or the project slice quota is exceeded.",
-  "error.INSUFFICIENT_SLICE_CAPACITY": "Not enough free MIG slice instances. Reduce the quantity or choose another SKU.",
-  "error.SLICE_WORKSPACE_MOCK_ONLY": "This demo workspace does not support physical node or live workload operations.",
+  "error.INVALID_SLICE_SPEC":
+    "Slice configuration does not match the shared workspace capabilities.",
+  "error.SLICE_QUOTA_OR_SKU_INVALID":
+    "The slice SKU is unavailable or the project slice quota is exceeded.",
+  "error.INSUFFICIENT_SLICE_CAPACITY":
+    "Not enough free MIG slice instances. Reduce the quantity or choose another SKU.",
+  "error.SLICE_WORKSPACE_MOCK_ONLY":
+    "This demo workspace does not support physical node or live workload operations.",
   "error.SLICE_SKU_NOT_FOUND": "Slice SKU quote not found.",
-  "slice.physicalAndCreated": "Shared physical GPUs {gpus} · created MIG instances {instances}",
+  "slice.physicalAndCreated":
+    "Shared physical GPUs {gpus} · created MIG instances {instances}",
   "slice.unitPrice": "Hourly price per slice",
 } as const;

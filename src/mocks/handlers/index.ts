@@ -1,7 +1,15 @@
-import { bucketStoredBytes, objectStoredBytes, isRegionalPoolVolume } from "../../lib/storage";
+import {
+  bucketStoredBytes,
+  objectStoredBytes,
+  isRegionalPoolVolume,
+} from "../../lib/storage";
 import { fileScopePrefix } from "../../lib/s3-files";
 import { inferenceEndpoint } from "../../lib/inference-endpoint";
-import { isWindowsImage, WINDOWS_MIN_SYSTEM_DISK_GB, WINDOWS_RDP_PORT } from "../../lib/windows-image";
+import {
+  isWindowsImage,
+  WINDOWS_MIN_SYSTEM_DISK_GB,
+  WINDOWS_RDP_PORT,
+} from "../../lib/windows-image";
 import { validResourcePassword } from "../../lib/password-policy";
 import type { FileAccessConfig } from "../../types/storage";
 import type { ElasticIp, SecurityRule, IpsecTunnel } from "../../types/network";
@@ -87,7 +95,10 @@ import { canWrite, canManageOrg } from "../../lib/rbac";
 import { displayId, formatResourceId, resourceLink } from "../../lib/ids";
 import { round, visibleTransaction } from "../../lib/money";
 import { invoicePeriodForSelection } from "../../lib/billing-period";
-import { compatiblePrecisions, supportsChatInference } from "../../lib/inference-precision";
+import {
+  compatiblePrecisions,
+  supportsChatInference,
+} from "../../lib/inference-precision";
 import { STORAGE_PRODUCTS } from "../../lib/storage";
 import { volumesForResource } from "../fixtures/storage";
 import { metricsFor } from "../metrics";
@@ -115,36 +126,76 @@ const resource = (id: string) =>
   db.resources.find((r) => r.resourceUuid === id) || fail(404, "NOT_FOUND");
 const live = () => db.resources.filter((r) => !r.deletedAt);
 const projectInRegion = (projectId: string, region: Region) =>
-  db.projects.some((project) => project.id === projectId && !project.deletedAt && project.defaultRegion === region);
-const sliceLimit = (projectId: string) => db.projects.find((project) => project.id === projectId)?.sliceQuota ?? 32;
-const sliceUsed = (projectId: string, region: Region) => live().filter((r) =>
-  r.kind === "vgpu" && r.projectId === projectId && r.region === region &&
-  r.spec.deploymentMode === "slice" && !["stopped", "error", "terminating"].includes(r.status),
-).reduce((sum, r) => sum + (r.kind === "vgpu" ? r.spec.slice?.count || 0 : 0), 0);
-const sliceStock = (skuId: string, region: Region) => db.sliceInventory.filter((item) => item.skuId === skuId && item.region === region);
+  db.projects.some(
+    (project) =>
+      project.id === projectId &&
+      !project.deletedAt &&
+      project.defaultRegion === region,
+  );
+const sliceLimit = (projectId: string) =>
+  db.projects.find((project) => project.id === projectId)?.sliceQuota ?? 32;
+const sliceUsed = (projectId: string, region: Region) =>
+  live()
+    .filter(
+      (r) =>
+        r.kind === "vgpu" &&
+        r.projectId === projectId &&
+        r.region === region &&
+        r.spec.deploymentMode === "slice" &&
+        !["stopped", "error", "terminating"].includes(r.status),
+    )
+    .reduce(
+      (sum, r) => sum + (r.kind === "vgpu" ? r.spec.slice?.count || 0 : 0),
+      0,
+    );
+const sliceStock = (skuId: string, region: Region) =>
+  db.sliceInventory.filter(
+    (item) => item.skuId === skuId && item.region === region,
+  );
 function reserveSlices(r: Extract<Resource, { kind: "vgpu" }>) {
   const slice = r.spec.slice;
   const sku = sliceSku(slice?.skuId || "");
-  if (!sku || r.nodePool !== sku.poolCode || !slice || !Number.isInteger(slice.count) || slice.count < 1 ||
-    slice.count > 64 || sliceUsed(r.projectId, r.region) + slice.count > sliceLimit(r.projectId))
+  if (
+    !sku ||
+    r.nodePool !== sku.poolCode ||
+    !slice ||
+    !Number.isInteger(slice.count) ||
+    slice.count < 1 ||
+    slice.count > 64 ||
+    sliceUsed(r.projectId, r.region) + slice.count > sliceLimit(r.projectId)
+  )
     fail(409, "SLICE_QUOTA_OR_SKU_INVALID");
-  const selected = sliceStock(sku.id, r.region).filter((item) => item.state === "free" && item.layoutId === sku.layoutId).slice(0, slice.count);
+  const selected = sliceStock(sku.id, r.region)
+    .filter((item) => item.state === "free" && item.layoutId === sku.layoutId)
+    .slice(0, slice.count);
   if (selected.length !== slice.count) fail(409, "INSUFFICIENT_SLICE_CAPACITY");
-  for (const item of selected) { item.state = "reserved"; item.resourceUuid = r.resourceUuid; }
+  for (const item of selected) {
+    item.state = "reserved";
+    item.resourceUuid = r.resourceUuid;
+  }
   slice.instanceIds = selected.map((item) => item.id);
   slice.profile = sku.profile;
   slice.gpuModel = sku.gpuModel;
   slice.memoryGb = sku.memoryGb;
   slice.layoutId = sku.layoutId;
   slice.kubernetesResource = sku.kubernetesResource;
-  slice.unitPriceUsd = RATES.find((rate) => rate.kind === "vgpu" && rate.region === r.region && rate.pool === sku.poolCode && rate.unit === "per_slice_hour")!.unitPrice;
+  slice.unitPriceUsd = RATES.find(
+    (rate) =>
+      rate.kind === "vgpu" &&
+      rate.region === r.region &&
+      rate.pool === sku.poolCode &&
+      rate.unit === "per_slice_hour",
+  )!.unitPrice;
   slice.workspaceId = `workspace-${r.resourceUuid}`;
   slice.namespace = `tenant-${r.resourceUuid.slice(0, 12)}`;
 }
 function releaseSlices(r: Resource) {
   if (r.kind !== "vgpu" || r.spec.deploymentMode !== "slice") return;
   for (const item of db.sliceInventory)
-    if (item.resourceUuid === r.resourceUuid) { item.state = "free"; item.resourceUuid = null; }
+    if (item.resourceUuid === r.resourceUuid) {
+      item.state = "free";
+      item.resourceUuid = null;
+    }
   if (r.spec.slice) r.spec.slice.instanceIds = [];
 }
 
@@ -174,7 +225,10 @@ function storageQuotaBreakdown(region: Region, exclude?: string) {
                 bucket.region === region &&
                 (!exclude || bucket.attachedResourceUuid !== exclude),
             )
-            .reduce((total, bucket) => total + bucketStoredBytes(bucket) / 1e9, 0)
+            .reduce(
+              (total, bucket) => total + bucketStoredBytes(bucket) / 1e9,
+              0,
+            )
         : db.volumes
             .filter(
               (volume) =>
@@ -341,12 +395,32 @@ function precheck(r: Resource, exclude?: string) {
   if (sliceMode) {
     const sku = sliceSku(r.spec.slice?.skuId || "");
     const count = r.spec.slice?.count || 0;
-    if (!sku || sku.poolCode !== r.nodePool || r.spec.scaling || !Number.isInteger(count) || count < 1 ||
-      count > 64 || !RATES.some((rate) => rate.kind === "vgpu" && rate.region === r.region && rate.pool === sku.poolCode && rate.unit === "per_slice_hour") ||
-      sliceUsed(r.projectId, r.region) + count > sliceLimit(r.projectId))
+    if (
+      !sku ||
+      sku.poolCode !== r.nodePool ||
+      r.spec.scaling ||
+      !Number.isInteger(count) ||
+      count < 1 ||
+      count > 64 ||
+      !RATES.some(
+        (rate) =>
+          rate.kind === "vgpu" &&
+          rate.region === r.region &&
+          rate.pool === sku.poolCode &&
+          rate.unit === "per_slice_hour",
+      ) ||
+      sliceUsed(r.projectId, r.region) + count > sliceLimit(r.projectId)
+    )
       fail(409, "SLICE_QUOTA_OR_SKU_INVALID");
-    const allocatedToSelf = db.sliceInventory.filter((item) => item.resourceUuid === exclude && item.skuId === sku.id).length;
-    if (sliceStock(sku.id, r.region).filter((item) => item.state === "free").length + allocatedToSelf < count)
+    const allocatedToSelf = db.sliceInventory.filter(
+      (item) => item.resourceUuid === exclude && item.skuId === sku.id,
+    ).length;
+    if (
+      sliceStock(sku.id, r.region).filter((item) => item.state === "free")
+        .length +
+        allocatedToSelf <
+      count
+    )
       fail(409, "INSUFFICIENT_SLICE_CAPACITY");
   }
   if (r.kind === "gpu_vm" && r.spec.gpuPerInstance > pool!.gpusPerNode)
@@ -355,12 +429,12 @@ function precheck(r: Resource, exclude?: string) {
     r.kind === "vgpu" && r.spec.deploymentMode === "slice"
       ? []
       : r.kind === "vgpu"
-      ? r.spec.nodePools.map((p) => ({
-          code: p.poolCode,
-          count: p.nodeCount * p.gpuPerNode,
-          slicing: p.slicingPolicy,
-        }))
-      : [{ code: r.nodePool, count: spec.gpuCount, slicing: "none" }];
+        ? r.spec.nodePools.map((p) => ({
+            code: p.poolCode,
+            count: p.nodeCount * p.gpuPerNode,
+            slicing: p.slicingPolicy,
+          }))
+        : [{ code: r.nodePool, count: spec.gpuCount, slicing: "none" }];
   const poolTotals = new Map<string, number>();
   for (const p of selected)
     poolTotals.set(p.code, (poolTotals.get(p.code) || 0) + p.count);
@@ -461,8 +535,13 @@ function precheck(r: Resource, exclude?: string) {
         ? IMAGES.find((i) => i.id === r.spec.runtimeImageRef)
         : undefined;
     const poolSpec = GPU_SPECS[r.nodePool];
-    if (isWindowsImage(image) && (r.kind !== "gpu_vm" || r.spec.authMethod !== "password" ||
-      !!runtimeImage || r.spec.systemDiskGb < WINDOWS_MIN_SYSTEM_DISK_GB))
+    if (
+      isWindowsImage(image) &&
+      (r.kind !== "gpu_vm" ||
+        r.spec.authMethod !== "password" ||
+        !!runtimeImage ||
+        r.spec.systemDiskGb < WINDOWS_MIN_SYSTEM_DISK_GB)
+    )
       fail(422, "VALIDATION_ERROR");
     if (
       !image ||
@@ -502,10 +581,17 @@ function findUsage(resourceUuid: string, hour: string, unit: string) {
   }
   return usageIndex.get(usageKey(resourceUuid, hour, unit));
 }
-function recordCharge(resourceUuid: Transaction["resourceUuid"], delta: number, referenceId: string, now: number) {
+function recordCharge(
+  resourceUuid: Transaction["resourceUuid"],
+  delta: number,
+  referenceId: string,
+  now: number,
+) {
   const amount = -round(delta, 4);
   if (amount >= 0) return;
-  const index = db.transactions.findIndex((tx) => tx.type === "charge" && tx.referenceId === referenceId);
+  const index = db.transactions.findIndex(
+    (tx) => tx.type === "charge" && tx.referenceId === referenceId,
+  );
   const previous = index >= 0 ? db.transactions.splice(index, 1)[0] : null;
   db.transactions.push({
     id: previous?.id || crypto.randomUUID(),
@@ -628,7 +714,12 @@ function settle(r: Resource) {
       });
     }
     db.account.creditBalance = round(db.account.creditBalance - delta, 4);
-    recordCharge(r.resourceUuid, delta, `usage-${r.resourceUuid}-${Math.floor(now / 3600000)}`, now);
+    recordCharge(
+      r.resourceUuid,
+      delta,
+      `usage-${r.resourceUuid}-${Math.floor(now / 3600000)}`,
+      now,
+    );
     if (db.account.creditBalance < 0 && !db.account.depletedAt)
       db.account.depletedAt = new Date(now).toISOString();
   }
@@ -702,7 +793,12 @@ function settleEips() {
     db.billingCursors[e.id] = now;
     if (delta > 0) {
       db.account.creditBalance = round(db.account.creditBalance - delta, 4);
-      recordCharge(e.id, delta, `eip-${e.id}-${Math.floor(now / 3600000)}`, now);
+      recordCharge(
+        e.id,
+        delta,
+        `eip-${e.id}-${Math.floor(now / 3600000)}`,
+        now,
+      );
       if (db.account.creditBalance < 0 && !db.account.depletedAt)
         db.account.depletedAt = new Date(now).toISOString();
     }
@@ -713,11 +809,18 @@ function settleVolumes() {
     if (isRegionalPoolVolume(volume)) continue;
     // Resource-created volumes are already included in their order price.
     const independent = !volume.id.startsWith("vol-");
-    const chargedByResource = !!volume.resourceUuid && !(volume.kind === "file" && volume.role === "pvc" && independent);
+    const chargedByResource =
+      !!volume.resourceUuid &&
+      !(volume.kind === "file" && volume.role === "pvc" && independent);
     if (!independent || chargedByResource) continue;
-    const product = STORAGE_PRODUCTS.find((item) => item.kind === volume.kind && item.tier === volume.tier);
+    const product = STORAGE_PRODUCTS.find(
+      (item) => item.kind === volume.kind && item.tier === volume.tier,
+    );
     if (!product) continue;
-    const now = Math.min(Date.now(), volume.deletedAt ? Date.parse(volume.deletedAt) : Infinity);
+    const now = Math.min(
+      Date.now(),
+      volume.deletedAt ? Date.parse(volume.deletedAt) : Infinity,
+    );
     let cursor = db.billingCursors[volume.id] ?? Date.parse(volume.createdAt);
     if (cursor >= now) continue;
     const rate = product.usdGbMonth / 730;
@@ -728,17 +831,33 @@ function settleVolumes() {
       const at = new Date(hour).toISOString();
       let usage = findUsage(volume.id, at, "per_gb_hour");
       if (!usage) {
-        usage = { id: `${volume.id}-${hour}-per_gb_hour`, resourceUuid: volume.id as ResourceUuid,
-          displayId: formatResourceId(volume.kind === "file" ? "fil" : "blk", volume.id) as Usage["displayId"],
-          projectId: volume.projectId, region: volume.region, kind: "storage", usageHour: at,
-          unit: "per_gb_hour", quantity: 0, unitPrice: rate, amount: 0, status: "running" };
+        usage = {
+          id: `${volume.id}-${hour}-per_gb_hour`,
+          resourceUuid: volume.id as ResourceUuid,
+          displayId: formatResourceId(
+            volume.kind === "file" ? "fil" : "blk",
+            volume.id,
+          ) as Usage["displayId"],
+          projectId: volume.projectId,
+          region: volume.region,
+          kind: "storage",
+          usageHour: at,
+          unit: "per_gb_hour",
+          quantity: 0,
+          unitPrice: rate,
+          amount: 0,
+          status: "running",
+        };
         db.usage.push(usage);
         usageIndex.set(usageKey(volume.id, at, "per_gb_hour"), usage);
       }
       const before = usage.amount;
-      const meter = db.usageMeters[usage.id] ?? { quantity: usage.quantity, amount: usage.quantity * usage.unitPrice };
-      meter.quantity += volume.sizeGb * (end - cursor) / 3600000;
-      meter.amount += volume.sizeGb * (end - cursor) / 3600000 * rate;
+      const meter = db.usageMeters[usage.id] ?? {
+        quantity: usage.quantity,
+        amount: usage.quantity * usage.unitPrice,
+      };
+      meter.quantity += (volume.sizeGb * (end - cursor)) / 3600000;
+      meter.amount += ((volume.sizeGb * (end - cursor)) / 3600000) * rate;
       db.usageMeters[usage.id] = meter;
       usage.quantity = round(meter.quantity, 4);
       usage.unitPrice = meter.quantity ? meter.amount / meter.quantity : rate;
@@ -749,7 +868,12 @@ function settleVolumes() {
     db.billingCursors[volume.id] = now;
     if (delta > 0) {
       db.account.creditBalance = round(db.account.creditBalance - delta, 4);
-      recordCharge(volume.id as ResourceUuid, delta, `volume-${volume.id}-${Math.floor(now / 3600000)}`, now);
+      recordCharge(
+        volume.id as ResourceUuid,
+        delta,
+        `volume-${volume.id}-${Math.floor(now / 3600000)}`,
+        now,
+      );
     }
   }
 }
@@ -759,10 +883,16 @@ function tick(settleBilling = true) {
   else db.account.depletedAt ??= new Date().toISOString();
 
   for (const r of live()) {
-    if (r.kind === "vgpu" && r.spec.deploymentMode === "slice" && r.status === "error" &&
-      db.sliceInventory.some((item) => item.resourceUuid === r.resourceUuid)) {
+    if (
+      r.kind === "vgpu" &&
+      r.spec.deploymentMode === "slice" &&
+      r.status === "error" &&
+      db.sliceInventory.some((item) => item.resourceUuid === r.resourceUuid)
+    ) {
       releaseSlices(r);
-      const order = db.orders.find((item) => item.resourceUuid === r.resourceUuid);
+      const order = db.orders.find(
+        (item) => item.resourceUuid === r.resourceUuid,
+      );
       if (order) order.status = "failed";
       lifecycleChanged = true;
     }
@@ -800,7 +930,11 @@ function tick(settleBilling = true) {
       if (age >= duration) {
         if (r.kind === "vgpu" && r.spec.deploymentMode === "slice")
           for (const item of db.sliceInventory)
-            if (item.resourceUuid === r.resourceUuid && item.state === "reserved") item.state = "allocated";
+            if (
+              item.resourceUuid === r.resourceUuid &&
+              item.state === "reserved"
+            )
+              item.state = "allocated";
         r.status = "running";
         r.runningSince = new Date(
           new Date(r.provisioningSince || r.createdAt).getTime() +
@@ -884,10 +1018,27 @@ function summary(
           (!projectId || e.projectId === projectId),
       )
       .reduce((n, e) => n + ipHourly(e.region), 0) +
-    db.volumes.filter((v) => !v.deletedAt && !isRegionalPoolVolume(v) && !v.id.startsWith("vol-") &&
-      (!v.resourceUuid || (v.kind === "file" && v.role === "pvc")) &&
-      (!region || v.region === region) && (!resourceId || v.id === resourceId) && (!projectId || v.projectId === projectId))
-      .reduce((sum, v) => sum + v.sizeGb * (STORAGE_PRODUCTS.find((p) => p.kind === v.kind && p.tier === v.tier)?.usdGbMonth || 0) / 730, 0);
+    db.volumes
+      .filter(
+        (v) =>
+          !v.deletedAt &&
+          !isRegionalPoolVolume(v) &&
+          !v.id.startsWith("vol-") &&
+          (!v.resourceUuid || (v.kind === "file" && v.role === "pvc")) &&
+          (!region || v.region === region) &&
+          (!resourceId || v.id === resourceId) &&
+          (!projectId || v.projectId === projectId),
+      )
+      .reduce(
+        (sum, v) =>
+          sum +
+          (v.sizeGb *
+            (STORAGE_PRODUCTS.find(
+              (p) => p.kind === v.kind && p.tier === v.tier,
+            )?.usdGbMonth || 0)) /
+            730,
+        0,
+      );
   const [year, monthOfPeriod] = billingPeriod.split("-").map(Number);
   const daysInPeriod =
     year && monthOfPeriod >= 1 && monthOfPeriod <= 12
@@ -904,7 +1055,10 @@ function summary(
       date: day,
       amount: round(entry?.amount || 0),
       ...Object.fromEntries(
-        [...KINDS, "eip", "storage"].map((kind) => [kind, round(entry?.kinds[kind] || 0)]),
+        [...KINDS, "eip", "storage"].map((kind) => [
+          kind,
+          round(entry?.kinds[kind] || 0),
+        ]),
       ),
       ...Object.fromEntries(
         db.projects.map((project) => [
@@ -1062,11 +1216,17 @@ async function dispatchNetwork(
       ...e,
       displayId: formatResourceId("eip", e.id),
       hourly: e.releasedAt ? 0 : ipHourly(e.region),
-      boundName: boundResource?.name ||
-        (e.tunnelId ? n.tunnels.find((t) => t.id === e.tunnelId)?.name : null) || null,
+      boundName:
+        boundResource?.name ||
+        (e.tunnelId
+          ? n.tunnels.find((t) => t.id === e.tunnelId)?.name
+          : null) ||
+        null,
       boundHref: boundResource
         ? resourceLink(boundResource)
-        : e.tunnelId ? `/network/tunnels?drawer=${e.tunnelId}` : null,
+        : e.tunnelId
+          ? `/network/tunnels?drawer=${e.tunnelId}`
+          : null,
     };
   };
   const interfaces = n.interfaces.filter((i) => !i.releasedAt);
@@ -1141,12 +1301,27 @@ async function dispatchNetwork(
         const s = scope(body);
         checkNetworkQuota(s.region, "vpc");
         const cidr = z.string().refine(validVpcCidr).parse(body.cidr);
-        const plan = z.array(z.object({ name: named, cidr: z.string(), zone: z.string() })).min(1).max(8).optional().parse(body.subnets);
+        const plan = z
+          .array(z.object({ name: named, cidr: z.string(), zone: z.string() }))
+          .min(1)
+          .max(8)
+          .optional()
+          .parse(body.subnets);
         if (plan) {
           checkNetworkQuota(s.region, "subnet", plan.length);
           checkNetworkQuota(s.region, "security_group");
-          if (plan.some((subnet) => !verifySubnet(cidr, subnet.cidr) || ![`${s.region}-a`, `${s.region}-b`].includes(subnet.zone)) ||
-            plan.some((subnet, index) => plan.slice(index + 1).some((other) => cidrOverlaps(subnet.cidr, other.cidr))))
+          if (
+            plan.some(
+              (subnet) =>
+                !verifySubnet(cidr, subnet.cidr) ||
+                ![`${s.region}-a`, `${s.region}-b`].includes(subnet.zone),
+            ) ||
+            plan.some((subnet, index) =>
+              plan
+                .slice(index + 1)
+                .some((other) => cidrOverlaps(subnet.cidr, other.cidr)),
+            )
+          )
             fail(422, "INVALID_CLUSTER_SUBNETS");
         }
         const v = {
@@ -1164,11 +1339,25 @@ async function dispatchNetwork(
         const createdVpc = { ...v, networkType };
         n.vpcs.push(createdVpc);
         if (plan) {
-          for (const subnet of plan) n.subnets.push({ ...s, ...subnet, id: `vsw-${crypto.randomUUID().slice(0, 12)}`,
-            vpcId: v.id, createdAt: v.createdAt });
-          n.groups.push({ ...s, id: `sg-${crypto.randomUUID().slice(0, 12)}`, vpcId: v.id,
-            name: "default", description: "", intraGroupPolicy: "allow", isDefault: true,
-            rules: defaultRules(cidr), createdAt: v.createdAt });
+          for (const subnet of plan)
+            n.subnets.push({
+              ...s,
+              ...subnet,
+              id: `vsw-${crypto.randomUUID().slice(0, 12)}`,
+              vpcId: v.id,
+              createdAt: v.createdAt,
+            });
+          n.groups.push({
+            ...s,
+            id: `sg-${crypto.randomUUID().slice(0, 12)}`,
+            vpcId: v.id,
+            name: "default",
+            description: "",
+            intraGroupPolicy: "allow",
+            isDefault: true,
+            rules: defaultRules(cidr),
+            createdAt: v.createdAt,
+          });
         }
         networkAudit(n, s, v.id, "vpcCreate");
         persist();
@@ -1190,7 +1379,13 @@ async function dispatchNetwork(
         groups: n.groups.filter((g) => g.vpcId === id && !g.deletedAt),
         interfaces: interfaces.filter((i) => i.vpcId === id),
         tunnels: n.tunnels.filter((t) => t.vpcId === id && !t.deletedAt),
-        audit: n.audit.filter((a) => a.entityId === id || n.subnets.some((subnet) => subnet.vpcId === id && subnet.id === a.entityId)),
+        audit: n.audit.filter(
+          (a) =>
+            a.entityId === id ||
+            n.subnets.some(
+              (subnet) => subnet.vpcId === id && subnet.id === a.entityId,
+            ),
+        ),
       });
     if (method === "PATCH") {
       v.name = named.parse(body.name);
@@ -1423,9 +1618,15 @@ async function dispatchNetwork(
             .filter(
               (e) =>
                 (!qs.get("region") || e.region === qs.get("region")) &&
-                (!qs.get("project_id") || e.projectId === qs.get("project_id")) &&
-                (!qs.get("q") || [e.name, e.address, formatResourceId("eip", e.id), e.id]
-                  .some((value) => value.toLowerCase().includes(qs.get("q")!.trim().toLowerCase()))) &&
+                (!qs.get("project_id") ||
+                  e.projectId === qs.get("project_id")) &&
+                (!qs.get("q") ||
+                  [e.name, e.address, formatResourceId("eip", e.id), e.id].some(
+                    (value) =>
+                      value
+                        .toLowerCase()
+                        .includes(qs.get("q")!.trim().toLowerCase()),
+                  )) &&
                 (!e.releasedAt || qs.get("includeReleased") === "true"),
             )
             .map(eipView),
@@ -1457,16 +1658,21 @@ async function dispatchNetwork(
       if (e.interfaceId || e.tunnelId) fail(409, "EIP_IN_USE");
       const targetId = body.resourceUuid
         ? z.string().parse(body.resourceUuid)
-        : interfaces.find((i) => i.id === body.interfaceId)?.resourceUuid || fail(404, "NOT_FOUND");
+        : interfaces.find((i) => i.id === body.interfaceId)?.resourceUuid ||
+          fail(404, "NOT_FOUND");
       const r = resource(targetId);
       if (
-        r.kind !== "gpu_vm" || r.deletedAt ||
+        r.kind !== "gpu_vm" ||
+        r.deletedAt ||
         !["running", "stopped"].includes(r.status) ||
-        r.region !== e.region || r.projectId !== e.projectId
-      ) fail(409, "NETWORK_SCOPE_MISMATCH");
-      const activeNics = () => n.interfaces
-        .filter((i) => i.resourceUuid === r.resourceUuid && !i.releasedAt)
-        .sort((a, b) => a.index - b.index);
+        r.region !== e.region ||
+        r.projectId !== e.projectId
+      )
+        fail(409, "NETWORK_SCOPE_MISMATCH");
+      const activeNics = () =>
+        n.interfaces
+          .filter((i) => i.resourceUuid === r.resourceUuid && !i.releasedAt)
+          .sort((a, b) => a.index - b.index);
       if (!activeNics().length && body.resourceUuid) {
         const networkBefore = structuredClone(n);
         const specBefore = structuredClone(r.spec);
@@ -1481,13 +1687,29 @@ async function dispatchNetwork(
       }
       const nic = body.interfaceId
         ? activeNics().find((i) => i.id === body.interfaceId)
-        : activeNics().find((i) => !n.eips.some((ip) => !ip.releasedAt && ip.interfaceId === i.id));
+        : activeNics().find(
+            (i) =>
+              !n.eips.some((ip) => !ip.releasedAt && ip.interfaceId === i.id),
+          );
       if (!nic) fail(409, "EIP_IN_USE");
       if (
-        nic.region !== e.region || nic.projectId !== e.projectId ||
-        !n.vpcs.some((v) => v.id === nic.vpcId && !v.deletedAt && v.region === e.region && v.projectId === e.projectId) ||
-        !n.subnets.some((subnet) => subnet.id === nic.subnetId && !subnet.deletedAt && subnet.vpcId === nic.vpcId)
-      ) fail(409, "NETWORK_SCOPE_MISMATCH");
+        nic.region !== e.region ||
+        nic.projectId !== e.projectId ||
+        !n.vpcs.some(
+          (v) =>
+            v.id === nic.vpcId &&
+            !v.deletedAt &&
+            v.region === e.region &&
+            v.projectId === e.projectId,
+        ) ||
+        !n.subnets.some(
+          (subnet) =>
+            subnet.id === nic.subnetId &&
+            !subnet.deletedAt &&
+            subnet.vpcId === nic.vpcId,
+        )
+      )
+        fail(409, "NETWORK_SCOPE_MISMATCH");
       if (n.eips.some((x) => !x.releasedAt && x.interfaceId === nic.id))
         fail(409, "EIP_IN_USE");
       e.interfaceId = nic.id;
@@ -1752,7 +1974,9 @@ async function dispatch(request: Request, settleBilling = true) {
     const target = resource(consoleLoginMatch[1]);
     if (target.kind !== "gpu_vm") fail(404, "NOT_FOUND");
     if (target.status !== "running") fail(409, "INVALID_STATE");
-    if (isWindowsImage(IMAGES.find((image) => image.id === target.spec.imageRef)))
+    if (
+      isWindowsImage(IMAGES.find((image) => image.id === target.spec.imageRef))
+    )
       fail(409, "WINDOWS_CONSOLE_UNAVAILABLE");
     if (target.spec.authMethod !== "password")
       fail(409, "PASSWORD_AUTH_NOT_CONFIGURED");
@@ -1770,9 +1994,14 @@ async function dispatch(request: Request, settleBilling = true) {
     return dispatchNetwork(path, method, qs, body, role);
   if (path === "/api/deployment-options") {
     const code = (region || "jp") as Region;
-    const projectId = qs.get("project_id") || db.projects.find((p) => p.isDefault && p.defaultRegion === code && !p.deletedAt)?.id || db.projects.find((p) => p.defaultRegion === code && !p.deletedAt)?.id || "";
-    if (!projectInRegion(projectId, code))
-      fail(422, "VALIDATION_ERROR");
+    const projectId =
+      qs.get("project_id") ||
+      db.projects.find(
+        (p) => p.isDefault && p.defaultRegion === code && !p.deletedAt,
+      )?.id ||
+      db.projects.find((p) => p.defaultRegion === code && !p.deletedAt)?.id ||
+      "";
+    if (!projectInRegion(projectId, code)) fail(422, "VALIDATION_ERROR");
     ensureScope(db.network, { projectId, region: code });
     const requestedKind = qs.get("kind");
     const requestedVpcType =
@@ -1851,10 +2080,7 @@ async function dispatch(request: Request, settleBilling = true) {
         fail(422, "VALIDATION_ERROR");
       const code = z.enum(REGIONS).parse(body.region);
       const projectId = z.string().min(1).parse(body.projectId);
-      if (
-        !projectInRegion(projectId, code)
-      )
-        fail(422, "VALIDATION_ERROR");
+      if (!projectInRegion(projectId, code)) fail(422, "VALIDATION_ERROR");
       const name = z.string().trim().min(3).max(63).parse(body.name);
       if (
         db.volumes.some(
@@ -1876,8 +2102,16 @@ async function dispatch(request: Request, settleBilling = true) {
           used: allocation.usedGb,
           requested: sizeGb,
         });
-      const zone = kind === "block" ? z.enum([`${code}-a`, `${code}-b`] as [string, string]).parse(body.zone || `${code}-a`) : undefined;
-      const fileAccess = kind === "file" && body.fileAccess ? parseFileAccess(body.fileAccess, projectId, code) : undefined;
+      const zone =
+        kind === "block"
+          ? z
+              .enum([`${code}-a`, `${code}-b`] as [string, string])
+              .parse(body.zone || `${code}-a`)
+          : undefined;
+      const fileAccess =
+        kind === "file" && body.fileAccess
+          ? parseFileAccess(body.fileAccess, projectId, code)
+          : undefined;
       const volume = {
         id: crypto.randomUUID(),
         name,
@@ -1901,40 +2135,75 @@ async function dispatch(request: Request, settleBilling = true) {
     }
   }
   function parseFileAccess(input: unknown, projectId: string, code: Region) {
-    const access = z.object({
-      protocol: z.literal("nfs4.1"),
-      vpcId: z.string().min(1),
-      subnetId: z.string().min(1),
-      allowedCidr: z.string().min(1),
-      accessMode: z.enum(["read_only", "read_write"]),
-      rootSquash: z.boolean(),
-    }).parse(input);
-    const vpc = db.network.vpcs.find((item) =>
-      item.id === access.vpcId && !item.deletedAt && item.projectId === projectId &&
-      item.region === code && vpcNetworkType(item) === "standard");
-    const subnet = db.network.subnets.find((item) =>
-      item.id === access.subnetId && !item.deletedAt && item.vpcId === vpc?.id &&
-      item.projectId === projectId && item.region === code);
+    const access = z
+      .object({
+        protocol: z.literal("nfs4.1"),
+        vpcId: z.string().min(1),
+        subnetId: z.string().min(1),
+        allowedCidr: z.string().min(1),
+        accessMode: z.enum(["read_only", "read_write"]),
+        rootSquash: z.boolean(),
+      })
+      .parse(input);
+    const vpc = db.network.vpcs.find(
+      (item) =>
+        item.id === access.vpcId &&
+        !item.deletedAt &&
+        item.projectId === projectId &&
+        item.region === code &&
+        vpcNetworkType(item) === "standard",
+    );
+    const subnet = db.network.subnets.find(
+      (item) =>
+        item.id === access.subnetId &&
+        !item.deletedAt &&
+        item.vpcId === vpc?.id &&
+        item.projectId === projectId &&
+        item.region === code,
+    );
     if (!vpc || !subnet || !cidrContains(vpc.cidr, access.allowedCidr))
       fail(422, "VALIDATION_ERROR");
     return access;
   }
-  function clusterCanUseFileAccess(cluster: Resource, access: FileAccessConfig) {
-    if (cluster.kind !== "vgpu" || cluster.spec.vpc !== access.vpcId) return false;
-    const subnetIds = cluster.spec.subnets?.length ? cluster.spec.subnets : [cluster.spec.subnet];
+  function clusterCanUseFileAccess(
+    cluster: Resource,
+    access: FileAccessConfig,
+  ) {
+    if (cluster.kind !== "vgpu" || cluster.spec.vpc !== access.vpcId)
+      return false;
+    const subnetIds = cluster.spec.subnets?.length
+      ? cluster.spec.subnets
+      : [cluster.spec.subnet];
     return subnetIds.every((id) => {
-      const subnet = db.network.subnets.find((item) => item.id === id && !item.deletedAt && item.vpcId === access.vpcId);
+      const subnet = db.network.subnets.find(
+        (item) =>
+          item.id === id && !item.deletedAt && item.vpcId === access.vpcId,
+      );
       return !!subnet && cidrContains(access.allowedCidr, subnet.cidr);
     });
   }
-  const fileAccessMatch = path.match(/^\/api\/storage\/volumes\/([^/]+)\/access$/);
+  const fileAccessMatch = path.match(
+    /^\/api\/storage\/volumes\/([^/]+)\/access$/,
+  );
   if (fileAccessMatch && method === "PATCH") {
     if (!canWrite(role)) fail(403, "FORBIDDEN");
-    const volume = db.volumes.find((item) => item.id === fileAccessMatch[1] && !item.deletedAt && !isRegionalPoolVolume(item)) || fail(404, "NOT_FOUND");
+    const volume =
+      db.volumes.find(
+        (item) =>
+          item.id === fileAccessMatch[1] &&
+          !item.deletedAt &&
+          !isRegionalPoolVolume(item),
+      ) || fail(404, "NOT_FOUND");
     if (volume.kind !== "file") fail(422, "VALIDATION_ERROR");
     const nextAccess = parseFileAccess(body, volume.projectId, volume.region);
-    const linkedCluster = db.resources.find((item) => item.resourceUuid === volume.resourceUuid && !item.deletedAt);
-    if (linkedCluster && linkedCluster.kind === "vgpu" && !clusterCanUseFileAccess(linkedCluster, nextAccess))
+    const linkedCluster = db.resources.find(
+      (item) => item.resourceUuid === volume.resourceUuid && !item.deletedAt,
+    );
+    if (
+      linkedCluster &&
+      linkedCluster.kind === "vgpu" &&
+      !clusterCanUseFileAccess(linkedCluster, nextAccess)
+    )
       fail(409, "HAS_DEPENDENCIES");
     volume.fileAccess = nextAccess;
     persist();
@@ -1951,22 +2220,49 @@ async function dispatch(request: Request, settleBilling = true) {
       ) || fail(404, "NOT_FOUND");
     if (isRegionalPoolVolume(volume)) fail(404, "NOT_FOUND");
     const action = volumeActionMatch[2];
-    const attachedCluster = db.resources.find((item) => item.resourceUuid === volume.resourceUuid && item.kind === "vgpu" && !item.deletedAt);
-    const clusterBinding = attachedCluster?.kind === "vgpu" ? attachedCluster.spec.volumeBindings?.find((item) => item.volumeId === volume.id) : undefined;
-    if (volume.role !== "custom" && !(action === "detach" && volume.role === "pvc" && clusterBinding)) fail(409, "HAS_DEPENDENCIES");
+    const attachedCluster = db.resources.find(
+      (item) =>
+        item.resourceUuid === volume.resourceUuid &&
+        item.kind === "vgpu" &&
+        !item.deletedAt,
+    );
+    const clusterBinding =
+      attachedCluster?.kind === "vgpu"
+        ? attachedCluster.spec.volumeBindings?.find(
+            (item) => item.volumeId === volume.id,
+          )
+        : undefined;
+    if (
+      volume.role !== "custom" &&
+      !(action === "detach" && volume.role === "pvc" && clusterBinding)
+    )
+      fail(409, "HAS_DEPENDENCIES");
     if (action === "attach") {
       if (volume.resourceUuid) fail(409, "HAS_DEPENDENCIES");
       const resourceUuid = z.string().min(1).parse(body.resourceUuid);
-      const mountPath = volume.kind === "file"
-        ? z.string().trim().regex(/^\/[A-Za-z0-9/._-]+$/).max(240).parse(body.mountPath)
-        : "";
+      const mountPath =
+        volume.kind === "file"
+          ? z
+              .string()
+              .trim()
+              .regex(/^\/[A-Za-z0-9/._-]+$/)
+              .max(240)
+              .parse(body.mountPath)
+          : "";
       const target =
         db.resources.find(
           (item) => item.resourceUuid === resourceUuid && !item.deletedAt,
         ) || fail(404, "NOT_FOUND");
       if (target.status !== "running") fail(409, "INVALID_STATE");
-      const targetInterface = db.network.interfaces.find((item) => item.resourceUuid === target.resourceUuid && !item.releasedAt);
-      const targetSubnet = db.network.subnets.find((item) => item.id === (targetInterface?.subnetId || ("subnet" in target.spec ? target.spec.subnet : "")));
+      const targetInterface = db.network.interfaces.find(
+        (item) => item.resourceUuid === target.resourceUuid && !item.releasedAt,
+      );
+      const targetSubnet = db.network.subnets.find(
+        (item) =>
+          item.id ===
+          (targetInterface?.subnetId ||
+            ("subnet" in target.spec ? target.spec.subnet : "")),
+      );
       if (
         target.projectId !== volume.projectId ||
         target.region !== volume.region ||
@@ -1975,25 +2271,50 @@ async function dispatch(request: Request, settleBilling = true) {
           : !["gpu_vm", "inference", "vgpu"].includes(target.kind))
       )
         fail(422, "VALIDATION_ERROR");
-      if (volume.kind === "block" && targetSubnet?.zone !== (volume.zone || `${volume.region}-a`)) fail(422, "INVALID_ZONE");
-      if (volume.kind === "file" && (target.kind !== "vgpu" || !volume.fileAccess || !clusterCanUseFileAccess(target, volume.fileAccess)))
+      if (
+        volume.kind === "block" &&
+        targetSubnet?.zone !== (volume.zone || `${volume.region}-a`)
+      )
+        fail(422, "INVALID_ZONE");
+      if (
+        volume.kind === "file" &&
+        (target.kind !== "vgpu" ||
+          !volume.fileAccess ||
+          !clusterCanUseFileAccess(target, volume.fileAccess))
+      )
         fail(422, "VALIDATION_ERROR");
       if (target.kind === "vgpu" && volume.kind === "file") {
         const bindings = target.spec.volumeBindings || [];
-        const index = Array.from({ length: 8 }, (_, i) => i + 1).find((number) => !bindings.some((binding) => binding.pvName === `file-pv-${number}`));
+        const index = Array.from({ length: 8 }, (_, i) => i + 1).find(
+          (number) =>
+            !bindings.some((binding) => binding.pvName === `file-pv-${number}`),
+        );
         if (!index) fail(409, "HAS_DEPENDENCIES");
-        const binding = { volumeId: volume.id, pvName: `file-pv-${index}`, pvcName: `file-pvc-${index}`, namespace: "default" };
+        const binding = {
+          volumeId: volume.id,
+          pvName: `file-pv-${index}`,
+          pvcName: `file-pvc-${index}`,
+          namespace: "default",
+        };
         target.spec.volumeBindings = [...bindings, binding];
         volume.resourceUuid = target.resourceUuid;
         volume.role = "pvc";
         volume.mountPath = `/pvc/default/${binding.pvcName}`;
       } else {
         const selections = target.spec.storageSelections || [];
-        if (mountPath && selections.some((row) => row.mountPath === mountPath)) fail(409, "VALIDATION_ERROR");
+        if (mountPath && selections.some((row) => row.mountPath === mountPath))
+          fail(409, "VALIDATION_ERROR");
         target.spec.storageSelections = [
           ...selections,
-          { key: `attached_${volume.id}`, kind: volume.kind, tier: volume.tier, name: volume.name,
-            sizeGb: volume.sizeGb, count: 1, mountPath },
+          {
+            key: `attached_${volume.id}`,
+            kind: volume.kind,
+            tier: volume.tier,
+            name: volume.name,
+            sizeGb: volume.sizeGb,
+            count: 1,
+            mountPath,
+          },
         ];
         target.spec.storageGb += volume.sizeGb;
         volume.resourceUuid = target.resourceUuid;
@@ -2005,13 +2326,26 @@ async function dispatch(request: Request, settleBilling = true) {
         (item) => item.resourceUuid === volume.resourceUuid,
       );
       if (target?.kind === "vgpu" && clusterBinding) {
-        if ((target.spec.workloads || []).some((workload) => workload.namespace === clusterBinding.namespace && workload.pvcName === clusterBinding.pvcName))
+        if (
+          (target.spec.workloads || []).some(
+            (workload) =>
+              workload.namespace === clusterBinding.namespace &&
+              workload.pvcName === clusterBinding.pvcName,
+          )
+        )
           fail(409, "HAS_DEPENDENCIES");
-        target.spec.volumeBindings = (target.spec.volumeBindings || []).filter((binding) => binding.volumeId !== volume.id);
+        target.spec.volumeBindings = (target.spec.volumeBindings || []).filter(
+          (binding) => binding.volumeId !== volume.id,
+        );
         volume.role = "custom";
       } else if (target) {
-        target.spec.storageSelections = (target.spec.storageSelections || []).filter((row) => row.key !== `attached_${volume.id}`);
-        target.spec.storageGb = Math.max(0, target.spec.storageGb - volume.sizeGb);
+        target.spec.storageSelections = (
+          target.spec.storageSelections || []
+        ).filter((row) => row.key !== `attached_${volume.id}`);
+        target.spec.storageGb = Math.max(
+          0,
+          target.spec.storageGb - volume.sizeGb,
+        );
       }
       volume.resourceUuid = null;
       volume.mountPath = "";
@@ -2023,8 +2357,7 @@ async function dispatch(request: Request, settleBilling = true) {
   const volumeMatch = path.match(/^\/api\/storage\/volumes\/([^/]+)$/);
   if (volumeMatch) {
     const volume =
-      db.volumes.find((v) => v.id === volumeMatch[1]) ||
-      fail(404, "NOT_FOUND");
+      db.volumes.find((v) => v.id === volumeMatch[1]) || fail(404, "NOT_FOUND");
     if (isRegionalPoolVolume(volume)) fail(404, "NOT_FOUND");
     if (method === "DELETE") {
       if (volume.deletedAt) fail(410, "GONE");
@@ -2060,19 +2393,33 @@ async function dispatch(request: Request, settleBilling = true) {
   if (path === "/api/slices/catalog") {
     const selectedRegion = (region || "jp") as Region;
     const projectId = qs.get("project_id") || "";
-    if (!projectInRegion(projectId, selectedRegion)) fail(422, "VALIDATION_ERROR");
-    return json(SLICE_SKUS.map((sku) => {
-      const stock = sliceStock(sku.id, selectedRegion);
-      return { ...sku, hourlyUsd: RATES.find((rate) => rate.kind === "vgpu" && rate.region === selectedRegion && rate.pool === sku.poolCode && rate.unit === "per_slice_hour")?.unitPrice ?? null,
-        physicalGpus: new Set(stock.map((item) => item.physicalGpuId)).size,
-        createdInstances: stock.length,
-        free: stock.filter((item) => item.state === "free").length,
-        reserved: stock.filter((item) => item.state === "reserved").length,
-        allocated: stock.filter((item) => item.state === "allocated").length,
-        maintenance: stock.filter((item) => item.state === "maintenance").length,
-        projectLimit: sliceLimit(projectId), projectUsed: sliceUsed(projectId, selectedRegion),
-      };
-    }));
+    if (!projectInRegion(projectId, selectedRegion))
+      fail(422, "VALIDATION_ERROR");
+    return json(
+      SLICE_SKUS.map((sku) => {
+        const stock = sliceStock(sku.id, selectedRegion);
+        return {
+          ...sku,
+          hourlyUsd:
+            RATES.find(
+              (rate) =>
+                rate.kind === "vgpu" &&
+                rate.region === selectedRegion &&
+                rate.pool === sku.poolCode &&
+                rate.unit === "per_slice_hour",
+            )?.unitPrice ?? null,
+          physicalGpus: new Set(stock.map((item) => item.physicalGpuId)).size,
+          createdInstances: stock.length,
+          free: stock.filter((item) => item.state === "free").length,
+          reserved: stock.filter((item) => item.state === "reserved").length,
+          allocated: stock.filter((item) => item.state === "allocated").length,
+          maintenance: stock.filter((item) => item.state === "maintenance")
+            .length,
+          projectLimit: sliceLimit(projectId),
+          projectUsed: sliceUsed(projectId, selectedRegion),
+        };
+      }),
+    );
   }
   if (path === "/api/quotas")
     return json(quotas().filter((q) => !region || q.region === region));
@@ -2119,7 +2466,13 @@ async function dispatch(request: Request, settleBilling = true) {
       alerts: rs
         .filter((r) => r.status === "error")
         .map((r) => ({ id: r.resourceUuid, type: "error", resource: r })),
-      projects: db.projects.filter((p) => !p.deletedAt).map((p) => ({ id: p.id, name: p.name, defaultRegion: p.defaultRegion })),
+      projects: db.projects
+        .filter((p) => !p.deletedAt)
+        .map((p) => ({
+          id: p.id,
+          name: p.name,
+          defaultRegion: p.defaultRegion,
+        })),
       account: db.account,
     });
   }
@@ -2215,8 +2568,15 @@ async function dispatch(request: Request, settleBilling = true) {
             operation.operation === "delete"
               ? deletedEvent?.id || operation.id
               : operation.operation === "create"
-                ? failedEvent?.id || readyEvent?.id || history[0]?.id || operation.id
-                : history.find((event) => event.id === operation.id.replace(`${operation.operation}-`, ""))?.id || operation.id,
+                ? failedEvent?.id ||
+                  readyEvent?.id ||
+                  history[0]?.id ||
+                  operation.id
+                : history.find(
+                    (event) =>
+                      event.id ===
+                      operation.id.replace(`${operation.operation}-`, ""),
+                  )?.id || operation.id,
           eventSource: "runsun.compute",
           actionName: operation.operation,
           actor:
@@ -2224,12 +2584,25 @@ async function dispatch(request: Request, settleBilling = true) {
               ? deletedEvent?.actor
               : operation.operation === "create"
                 ? failedEvent?.actor || readyEvent?.actor || history[0]?.actor
-                : history.find((event) => event.id === operation.id.replace(`${operation.operation}-`, ""))?.actor) || "enzoOvOyu",
+                : history.find(
+                    (event) =>
+                      event.id ===
+                      operation.id.replace(`${operation.operation}-`, ""),
+                  )?.actor) || "enzoOvOyu",
           requestParameters:
             operation.operation === "create"
-              ? { name: r.name, kind: r.kind, region: r.region, projectId: r.projectId, spec: r.spec }
+              ? {
+                  name: r.name,
+                  kind: r.kind,
+                  region: r.region,
+                  projectId: r.projectId,
+                  spec: r.spec,
+                }
               : { resourceUuid: r.resourceUuid, displayId: r.displayId },
-          errorDetails: createStatus === "failed" && operation.operation === "create" ? failedEvent?.reason || null : null,
+          errorDetails:
+            createStatus === "failed" && operation.operation === "create"
+              ? failedEvent?.reason || null
+              : null,
           relatedEventIds: history.map((event) => event.id),
           resourceUuid: r.resourceUuid,
           displayId: r.displayId,
@@ -2249,31 +2622,63 @@ async function dispatch(request: Request, settleBilling = true) {
     const targetUrl = (section: string, id: string, region: Region) =>
       `/network/${section}?drawer=${encodeURIComponent(id)}&region=${region}`;
     const networkTargets = new Map([
-      ...network.vpcs.map((entity) => [entity.id, {
-        name: entity.name,
-        displayId: formatResourceId("vpc", entity.id, { baremetalVpc: vpcNetworkType(entity) === "baremetal" }),
-        href: targetUrl("vpcs", entity.id, entity.region),
-      }] as const),
-      ...network.subnets.map((entity) => [entity.id, {
-        name: entity.name,
-        displayId: formatResourceId("sub", entity.id),
-        href: targetUrl("vpcs", entity.vpcId, entity.region),
-      }] as const),
-      ...network.groups.map((entity) => [entity.id, {
-        name: entity.name,
-        displayId: formatResourceId("sgr", entity.id),
-        href: targetUrl("security-groups", entity.id, entity.region),
-      }] as const),
-      ...network.eips.map((entity) => [entity.id, {
-        name: entity.name,
-        displayId: formatResourceId("eip", entity.id),
-        href: targetUrl("eips", entity.id, entity.region),
-      }] as const),
-      ...network.tunnels.map((entity) => [entity.id, {
-        name: entity.name,
-        displayId: formatResourceId("tun", entity.id),
-        href: targetUrl("tunnels", entity.id, entity.region),
-      }] as const),
+      ...network.vpcs.map(
+        (entity) =>
+          [
+            entity.id,
+            {
+              name: entity.name,
+              displayId: formatResourceId("vpc", entity.id, {
+                baremetalVpc: vpcNetworkType(entity) === "baremetal",
+              }),
+              href: targetUrl("vpcs", entity.id, entity.region),
+            },
+          ] as const,
+      ),
+      ...network.subnets.map(
+        (entity) =>
+          [
+            entity.id,
+            {
+              name: entity.name,
+              displayId: formatResourceId("sub", entity.id),
+              href: targetUrl("vpcs", entity.vpcId, entity.region),
+            },
+          ] as const,
+      ),
+      ...network.groups.map(
+        (entity) =>
+          [
+            entity.id,
+            {
+              name: entity.name,
+              displayId: formatResourceId("sgr", entity.id),
+              href: targetUrl("security-groups", entity.id, entity.region),
+            },
+          ] as const,
+      ),
+      ...network.eips.map(
+        (entity) =>
+          [
+            entity.id,
+            {
+              name: entity.name,
+              displayId: formatResourceId("eip", entity.id),
+              href: targetUrl("eips", entity.id, entity.region),
+            },
+          ] as const,
+      ),
+      ...network.tunnels.map(
+        (entity) =>
+          [
+            entity.id,
+            {
+              name: entity.name,
+              displayId: formatResourceId("tun", entity.id),
+              href: targetUrl("tunnels", entity.id, entity.region),
+            },
+          ] as const,
+      ),
     ]);
     for (const audit of network.audit) {
       const entity = networkTargets.get(audit.entityId);
@@ -2297,12 +2702,20 @@ async function dispatch(request: Request, settleBilling = true) {
         resourceUuid: null,
         displayId: entity?.displayId || formatResourceId("vpc", audit.entityId),
         resourceName: entity?.name || audit.entityId,
-        targetHref: entity?.href || targetUrl("vpcs", audit.entityId, audit.region),
+        targetHref:
+          entity?.href || targetUrl("vpcs", audit.entityId, audit.region),
         projectId: audit.projectId,
-        projectName: db.projects.find((project) => project.id === audit.projectId)?.name || audit.projectId,
+        projectName:
+          db.projects.find((project) => project.id === audit.projectId)?.name ||
+          audit.projectId,
         region: audit.region,
         kind: null,
-        requestParameters: { entityId: audit.entityId, action, region: audit.region, projectId: audit.projectId },
+        requestParameters: {
+          entityId: audit.entityId,
+          action,
+          region: audit.region,
+          projectId: audit.projectId,
+        },
         errorDetails: null,
         relatedEventIds: [audit.id],
       });
@@ -2321,19 +2734,32 @@ async function dispatch(request: Request, settleBilling = true) {
         completedAt: volume.deletedAt,
         elapsedSeconds: 0,
         resourceUuid: null,
-        displayId: formatResourceId(volume.kind === "block" ? "blk" : "fil", volume.id),
+        displayId: formatResourceId(
+          volume.kind === "block" ? "blk" : "fil",
+          volume.id,
+        ),
         resourceName: volume.name,
         targetHref: `/storage/${volume.kind}?drawer=${encodeURIComponent(volume.id)}&region=${volume.region}`,
         projectId: volume.projectId,
-        projectName: db.projects.find((project) => project.id === volume.projectId)?.name || volume.projectId,
+        projectName:
+          db.projects.find((project) => project.id === volume.projectId)
+            ?.name || volume.projectId,
         region: volume.region,
         kind: null,
-        requestParameters: { volumeId: volume.id, name: volume.name, kind: volume.kind, sizeGb: volume.sizeGb, zone: volume.zone },
+        requestParameters: {
+          volumeId: volume.id,
+          name: volume.name,
+          kind: volume.kind,
+          sizeGb: volume.sizeGb,
+          zone: volume.zone,
+        },
         errorDetails: null,
         relatedEventIds: [`evt-${volume.id}`],
       });
     }
-    return json(operations.sort((a, b) => b.startedAt.localeCompare(a.startedAt)));
+    return json(
+      operations.sort((a, b) => b.startedAt.localeCompare(a.startedAt)),
+    );
   }
   if (path === "/api/notifications") {
     const items: {
@@ -2518,11 +2944,11 @@ async function dispatch(request: Request, settleBilling = true) {
             ? ["allocation", "network", "bmc", "os", "driver", "ready"]
             : r.kind === "vgpu" && r.spec.deploymentMode === "slice"
               ? ["allocation", "workspace", "quota", "ready"]
-            : r.kind === "vgpu"
-              ? ["allocation", "controlplane", "network", "plugins", "ready"]
-              : r.kind === "inference"
-                ? ["allocation", "network", "image", "weights", "ready"]
-                : ["allocation", "network", "image", "driver", "ready"];
+              : r.kind === "vgpu"
+                ? ["allocation", "controlplane", "network", "plugins", "ready"]
+                : r.kind === "inference"
+                  ? ["allocation", "network", "image", "weights", "ready"]
+                  : ["allocation", "network", "image", "driver", "ready"];
         const duration = provisioningSeconds(r, db.models);
         const progress =
           r.status === "running"
@@ -2563,41 +2989,89 @@ async function dispatch(request: Request, settleBilling = true) {
         );
       }
     }
-    if (r.kind === "vgpu" && r.spec.deploymentMode === "slice" &&
-      ["workloads", "cordon", "uncordon", "resize", "access"].includes(action || ""))
+    if (
+      r.kind === "vgpu" &&
+      r.spec.deploymentMode === "slice" &&
+      ["workloads", "cordon", "uncordon", "resize", "access"].includes(
+        action || "",
+      )
+    )
       fail(409, "SLICE_WORKSPACE_MOCK_ONLY");
     if (r.kind === "vgpu" && action === "workloads" && method === "POST") {
       if (r.deletedAt || r.status !== "running") fail(409, "INVALID_STATE");
-      const input = z.object({
-        name: z.string().trim().regex(/^[a-z][a-z0-9-]{0,61}[a-z0-9]$/),
-        namespace: z.string().trim().regex(/^[a-z][a-z0-9-]{0,61}[a-z0-9]$/),
-        kind: z.enum(["Deployment", "StatefulSet", "Job"]),
-        replicas: z.number().int().min(1).max(64),
-        gpuPerPod: z.number().int().min(0).max(72),
-        cpuPerPod: z.number().int().min(1).max(128),
-        memoryGbPerPod: z.number().int().min(1).max(1024),
-        nodePoolName: z.string(),
-        gpuModel: z.string().optional(),
-        selectorKey: z.string().optional(),
-        selectorValue: z.string().optional(),
-        pvcName: z.string().optional(), localStorageGb: z.number().int().min(0).max(32768).optional(),
-        tolerateGpuTaint: z.boolean(),
-      }).parse(body);
-      if (input.nodePoolName && !r.spec.nodePools.some((pool, i) =>
-        (pool.name || `gpu-pool-${i + 1}`) === input.nodePoolName))
+      const input = z
+        .object({
+          name: z
+            .string()
+            .trim()
+            .regex(/^[a-z][a-z0-9-]{0,61}[a-z0-9]$/),
+          namespace: z
+            .string()
+            .trim()
+            .regex(/^[a-z][a-z0-9-]{0,61}[a-z0-9]$/),
+          kind: z.enum(["Deployment", "StatefulSet", "Job"]),
+          replicas: z.number().int().min(1).max(64),
+          gpuPerPod: z.number().int().min(0).max(72),
+          cpuPerPod: z.number().int().min(1).max(128),
+          memoryGbPerPod: z.number().int().min(1).max(1024),
+          nodePoolName: z.string(),
+          gpuModel: z.string().optional(),
+          selectorKey: z.string().optional(),
+          selectorValue: z.string().optional(),
+          pvcName: z.string().optional(),
+          localStorageGb: z.number().int().min(0).max(32768).optional(),
+          tolerateGpuTaint: z.boolean(),
+        })
+        .parse(body);
+      if (
+        input.nodePoolName &&
+        !r.spec.nodePools.some(
+          (pool, i) =>
+            (pool.name || `gpu-pool-${i + 1}`) === input.nodePoolName,
+        )
+      )
         fail(422, "INVALID_NODE_POOL");
-      if (input.gpuModel && !r.spec.nodePools.some((pool) => GPU_SPECS[pool.poolCode].gpuModel === input.gpuModel))
+      if (
+        input.gpuModel &&
+        !r.spec.nodePools.some(
+          (pool) => GPU_SPECS[pool.poolCode].gpuModel === input.gpuModel,
+        )
+      )
         fail(422, "INVALID_GPU_MODEL");
-      if (!!input.selectorKey !== !!input.selectorValue ||
-        (input.selectorKey && !/^[a-z0-9.-]+(?:\/[a-z0-9.-]+)?$/.test(input.selectorKey)))
+      if (
+        !!input.selectorKey !== !!input.selectorValue ||
+        (input.selectorKey &&
+          !/^[a-z0-9.-]+(?:\/[a-z0-9.-]+)?$/.test(input.selectorKey))
+      )
         fail(422, "INVALID_NODE_SELECTOR");
-      if (input.pvcName && !((input.namespace === "default" && clusterView(r).storage.pvcs.some((claim) => claim.name === input.pvcName && claim.status === "Bound")) ||
-        (r.spec.volumeBindings || []).some((binding) => binding.namespace === input.namespace && binding.pvcName === input.pvcName)))
+      if (
+        input.pvcName &&
+        !(
+          (input.namespace === "default" &&
+            clusterView(r).storage.pvcs.some(
+              (claim) =>
+                claim.name === input.pvcName && claim.status === "Bound",
+            )) ||
+          (r.spec.volumeBindings || []).some(
+            (binding) =>
+              binding.namespace === input.namespace &&
+              binding.pvcName === input.pvcName,
+          )
+        )
+      )
         fail(422, "INVALID_CLUSTER_PVC");
-      if (input.localStorageGb && (!r.spec.localPvGb || input.localStorageGb > r.spec.localPvGb))
+      if (
+        input.localStorageGb &&
+        (!r.spec.localPvGb || input.localStorageGb > r.spec.localPvGb)
+      )
         fail(422, "INVALID_LOCAL_PV_SIZE");
-      if ((r.spec.workloads || []).some((workload) =>
-        workload.namespace === input.namespace && workload.name === input.name))
+      if (
+        (r.spec.workloads || []).some(
+          (workload) =>
+            workload.namespace === input.namespace &&
+            workload.name === input.name,
+        )
+      )
         fail(409, "WORKLOAD_NAME_CONFLICT");
       const workload = { ...input, id: crypto.randomUUID() };
       r.spec.workloads = [...(r.spec.workloads || []), workload];
@@ -2605,12 +3079,19 @@ async function dispatch(request: Request, settleBilling = true) {
       persist();
       return json({ workload, cluster: clusterView(r) }, 201);
     }
-    if (r.kind === "vgpu" && action?.startsWith("workloads/") && method === "POST") {
+    if (
+      r.kind === "vgpu" &&
+      action?.startsWith("workloads/") &&
+      method === "POST"
+    ) {
       const [, workloadId, operation] = action.split("/");
       if (operation !== "delete") fail(404, "NOT_FOUND");
       const workloads = r.spec.workloads || [];
-      if (!workloads.some((workload) => workload.id === workloadId)) fail(404, "NOT_FOUND");
-      r.spec.workloads = workloads.filter((workload) => workload.id !== workloadId);
+      if (!workloads.some((workload) => workload.id === workloadId))
+        fail(404, "NOT_FOUND");
+      r.spec.workloads = workloads.filter(
+        (workload) => workload.id !== workloadId,
+      );
       addEvent(r, "workload-deleted", r.status, r.status);
       persist();
       return json(clusterView(r));
@@ -2638,7 +3119,12 @@ async function dispatch(request: Request, settleBilling = true) {
       r.deletedAt = new Date().toISOString();
       for (const volume of db.volumes)
         if (volume.resourceUuid === r.resourceUuid) {
-          if (r.kind === "vgpu" && r.spec.volumeBindings?.some((binding) => binding.volumeId === volume.id)) {
+          if (
+            r.kind === "vgpu" &&
+            r.spec.volumeBindings?.some(
+              (binding) => binding.volumeId === volume.id,
+            )
+          ) {
             volume.resourceUuid = null;
             volume.role = "custom";
             volume.mountPath = "";
@@ -2689,7 +3175,8 @@ async function dispatch(request: Request, settleBilling = true) {
       } else if (action === "retry") {
         if (r.status !== "error") fail(409, "INVALID_STATE");
         precheck(r, r.resourceUuid);
-        if (r.kind === "vgpu" && r.spec.deploymentMode === "slice") reserveSlices(r);
+        if (r.kind === "vgpu" && r.spec.deploymentMode === "slice")
+          reserveSlices(r);
         r.status = "provisioning";
         r.provisioningSince = new Date().toISOString();
         const order = db.orders.find((o) => o.resourceUuid === r.resourceUuid);
@@ -2793,9 +3280,19 @@ async function dispatch(request: Request, settleBilling = true) {
             .max(next.spec.nodePools.length - 1)
             .parse(body.poolIndex);
           const targetPool = next.spec.nodePools[poolIndex];
-          const minNodes = body.minNodes === undefined ? (targetPool.minNodes ?? 1) : z.number().int().min(1).max(64).parse(body.minNodes);
-          const maxNodes = body.maxNodes === undefined ? (targetPool.maxNodes ?? 64) : z.number().int().min(1).max(64).parse(body.maxNodes);
-          if (minNodes > maxNodes || Number(body.count) < minNodes || Number(body.count) > maxNodes)
+          const minNodes =
+            body.minNodes === undefined
+              ? (targetPool.minNodes ?? 1)
+              : z.number().int().min(1).max(64).parse(body.minNodes);
+          const maxNodes =
+            body.maxNodes === undefined
+              ? (targetPool.maxNodes ?? 64)
+              : z.number().int().min(1).max(64).parse(body.maxNodes);
+          if (
+            minNodes > maxNodes ||
+            Number(body.count) < minNodes ||
+            Number(body.count) > maxNodes
+          )
             fail(422, "INVALID_NODE_POOL_RANGE");
           resizePreviousCount = targetPool.nodeCount;
           targetPool.minNodes = minNodes;
@@ -2813,34 +3310,69 @@ async function dispatch(request: Request, settleBilling = true) {
             0,
           );
           next.spec = normalizeSpec(next.spec);
-          if (targetPool.nodeCount < (resizePreviousCount ?? 0) && (r.spec.workloads || []).some((workload) =>
-            Array.from({ length: (resizePreviousCount ?? 0) - targetPool.nodeCount }, (_, offset) =>
-              workload.pvcName === `data-pool${poolIndex + 1}-node${targetPool.nodeCount + offset + 1}` ||
-              workload.pvcName === `local-pool${poolIndex + 1}-node${targetPool.nodeCount + offset + 1}`).some(Boolean)))
+          if (
+            targetPool.nodeCount < (resizePreviousCount ?? 0) &&
+            (r.spec.workloads || []).some((workload) =>
+              Array.from(
+                { length: (resizePreviousCount ?? 0) - targetPool.nodeCount },
+                (_, offset) =>
+                  workload.pvcName ===
+                    `data-pool${poolIndex + 1}-node${targetPool.nodeCount + offset + 1}` ||
+                  workload.pvcName ===
+                    `local-pool${poolIndex + 1}-node${targetPool.nodeCount + offset + 1}`,
+              ).some(Boolean),
+            )
+          )
             fail(409, "INVALID_CLUSTER_PVC");
           precheck(next, r.resourceUuid);
           r.spec = next.spec;
           // Removed node identities must not retain a cordon marker if the pool grows later.
           const prefix = `cluster-node:${r.resourceUuid}-${poolIndex}-`;
           r.labels = r.labels.filter((label) => {
-            if (!label.startsWith(prefix) || !label.endsWith(":cordoned")) return true;
-            const index = Number(label.slice(prefix.length, -":cordoned".length));
+            if (!label.startsWith(prefix) || !label.endsWith(":cordoned"))
+              return true;
+            const index = Number(
+              label.slice(prefix.length, -":cordoned".length),
+            );
             return Number.isInteger(index) && index < targetPool.nodeCount;
           });
         } else fail(422, "VALIDATION_ERROR");
       } else fail(404, "NOT_FOUND");
       if (action === "resize") {
         syncResourceNetwork(db.network, r);
-        if (r.kind === "vgpu" && (r.spec.storageMode === "dynamic_block" || r.spec.storageMode === "existing_block")) {
-          const expected = volumesForResource(r).filter((volume) => volume.role === "pvc");
+        if (
+          r.kind === "vgpu" &&
+          (r.spec.storageMode === "dynamic_block" ||
+            r.spec.storageMode === "existing_block")
+        ) {
+          const expected = volumesForResource(r).filter(
+            (volume) => volume.role === "pvc",
+          );
           const ids = new Set(expected.map((volume) => volume.id));
-          db.volumes = db.volumes.filter((volume) => volume.resourceUuid !== r.resourceUuid || volume.role !== "pvc" || ids.has(volume.id));
+          db.volumes = db.volumes.filter(
+            (volume) =>
+              volume.resourceUuid !== r.resourceUuid ||
+              volume.role !== "pvc" ||
+              ids.has(volume.id),
+          );
           for (const volume of expected) {
             const match = volume.id.match(/-pvc-(\d+)-(\d+)$/)!;
-            const poolIndex = Number(match[1]), index = Number(match[2]);
-            const nodeOffset = r.spec.nodePools.slice(0, poolIndex).reduce((count, pool) => count + pool.nodeCount, 0) + index;
-            const nic = db.network.interfaces.find((item) => item.resourceUuid === r.resourceUuid && !item.releasedAt && item.index === (r.spec.controlPlaneTier === "ha" ? 3 : 1) + nodeOffset);
-            const zone = db.network.subnets.find((subnet) => subnet.id === nic?.subnetId)?.zone || `${r.region}-a`;
+            const poolIndex = Number(match[1]),
+              index = Number(match[2]);
+            const nodeOffset =
+              r.spec.nodePools
+                .slice(0, poolIndex)
+                .reduce((count, pool) => count + pool.nodeCount, 0) + index;
+            const nic = db.network.interfaces.find(
+              (item) =>
+                item.resourceUuid === r.resourceUuid &&
+                !item.releasedAt &&
+                item.index ===
+                  (r.spec.controlPlaneTier === "ha" ? 3 : 1) + nodeOffset,
+            );
+            const zone =
+              db.network.subnets.find((subnet) => subnet.id === nic?.subnetId)
+                ?.zone || `${r.region}-a`;
             const existing = db.volumes.find((item) => item.id === volume.id);
             if (existing) existing.zone = zone;
             else db.volumes.push({ ...volume, zone });
@@ -2917,10 +3449,15 @@ async function dispatch(request: Request, settleBilling = true) {
     if (!projectInRegion(parsed.projectId, parsed.region))
       fail(422, "VALIDATION_ERROR");
     const spec = normalizeSpec(parsed.spec);
-    const windowsOrder = "imageRef" in spec && isWindowsImage(IMAGES.find((image) => image.id === spec.imageRef));
+    const windowsOrder =
+      "imageRef" in spec &&
+      isWindowsImage(IMAGES.find((image) => image.id === spec.imageRef));
     if (windowsOrder && parsed.kind === "gpu_vm") {
-      if (!("authMethod" in spec) || spec.authMethod !== "password" ||
-        !validResourcePassword(String(body.authPassword || "")))
+      if (
+        !("authMethod" in spec) ||
+        spec.authMethod !== "password" ||
+        !validResourcePassword(String(body.authPassword || ""))
+      )
         fail(422, "WINDOWS_PASSWORD_WEAK");
       spec.ports = [WINDOWS_RDP_PORT];
     }
@@ -2942,45 +3479,100 @@ async function dispatch(request: Request, settleBilling = true) {
     if (parsed.kind === "vgpu" && "nodePools" in spec) {
       if (spec.deploymentMode === "slice") {
         const sku = sliceSku(spec.slice?.skuId || "");
-        if (!sku || sku.poolCode !== parsed.nodePool || sku.k8sVersion !== spec.k8sVersion || parsed.mode !== "on_demand" || spec.nodePools.length || spec.scaling ||
+        if (
+          !sku ||
+          sku.poolCode !== parsed.nodePool ||
+          sku.k8sVersion !== spec.k8sVersion ||
+          parsed.mode !== "on_demand" ||
+          spec.nodePools.length ||
+          spec.scaling ||
           !["dynamic_block", "shared_file"].includes(spec.storageMode || "") ||
-          spec.localPvGb || spec.apiServerPublic || spec.ingressEnabled || spec.rbacDefaultAdmin ||
-          (spec.storageSelections || []).length || (spec.workloads || []).length)
+          spec.localPvGb ||
+          spec.apiServerPublic ||
+          spec.ingressEnabled ||
+          spec.rbacDefaultAdmin ||
+          (spec.storageSelections || []).length ||
+          (spec.workloads || []).length
+        )
           fail(422, "INVALID_SLICE_SPEC");
         spec.controlPlaneTier = "standard";
         spec.gpuCount = 0;
         spec.podCidr = "";
         spec.serviceCidr = "";
       }
-      if (spec.rbacDefaultAdmin && role !== "owner" && role !== "admin") fail(403, "FORBIDDEN");
+      if (spec.rbacDefaultAdmin && role !== "owner" && role !== "admin")
+        fail(403, "FORBIDDEN");
       if (!/^[a-z][a-z0-9-]{1,61}[a-z0-9]$/.test(parsed.name))
         fail(422, "INVALID_CLUSTER_NAME");
-      if (db.resources.some((item) => item.kind === "vgpu" && !item.deletedAt &&
-        item.projectId === parsed.projectId && item.region === parsed.region &&
-        item.name.toLowerCase() === parsed.name.toLowerCase()))
+      if (
+        db.resources.some(
+          (item) =>
+            item.kind === "vgpu" &&
+            !item.deletedAt &&
+            item.projectId === parsed.projectId &&
+            item.region === parsed.region &&
+            item.name.toLowerCase() === parsed.name.toLowerCase(),
+        )
+      )
         fail(409, "CLUSTER_NAME_CONFLICT");
       const podCidr = spec.podCidr || "172.20.0.0/16";
       const serviceCidr = spec.serviceCidr || "172.21.0.0/16";
-      const knownVpcCidrs = db.network.vpcs.filter((item) => !item.deletedAt && item.projectId === parsed.projectId && item.region === parsed.region && vpcNetworkType(item) === "standard").map((item) => item.cidr);
-      if (spec.deploymentMode !== "slice" && (!["cilium", "calico"].includes(spec.networkPlugin) || !privateCidr(podCidr) || !privateCidr(serviceCidr) ||
-        !cidrRange(podCidr) || !cidrRange(serviceCidr) ||
-        cidrOverlaps(podCidr, serviceCidr) ||
-        knownVpcCidrs.some((cidr) => cidrOverlaps(podCidr, cidr) || cidrOverlaps(serviceCidr, cidr))))
+      const knownVpcCidrs = db.network.vpcs
+        .filter(
+          (item) =>
+            !item.deletedAt &&
+            item.projectId === parsed.projectId &&
+            item.region === parsed.region &&
+            vpcNetworkType(item) === "standard",
+        )
+        .map((item) => item.cidr);
+      if (
+        spec.deploymentMode !== "slice" &&
+        (!["cilium", "calico"].includes(spec.networkPlugin) ||
+          !privateCidr(podCidr) ||
+          !privateCidr(serviceCidr) ||
+          !cidrRange(podCidr) ||
+          !cidrRange(serviceCidr) ||
+          cidrOverlaps(podCidr, serviceCidr) ||
+          knownVpcCidrs.some(
+            (cidr) =>
+              cidrOverlaps(podCidr, cidr) || cidrOverlaps(serviceCidr, cidr),
+          ))
+      )
         fail(422, "CLUSTER_CIDR_CONFLICT");
-      if (spec.ingressEnabled && (spec.ingressClass !== "nginx" || !spec.securityGroups?.length || !spec.vpc || !spec.subnet))
+      if (
+        spec.ingressEnabled &&
+        (spec.ingressClass !== "nginx" ||
+          !spec.securityGroups?.length ||
+          !spec.vpc ||
+          !spec.subnet)
+      )
         fail(422, "VALIDATION_ERROR");
       if (!spec.ingressEnabled) spec.ingressClass = "";
-      if (!spec.nodePools.every((nodePool) =>
-        (nodePool.minNodes ?? 1) <= nodePool.nodeCount &&
-        nodePool.nodeCount <= (nodePool.maxNodes ?? 64)))
+      if (
+        !spec.nodePools.every(
+          (nodePool) =>
+            (nodePool.minNodes ?? 1) <= nodePool.nodeCount &&
+            nodePool.nodeCount <= (nodePool.maxNodes ?? 64),
+        )
+      )
         fail(422, "INVALID_NODE_POOL_RANGE");
-      if (spec.deploymentMode !== "slice" && !spec.nodePools.every((nodePool) => {
-        const image = IMAGES.find((item) => item.id === (nodePool.imageRef || "ubuntu-22.04"));
-        const hardware = GPU_SPECS[nodePool.poolCode];
-        return image?.type === "os" && image.osFamily !== "Windows Server" &&
-          image.architectures.includes(hardware.cpuArchitecture) &&
-          image.supportedGpuModels.includes(nodePool.poolCode);
-      })) fail(422, "INVALID_NODE_IMAGE");
+      if (
+        spec.deploymentMode !== "slice" &&
+        !spec.nodePools.every((nodePool) => {
+          const image = IMAGES.find(
+            (item) => item.id === (nodePool.imageRef || "ubuntu-22.04"),
+          );
+          const hardware = GPU_SPECS[nodePool.poolCode];
+          return (
+            image?.type === "os" &&
+            image.osFamily !== "Windows Server" &&
+            image.architectures.includes(hardware.cpuArchitecture) &&
+            image.supportedGpuModels.includes(nodePool.poolCode)
+          );
+        })
+      )
+        fail(422, "INVALID_NODE_IMAGE");
       if (spec.deploymentMode !== "slice") {
         spec.podCidr = podCidr;
         spec.serviceCidr = serviceCidr;
@@ -2990,9 +3582,15 @@ async function dispatch(request: Request, settleBilling = true) {
       spec.nodePools = spec.nodePools.map((pool) => ({
         ...pool,
         gpuPerNode: GPU_SPECS[pool.poolCode].gpusPerNode,
-        ...(spec.deploymentMode === "exclusive" ? { slicingPolicy: "none", migProfile: "", timeSliceShare: 2 } : {}),
+        ...(spec.deploymentMode === "exclusive"
+          ? { slicingPolicy: "none", migProfile: "", timeSliceShare: 2 }
+          : {}),
       }));
-    if (parsed.kind === "vgpu" && "nodePools" in spec && spec.deploymentMode !== "slice")
+    if (
+      parsed.kind === "vgpu" &&
+      "nodePools" in spec &&
+      spec.deploymentMode !== "slice"
+    )
       spec.gpuCount = spec.nodePools.reduce(
         (a, p) => a + p.nodeCount * GPU_SPECS[p.poolCode].gpusPerNode,
         0,
@@ -3009,31 +3607,80 @@ async function dispatch(request: Request, settleBilling = true) {
     );
     if (parsed.kind === "vgpu" && "nodePools" in spec) {
       const bindings = spec.volumeBindings || [];
-      if (new Set(bindings.map((binding) => binding.volumeId)).size !== bindings.length ||
-        new Set(bindings.map((binding) => binding.pvName)).size !== bindings.length ||
-        new Set(bindings.map((binding) => `${binding.namespace}/${binding.pvcName}`)).size !== bindings.length)
+      if (
+        new Set(bindings.map((binding) => binding.volumeId)).size !==
+          bindings.length ||
+        new Set(bindings.map((binding) => binding.pvName)).size !==
+          bindings.length ||
+        new Set(
+          bindings.map((binding) => `${binding.namespace}/${binding.pvcName}`),
+        ).size !== bindings.length
+      )
         fail(422, "INVALID_CLUSTER_VOLUME_BINDING");
-      const selectedSubnets = (spec.subnets?.length ? spec.subnets : [spec.subnet]).map((id) => db.network.subnets.find((subnet) => subnet.id === id));
+      const selectedSubnets = (
+        spec.subnets?.length ? spec.subnets : [spec.subnet]
+      ).map((id) => db.network.subnets.find((subnet) => subnet.id === id));
       const controlPlaneNodes = spec.controlPlaneTier === "ha" ? 3 : 1;
-      const nodeCount = spec.nodePools.reduce((count, pool) => count + pool.nodeCount, 0);
-      const selectedZones = new Set(Array.from({ length: nodeCount }, (_, index) => selectedSubnets[(controlPlaneNodes + index) % selectedSubnets.length]?.zone));
+      const nodeCount = spec.nodePools.reduce(
+        (count, pool) => count + pool.nodeCount,
+        0,
+      );
+      const selectedZones = new Set(
+        Array.from(
+          { length: nodeCount },
+          (_, index) =>
+            selectedSubnets[
+              (controlPlaneNodes + index) % selectedSubnets.length
+            ]?.zone,
+        ),
+      );
       for (const binding of bindings) {
-        const volume = db.volumes.find((item) => item.id === binding.volumeId && !item.deletedAt);
-        if (!volume || !["block", "file"].includes(volume.kind) || volume.role !== "custom" || volume.resourceUuid || volume.sizeGb <= 0 ||
-          volume.projectId !== parsed.projectId || volume.region !== parsed.region ||
-          (volume.kind === "block" && selectedZones.size && !selectedZones.has(volume.zone || `${volume.region}-a`)))
+        const volume = db.volumes.find(
+          (item) => item.id === binding.volumeId && !item.deletedAt,
+        );
+        if (
+          !volume ||
+          !["block", "file"].includes(volume.kind) ||
+          volume.role !== "custom" ||
+          volume.resourceUuid ||
+          volume.sizeGb <= 0 ||
+          volume.projectId !== parsed.projectId ||
+          volume.region !== parsed.region ||
+          (volume.kind === "block" &&
+            selectedZones.size &&
+            !selectedZones.has(volume.zone || `${volume.region}-a`))
+        )
           fail(422, "INVALID_CLUSTER_VOLUME_BINDING");
       }
-      if (spec.storageMode && (
-        ((spec.storageMode === "dynamic_block" || spec.storageMode === "existing_block" || spec.storageMode === "shared_file") &&
-          (bindings.length > 0 || !!spec.localPvGb || !Number.isInteger(spec.defaultPvcGb) || spec.defaultPvcGb <= 0 ||
-            (spec.storageMode === "shared_file" ? spec.storageClass !== "shared-fs" : spec.storageClass === "shared-fs"))) ||
-        (spec.storageMode === "local_nvme" && (bindings.length > 0 || spec.defaultPvcGb > 0 || !spec.localPvGb))
-      )) fail(422, "INVALID_CLUSTER_VOLUME_BINDING");
-      if (spec.localPvGb && spec.nodePools.some((nodePool) => spec.localPvGb! > GPU_SPECS[nodePool.poolCode].localNvmeGb))
+      if (
+        spec.storageMode &&
+        (((spec.storageMode === "dynamic_block" ||
+          spec.storageMode === "existing_block" ||
+          spec.storageMode === "shared_file") &&
+          (bindings.length > 0 ||
+            !!spec.localPvGb ||
+            !Number.isInteger(spec.defaultPvcGb) ||
+            spec.defaultPvcGb <= 0 ||
+            (spec.storageMode === "shared_file"
+              ? spec.storageClass !== "shared-fs"
+              : spec.storageClass === "shared-fs"))) ||
+          (spec.storageMode === "local_nvme" &&
+            (bindings.length > 0 || spec.defaultPvcGb > 0 || !spec.localPvGb)))
+      )
+        fail(422, "INVALID_CLUSTER_VOLUME_BINDING");
+      if (
+        spec.localPvGb &&
+        spec.nodePools.some(
+          (nodePool) =>
+            spec.localPvGb! > GPU_SPECS[nodePool.poolCode].localNvmeGb,
+        )
+      )
         fail(422, "INVALID_LOCAL_PV_SIZE");
     }
-    if (parsed.kind !== "vgpu" && (spec.storageSelections || []).some((row) => row.kind !== "block"))
+    if (
+      parsed.kind !== "vgpu" &&
+      (spec.storageSelections || []).some((row) => row.kind !== "block")
+    )
       fail(422, "INVALID_STORAGE_SPEC");
     const r = {
       ...parsed,
@@ -3051,10 +3698,12 @@ async function dispatch(request: Request, settleBilling = true) {
     } as Resource;
     precheck(r);
     const priceSnapshot = estimate(r, RATES);
-    if (r.kind === "vgpu" && r.spec.deploymentMode === "slice") reserveSlices(r);
-    const networkBeforeCreate = r.kind === "gpu_vm" && r.spec.publicIp
-      ? structuredClone(db.network)
-      : null;
+    if (r.kind === "vgpu" && r.spec.deploymentMode === "slice")
+      reserveSlices(r);
+    const networkBeforeCreate =
+      r.kind === "gpu_vm" && r.spec.publicIp
+        ? structuredClone(db.network)
+        : null;
     try {
       syncResourceNetwork(db.network, r);
     } catch (error) {
@@ -3064,12 +3713,15 @@ async function dispatch(request: Request, settleBilling = true) {
     }
     try {
       db.resources.push(r);
-      if (r.kind === "vgpu") for (const binding of r.spec.volumeBindings || []) {
-        const volume = db.volumes.find((item) => item.id === binding.volumeId)!;
-        volume.resourceUuid = r.resourceUuid;
-        volume.role = "pvc";
-        volume.mountPath = `/pvc/${binding.namespace}/${binding.pvcName}`;
-      }
+      if (r.kind === "vgpu")
+        for (const binding of r.spec.volumeBindings || []) {
+          const volume = db.volumes.find(
+            (item) => item.id === binding.volumeId,
+          )!;
+          volume.resourceUuid = r.resourceUuid;
+          volume.role = "pvc";
+          volume.mountPath = `/pvc/${binding.namespace}/${binding.pvcName}`;
+        }
       if (
         (r.kind === "gpu_vm" || r.kind === "gpu_baremetal") &&
         r.spec.authMethod === "password"
@@ -3078,16 +3730,38 @@ async function dispatch(request: Request, settleBilling = true) {
         db.consolePasswordFingerprints[r.resourceUuid] =
           consolePasswordFingerprint(r.resourceUuid, password);
       }
-      db.volumes.push(...volumesForResource(r).map((volume) => r.kind === "vgpu" ? {
-        ...volume, zone: (() => {
-          if (volume.kind === "file") return undefined;
-          const match = volume.id.match(/-pvc-(\d+)-(\d+)$/);
-          const nodeIndex = match ? r.spec.nodePools.slice(0, Number(match[1])).reduce((count, pool) => count + pool.nodeCount, 0) + Number(match[2]) : 0;
-          const controlPlaneNodes = r.spec.controlPlaneTier === "ha" ? 3 : 1;
-          const nic = db.network.interfaces.find((item) => item.resourceUuid === r.resourceUuid && !item.releasedAt && item.index === controlPlaneNodes + nodeIndex);
-          return db.network.subnets.find((subnet) => subnet.id === nic?.subnetId)?.zone || `${r.region}-a`;
-        })(),
-      } : volume));
+      db.volumes.push(
+        ...volumesForResource(r).map((volume) =>
+          r.kind === "vgpu"
+            ? {
+                ...volume,
+                zone: (() => {
+                  if (volume.kind === "file") return undefined;
+                  const match = volume.id.match(/-pvc-(\d+)-(\d+)$/);
+                  const nodeIndex = match
+                    ? r.spec.nodePools
+                        .slice(0, Number(match[1]))
+                        .reduce((count, pool) => count + pool.nodeCount, 0) +
+                      Number(match[2])
+                    : 0;
+                  const controlPlaneNodes =
+                    r.spec.controlPlaneTier === "ha" ? 3 : 1;
+                  const nic = db.network.interfaces.find(
+                    (item) =>
+                      item.resourceUuid === r.resourceUuid &&
+                      !item.releasedAt &&
+                      item.index === controlPlaneNodes + nodeIndex,
+                  );
+                  return (
+                    db.network.subnets.find(
+                      (subnet) => subnet.id === nic?.subnetId,
+                    )?.zone || `${r.region}-a`
+                  );
+                })(),
+              }
+            : volume,
+        ),
+      );
       for (const row of spec.storageSelections || []) {
         if (row.kind !== "object") continue;
         db.buckets.push({
@@ -3144,11 +3818,21 @@ async function dispatch(request: Request, settleBilling = true) {
     } catch (error) {
       if (r.kind === "vgpu" && r.spec.deploymentMode === "slice") {
         releaseSlices(r);
-        db.resources = db.resources.filter((item) => item.resourceUuid !== r.resourceUuid);
-        db.volumes = db.volumes.filter((item) => item.resourceUuid !== r.resourceUuid);
-        db.orders = db.orders.filter((item) => item.resourceUuid !== r.resourceUuid);
-        db.policies = db.policies.filter((item) => item.resourceUuid !== r.resourceUuid);
-        db.events = db.events.filter((item) => item.resourceUuid !== r.resourceUuid);
+        db.resources = db.resources.filter(
+          (item) => item.resourceUuid !== r.resourceUuid,
+        );
+        db.volumes = db.volumes.filter(
+          (item) => item.resourceUuid !== r.resourceUuid,
+        );
+        db.orders = db.orders.filter(
+          (item) => item.resourceUuid !== r.resourceUuid,
+        );
+        db.policies = db.policies.filter(
+          (item) => item.resourceUuid !== r.resourceUuid,
+        );
+        db.events = db.events.filter(
+          (item) => item.resourceUuid !== r.resourceUuid,
+        );
         releaseResourceNetwork(db.network, r.resourceUuid);
       }
       throw error;
@@ -3275,7 +3959,10 @@ async function dispatch(request: Request, settleBilling = true) {
         id: crypto.randomUUID(),
         name,
         slug,
-        isDefault: !db.projects.some((project) => !project.deletedAt && project.defaultRegion === selectedRegion),
+        isDefault: !db.projects.some(
+          (project) =>
+            !project.deletedAt && project.defaultRegion === selectedRegion,
+        ),
         defaultRegion: selectedRegion,
         labels: [],
         createdAt: new Date().toISOString(),
@@ -3328,7 +4015,9 @@ async function dispatch(request: Request, settleBilling = true) {
           new Date().toISOString().slice(0, 7),
           null,
           p.id,
-        ).trend.filter((point) => point.date <= new Date().toISOString().slice(0, 10)),
+        ).trend.filter(
+          (point) => point.date <= new Date().toISOString().slice(0, 10),
+        ),
       });
     }
     if (method === "DELETE") {
@@ -3382,7 +4071,8 @@ async function dispatch(request: Request, settleBilling = true) {
           .parse(body.members);
       } else {
         if (body.name) p.name = z.string().min(2).max(63).parse(body.name);
-        if (body.defaultRegion && body.defaultRegion !== p.defaultRegion) fail(409, "PROJECT_REGION_IMMUTABLE");
+        if (body.defaultRegion && body.defaultRegion !== p.defaultRegion)
+          fail(409, "PROJECT_REGION_IMMUTABLE");
         if (body.labels) p.labels = z.array(z.string()).parse(body.labels);
       }
       persist();
@@ -3506,6 +4196,21 @@ async function dispatch(request: Request, settleBilling = true) {
       };
       db.policies.push(p);
       r.spec.scaling = config;
+      db.events.unshift({
+        id: crypto.randomUUID(),
+        resourceUuid: r.resourceUuid,
+        type: "scaling_policy_created",
+        at: new Date().toISOString(),
+        actor: "enzoOvOyu",
+        component: "autoscaling",
+        reason: "Scaling policy created",
+        before: "—",
+        after: JSON.stringify(config),
+        action: "update",
+        metric: "scaling_policy",
+        value: config.max_size,
+        threshold: config.min_size,
+      });
       persist();
       return json(p, 201);
     }
@@ -3518,9 +4223,26 @@ async function dispatch(request: Request, settleBilling = true) {
       if (r.status === "running") fail(409, "POLICY_BOUND_RESOURCE_RUNNING");
       db.policies = db.policies.filter((x) => x.id !== p.id);
       r.spec.scaling = null;
+      db.events.unshift({
+        id: crypto.randomUUID(),
+        resourceUuid: r.resourceUuid,
+        type: "scaling_policy_deleted",
+        at: new Date().toISOString(),
+        actor: "enzoOvOyu",
+        component: "autoscaling",
+        reason: "Scaling policy deleted",
+        before: JSON.stringify(p.config),
+        after: "—",
+        action: "update",
+        metric: "scaling_policy",
+        value: p.config.max_size,
+        threshold: p.config.min_size,
+      });
+      persist();
       return done();
     }
     if (method === "PATCH") {
+      const previous = JSON.stringify({ config: p.config, status: p.status });
       if (body.config) {
         const config = scalingSchema.parse(body.config);
         precheck(
@@ -3533,10 +4255,43 @@ async function dispatch(request: Request, settleBilling = true) {
       if (body.status)
         p.status = z.enum(["active", "paused"]).parse(body.status);
       p.updatedAt = new Date().toISOString();
+      const next = JSON.stringify({ config: p.config, status: p.status });
+      if (previous !== next) {
+        const changeType = body.status
+          ? p.status === "paused"
+            ? "scaling_policy_paused"
+            : "scaling_policy_resumed"
+          : "scaling_policy_updated";
+        db.events.unshift({
+          id: crypto.randomUUID(),
+          resourceUuid: r.resourceUuid,
+          type: changeType,
+          at: p.updatedAt,
+          actor: "enzoOvOyu",
+          component: "autoscaling",
+          reason: "Scaling policy changed",
+          before: previous,
+          after: next,
+          action: "update",
+          metric: "scaling_policy",
+          value: p.config.max_size,
+          threshold: p.config.min_size,
+        });
+      }
       persist();
       return json(p);
     }
   }
+  if (path === "/api/scaling/changes")
+    return json(
+      db.events
+        .filter(
+          (event) =>
+            event.component === "autoscaling" &&
+            (!region || resource(event.resourceUuid).region === region),
+        )
+        .sort((a, b) => b.at.localeCompare(a.at)),
+    );
   if (path === "/api/scaling/events")
     return json(
       db.scalingEvents
@@ -3565,9 +4320,10 @@ async function dispatch(request: Request, settleBilling = true) {
       usage,
       invoices,
       transactions: db.transactions
-        .filter((transaction) =>
-          transaction.at.startsWith(billingPeriod) &&
-          visibleTransaction(transaction.type, transaction.amount),
+        .filter(
+          (transaction) =>
+            transaction.at.startsWith(billingPeriod) &&
+            visibleTransaction(transaction.type, transaction.amount),
         )
         .sort((a, b) => b.at.localeCompare(a.at))
         .slice(0, 100),
@@ -3958,10 +4714,7 @@ async function dispatch(request: Request, settleBilling = true) {
         fail(422, "VALIDATION_ERROR");
       const code = z.enum(REGIONS).parse(body.region);
       const projectId = z.string().min(1).parse(body.projectId);
-      if (
-        !projectInRegion(projectId, code)
-      )
-        fail(422, "VALIDATION_ERROR");
+      if (!projectInRegion(projectId, code)) fail(422, "VALIDATION_ERROR");
       const quotaGb = z
         .number()
         .int()
@@ -3979,10 +4732,19 @@ async function dispatch(request: Request, settleBilling = true) {
           .parse(body.storageClass),
         attachedResourceUuid: null,
         access: "private" as const,
-        blockPublicAccess: z.boolean().default(true).parse(body.blockPublicAccess),
-        defaultEncryption: z.boolean().default(true).parse(body.defaultEncryption),
+        blockPublicAccess: z
+          .boolean()
+          .default(true)
+          .parse(body.blockPublicAccess),
+        defaultEncryption: z
+          .boolean()
+          .default(true)
+          .parse(body.defaultEncryption),
         versioning: z.boolean().default(false).parse(body.versioning),
-        tags: z.record(z.string().min(1).max(128), z.string().max(256)).default({}).parse(body.tags),
+        tags: z
+          .record(z.string().min(1).max(128), z.string().max(256))
+          .default({})
+          .parse(body.tags),
         status: "active" as const,
         quotaGb,
         createdAt: new Date().toISOString(),
@@ -4013,7 +4775,8 @@ async function dispatch(request: Request, settleBilling = true) {
           continue;
         if (rule.action === "delete") {
           await deleteObject(`${b.id}:${object.key}`);
-          if (object.versionId) await deleteObject(`${b.id}:${object.key}:${object.versionId}`);
+          if (object.versionId)
+            await deleteObject(`${b.id}:${object.key}:${object.versionId}`);
           for (const version of object.previousVersions || [])
             await deleteObject(`${b.id}:${object.key}:${version.versionId}`);
           b.objects = b.objects.filter((item) => item.key !== object.key);
@@ -4028,7 +4791,8 @@ async function dispatch(request: Request, settleBilling = true) {
     if (lifecycleChanged) persist();
     const part = bm[2];
     if (method === "DELETE" && !part) {
-      if (b.fileInterface) fail(409, "BUCKET_IN_USE", { fileInterfaceId: b.fileInterface.id });
+      if (b.fileInterface)
+        fail(409, "BUCKET_IN_USE", { fileInterfaceId: b.fileInterface.id });
       if (b.references.length)
         fail(409, "BUCKET_IN_USE", { references: b.references });
       if (b.objects.length)
@@ -4038,7 +4802,8 @@ async function dispatch(request: Request, settleBilling = true) {
             href: `/storage/object?drawer=${b.id}`,
           })),
         });
-      if (b.lifecycle.length) fail(409, "BUCKET_IN_USE", { rules: b.lifecycle.length });
+      if (b.lifecycle.length)
+        fail(409, "BUCKET_IN_USE", { rules: b.lifecycle.length });
       db.buckets = db.buckets.filter((x) => x.id !== b.id);
       return done();
     }
@@ -4067,48 +4832,84 @@ async function dispatch(request: Request, settleBilling = true) {
         return json({
           prefixes,
           objects: children.filter(
-            (o) => o.key !== prefix && !o.key.slice(prefix.length).includes("/"),
+            (o) =>
+              o.key !== prefix && !o.key.slice(prefix.length).includes("/"),
           ),
         });
       }
       if (method === "POST") {
         const key = z.string().min(1).max(1024).parse(body.key);
-        if (key.startsWith("/") || key.includes("//")) fail(422, "VALIDATION_ERROR");
+        if (key.startsWith("/") || key.includes("//"))
+          fail(422, "VALIDATION_ERROR");
         const folder = key.endsWith("/");
         const content = String(body.content || "");
         const objectSize = z.number().int().nonnegative().parse(body.size);
-        if (folder && (objectSize !== 0 || content)) fail(422, "VALIDATION_ERROR");
+        if (folder && (objectSize !== 0 || content))
+          fail(422, "VALIDATION_ERROR");
         if (objectSize > 20_000_000) fail(422, "INVALID_FILE");
         const previous = b.objects.find((item) => item.key === key);
         if (folder && previous) fail(409, "VALIDATION_ERROR");
-        const archived = previous && (b.versioning || !!previous.versionId) ? {
-          versionId: previous.versionId || crypto.randomUUID(), size: previous.size,
-          contentType: previous.contentType, etag: previous.etag, storageClass: previous.storageClass,
-          updatedAt: previous.updatedAt, encryption: previous.encryption || "SSE" as const,
-          tags: previous.tags || {},
-        } : null;
+        const archived =
+          previous && (b.versioning || !!previous.versionId)
+            ? {
+                versionId: previous.versionId || crypto.randomUUID(),
+                size: previous.size,
+                contentType: previous.contentType,
+                etag: previous.etag,
+                storageClass: previous.storageClass,
+                updatedAt: previous.updatedAt,
+                encryption: previous.encryption || ("SSE" as const),
+                tags: previous.tags || {},
+              }
+            : null;
         const versionId = b.versioning ? crypto.randomUUID() : undefined;
         const object: StorageObject = {
-          key, size: objectSize, contentType: folder ? "application/x-directory" : String(body.contentType || "application/octet-stream"),
-          etag: crypto.randomUUID(), storageClass: b.storageClass || "STANDARD",
-          updatedAt: new Date().toISOString(), encryption: b.defaultEncryption === false ? "none" : "SSE",
-          tags: {}, versionId,
-          previousVersions: [...(previous?.previousVersions || []), ...(archived ? [archived] : [])],
+          key,
+          size: objectSize,
+          contentType: folder
+            ? "application/x-directory"
+            : String(body.contentType || "application/octet-stream"),
+          etag: crypto.randomUUID(),
+          storageClass: b.storageClass || "STANDARD",
+          updatedAt: new Date().toISOString(),
+          encryption: b.defaultEncryption === false ? "none" : "SSE",
+          tags: {},
+          versionId,
+          previousVersions: [
+            ...(previous?.previousVersions || []),
+            ...(archived ? [archived] : []),
+          ],
         };
-        const nextBytes = bucketStoredBytes(b) - (previous ? objectStoredBytes(previous) : 0) + objectStoredBytes(object);
+        const nextBytes =
+          bucketStoredBytes(b) -
+          (previous ? objectStoredBytes(previous) : 0) +
+          objectStoredBytes(object);
         if (nextBytes > b.quotaGb * 1e9) fail(409, "BUCKET_LIMIT_EXCEEDED");
-        const regionalBytes = db.buckets.filter((bucket) => bucket.region === b.region)
+        const regionalBytes = db.buckets
+          .filter((bucket) => bucket.region === b.region)
           .reduce((sum, bucket) => sum + bucketStoredBytes(bucket), 0);
-        if (regionalBytes - (previous ? objectStoredBytes(previous) : 0) + objectStoredBytes(object) > storageLimits[b.region].object * 1e9)
+        if (
+          regionalBytes -
+            (previous ? objectStoredBytes(previous) : 0) +
+            objectStoredBytes(object) >
+          storageLimits[b.region].object * 1e9
+        )
           fail(409, "QUOTA_EXCEEDED", { metric: "storage", kind: "object" });
         try {
           if (archived) {
             const oldContent = await getObject(`${b.id}:${key}`);
-            if (oldContent) await putObject(`${b.id}:${key}:${archived.versionId}`, oldContent);
+            if (oldContent)
+              await putObject(
+                `${b.id}:${key}:${archived.versionId}`,
+                oldContent,
+              );
           }
           await putObject(`${b.id}:${key}`, content);
-          if (versionId) await putObject(`${b.id}:${key}:${versionId}`, content);
-        } catch { fail(500, "INTERNAL"); }
+          if (versionId)
+            await putObject(`${b.id}:${key}:${versionId}`, content);
+        } catch {
+          fail(500, "INTERNAL");
+        }
         b.objects = b.objects.filter((item) => item.key !== key);
         b.objects.push(object);
         persist();
@@ -4116,12 +4917,14 @@ async function dispatch(request: Request, settleBilling = true) {
       }
       if (method === "DELETE") {
         const key = qs.get("key") || "";
-        const object = b.objects.find((item) => item.key === key) || fail(404, "NOT_FOUND");
+        const object =
+          b.objects.find((item) => item.key === key) || fail(404, "NOT_FOUND");
         b.objects = b.objects.filter((item) => item.key !== key);
         await deleteObject(`${b.id}:${key}`);
         for (const version of object.previousVersions || [])
           await deleteObject(`${b.id}:${key}:${version.versionId}`);
-        if (object.versionId) await deleteObject(`${b.id}:${key}:${object.versionId}`);
+        if (object.versionId)
+          await deleteObject(`${b.id}:${key}:${object.versionId}`);
         return done();
       }
     }
@@ -4135,9 +4938,15 @@ async function dispatch(request: Request, settleBilling = true) {
         .max(604800)
         .parse(qs.get("expires") || 3600);
       const versionId = qs.get("version_id");
-      if (versionId && versionId !== o.versionId && !o.previousVersions?.some((version) => version.versionId === versionId))
+      if (
+        versionId &&
+        versionId !== o.versionId &&
+        !o.previousVersions?.some((version) => version.versionId === versionId)
+      )
         fail(404, "NOT_FOUND");
-      const content = await getObject(`${b.id}:${key}${versionId ? `:${versionId}` : ""}`);
+      const content = await getObject(
+        `${b.id}:${key}${versionId ? `:${versionId}` : ""}`,
+      );
       return json({
         url:
           content ||
@@ -4149,17 +4958,26 @@ async function dispatch(request: Request, settleBilling = true) {
       if (method === "PUT") {
         if (b.fileInterface) fail(409, "FILE_INTERFACE_EXISTS");
         if (!b.versioning) fail(409, "VERSIONING_REQUIRED");
-        const input = z.object({ prefix: z.string().max(1024), vpcId: z.string().min(1) }).parse(body);
+        const input = z
+          .object({ prefix: z.string().max(1024), vpcId: z.string().min(1) })
+          .parse(body);
         const prefix = fileScopePrefix(input.prefix);
         if (prefix === null) fail(422, "INVALID_FILE_PATH");
-        const vpc = db.network.vpcs.find((item) =>
-          item.id === input.vpcId && !item.deletedAt && item.projectId === b.projectId &&
-          item.region === b.region && vpcNetworkType(item) === "standard",
+        const vpc = db.network.vpcs.find(
+          (item) =>
+            item.id === input.vpcId &&
+            !item.deletedAt &&
+            item.projectId === b.projectId &&
+            item.region === b.region &&
+            vpcNetworkType(item) === "standard",
         );
         if (!vpc) fail(409, "NETWORK_SCOPE_MISMATCH");
         b.fileInterface = {
-          id: crypto.randomUUID(), prefix, vpcId: vpc.id,
-          createdAt: new Date().toISOString(), status: "simulated",
+          id: crypto.randomUUID(),
+          prefix,
+          vpcId: vpc.id,
+          createdAt: new Date().toISOString(),
+          status: "simulated",
         };
         persist();
         return json(b.fileInterface);
@@ -4174,16 +4992,24 @@ async function dispatch(request: Request, settleBilling = true) {
     }
     if (part === "settings") {
       if (method !== "PUT") fail(405, "METHOD_NOT_ALLOWED");
-      const config = z.object({
-        blockPublicAccess: z.boolean(), defaultEncryption: z.boolean(), versioning: z.boolean(),
-        access: z.enum(["private", "public_read"]),
-        tags: z.record(z.string().min(1).max(128), z.string().max(256)),
-      }).parse(body);
-      if (config.access === "public_read" && config.blockPublicAccess) fail(422, "VALIDATION_ERROR");
-      if (b.fileInterface && !config.versioning) fail(409, "VERSIONING_REQUIRED");
-      if ((b.blockPublicAccess !== false && !config.blockPublicAccess) ||
-          (b.defaultEncryption !== false && !config.defaultEncryption) ||
-          (b.access === "private" && config.access === "public_read")) {
+      const config = z
+        .object({
+          blockPublicAccess: z.boolean(),
+          defaultEncryption: z.boolean(),
+          versioning: z.boolean(),
+          access: z.enum(["private", "public_read"]),
+          tags: z.record(z.string().min(1).max(128), z.string().max(256)),
+        })
+        .parse(body);
+      if (config.access === "public_read" && config.blockPublicAccess)
+        fail(422, "VALIDATION_ERROR");
+      if (b.fileInterface && !config.versioning)
+        fail(409, "VERSIONING_REQUIRED");
+      if (
+        (b.blockPublicAccess !== false && !config.blockPublicAccess) ||
+        (b.defaultEncryption !== false && !config.defaultEncryption) ||
+        (b.access === "private" && config.access === "public_read")
+      ) {
         if (body.confirm !== b.name) fail(422, "CONFIRM_MISMATCH");
       }
       Object.assign(b, config);
