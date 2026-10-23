@@ -379,6 +379,30 @@ export function ProjectDetail() {
               {p.isDefault && (
                 <span className="chip">{t("project.default")}</span>
               )}
+              <div className="stack" style={{ marginTop: 16 }}>
+                <Field label={t("project.name")}>
+                  <input
+                    className="input"
+                    value={name || p.name}
+                    onChange={(event) => setName(event.target.value)}
+                    disabled={!canManageOrg(role) || !!p.deletedAt}
+                  />
+                </Field>
+                <Button
+                  disabled={
+                    !canManageOrg(role) || !!p.deletedAt || busy ||
+                    (name.trim() || p.name).length < 2 ||
+                    (name.trim() || p.name) === p.name
+                  }
+                  onClick={async () => {
+                    const nextName = name.trim() || p.name;
+                    const saved = await run(() => patch(`${EP.projects}/${p.id}`, { name: nextName }));
+                    if (saved) setName(nextName);
+                  }}
+                >
+                  {t("common.save")}
+                </Button>
+              </div>
             </Panel>
           </div>
         </div>
@@ -556,49 +580,28 @@ export function ProjectDetail() {
           </Panel>
         </div>
       ) : (
-        <Panel title={t("project.settings")}>
-          <div className="stack">
-            <Field label={t("project.name")}>
-              <input
-                className="input"
-                value={name || p.name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </Field>
-            <Button
-              disabled={
-                !canManageOrg(role) || !!p.deletedAt || busy || name.length < 2
-              }
-              onClick={() =>
-                void run(() => patch(`${EP.projects}/${p.id}`, { name }))
-              }
-            >
-              {t("common.save")}
-            </Button>
-            <Field label={t("common.region")}><strong>{t("common." + p.defaultRegion)}</strong></Field>
-            <Button
-              variant="danger"
-              disabled={!canManageOrg(role) || !!p.deletedAt || p.isDefault}
-              onClick={async () => {
-                if (
-                  !(await confirmAction(
-                    t("common.delete") + " " + dt(p.name),
-                    formatResourceId("prj", p.id),
-                  ))
-                )
-                  return;
-                const deleted = await run(async () => {
-                  await remove(`${EP.projects}/${p.id}`);
-                  return true;
-                }, "success.deleted");
-                if (deleted) navigate("/ops/projects");
-              }}
-            >
-              {t("common.delete")}
-            </Button>
-            <Link to="/ops/projects">{t("nav.projects")}</Link>
-          </div>
-        </Panel>
+        <div className="stack">
+          <Button
+            variant="danger"
+            disabled={!canManageOrg(role) || !!p.deletedAt || p.isDefault}
+            onClick={async () => {
+              if (
+                !(await confirmAction(
+                  t("common.delete") + " " + dt(p.name),
+                  formatResourceId("prj", p.id),
+                ))
+              )
+                return;
+              const deleted = await run(async () => {
+                await remove(`${EP.projects}/${p.id}`);
+                return true;
+              }, "success.deleted");
+              if (deleted) navigate("/ops/projects");
+            }}
+          >
+            {t("common.delete")}
+          </Button>
+        </div>
       )}
     </>
   );
