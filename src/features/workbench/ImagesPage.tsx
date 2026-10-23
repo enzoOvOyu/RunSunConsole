@@ -7,6 +7,7 @@ import {
   publisherLabel,
 } from "../../components/ModelPublisherLogo";
 import { poolDisplayName } from "../../lib/gpu-labels";
+import { compareFeaturedModels } from "../../lib/model-order";
 import { supportsChatInference } from "../../lib/inference-precision";
 import type { Image, Model } from "../../types/domain";
 import { useAuth } from "../../stores/auth";
@@ -107,7 +108,7 @@ export default function ImagesPage() {
       if (sort === "name") return left.name.localeCompare(right.name);
       if (sort === "publisher")
         return publisherName(left).localeCompare(publisherName(right));
-      return (left.featuredRank || 999) - (right.featuredRank || 999);
+      return compareFeaturedModels(left, right);
     });
   const readyCount = allModels.filter(supportsChatInference).length;
   return (

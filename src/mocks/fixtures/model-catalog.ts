@@ -1,4 +1,5 @@
 import type { Model } from "../../types/domain";
+import { FEATURED_MODEL_REFS } from "../../lib/model-order";
 import { MODEL_RESEARCH } from "./model-research";
 import { MODEL_KV_SHAPES } from "./model-runtime";
 
@@ -90,15 +91,6 @@ const DENSE_MODELS = new Set([
   "CohereLabs/c4ai-command-a-03-2025",
 ]);
 
-const featured = [
-  "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16",
-  "meta-models/Muse-Spark-Open-816B-A42B",
-  "mistralai/Mistral-Large-3-675B-Instruct-2512",
-  "moonshotai/Kimi-K3",
-  "deepseek-ai/DeepSeek-V4-Pro-0813",
-  "Qwen/Qwen3.8-2.4T-A95B",
-];
-
 function toBillions(value: string) {
   const match = value.match(/([\d.]+)([BT])/);
   if (!match) return 0;
@@ -109,6 +101,9 @@ export const CATALOG_MODELS: Model[] = entries.map(
   ([modelRef, parameters, countryCode], index) => {
     const [total, active] = parameters.split(" / ");
     const publisher = modelRef.split("/")[0];
+    const featuredRank = FEATURED_MODEL_REFS.findIndex(
+      (ref) => ref === modelRef,
+    );
     const [layers, kvHeads, headDim] = MODEL_KV_SHAPES[modelRef] || [0, 0, 0];
     return {
       id: `catalog-${index + 1}`,
@@ -127,14 +122,11 @@ export const CATALOG_MODELS: Model[] = entries.map(
         MODEL_RESEARCH[modelRef]?.activeParamsB ??
         (active
           ? toBillions(active)
-          : ACTIVE_PARAMS_B[modelRef] ??
-            (DENSE_MODELS.has(modelRef) ? toBillions(total) : undefined)),
+          : (ACTIVE_PARAMS_B[modelRef] ??
+            (DENSE_MODELS.has(modelRef) ? toBillions(total) : undefined))),
       sourceUrl: `https://huggingface.co/${modelRef}`,
       favorite: false,
-      featuredRank:
-        featured.indexOf(modelRef) < 0
-          ? undefined
-          : featured.indexOf(modelRef) + 1,
+      featuredRank: featuredRank < 0 ? undefined : featuredRank + 1,
     };
   },
 );
