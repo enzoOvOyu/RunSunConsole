@@ -205,7 +205,7 @@ function ProjectCard({ project: p }: { project: Project }) {
       </div>
       <div>
         <small>
-          {t("common.mtd")} · {t("common.allRegions")}
+          {t("common.mtd")} · {t("common." + p.defaultRegion)}
         </small>
         <div>{q.data ? money(q.data.monthCost) : "—"}</div>
       </div>
@@ -303,7 +303,7 @@ export function ProjectDetail() {
             {[
               [t("overview.allocated"), number(p.gpuTotal)],
               [
-                `${t("common.mtd")} · ${t("common.allRegions")}`,
+                `${t("common.mtd")} · ${t("common." + p.defaultRegion)}`,
                 money(p.monthCost),
               ],
               [t("project.resources"), number(p.resourceItems.length)],
@@ -541,14 +541,14 @@ export function ProjectDetail() {
       ) : tab === "cost" ? (
         <div className="stack">
           <Panel
-            title={`${t("common.mtd")} · ${t("common.allRegions")}`}
+            title={`${t("common.mtd")} · ${t("common." + p.defaultRegion)}`}
             hint={t("project.costUsageBasis")}
           >
             <strong className="stat-value">{money(p.monthCost)}</strong>
           </Panel>
           <Panel
             title={t("overview.trend")}
-            hint={`${t("project.costTrendScope")} · ${t("common.allRegions")}`}
+            hint={`${t("project.costTrendScope")} · ${t("common." + p.defaultRegion)}`}
           >
             <Suspense fallback={<Loading />}>
               <TrendChart data={p.costTrend7d} />

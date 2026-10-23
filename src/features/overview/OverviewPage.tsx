@@ -102,7 +102,7 @@ interface Overview {
   events: ResourceEvent[];
   alerts: { id: string; resource: Resource }[];
   account: Account;
-  projects: { id: string; name: string }[];
+  projects: { id: string; name: string; defaultRegion: Region }[];
 }
 const modules = [
   "insights",
@@ -647,7 +647,7 @@ export default function OverviewPage() {
                       to={`/ops/projects/${project.id}`}
                     >
                       <span className="overview-project-name">
-                        {dt(project.name)}
+                        {dt(project.name)} · {t("common." + project.defaultRegion)}
                       </span>
                       <span className="muted">
                         {t("overview.projectResources", {
@@ -1054,7 +1054,7 @@ export default function OverviewPage() {
                       : ["amount"]
                 }
                 labels={Object.fromEntries(
-                  (data.projects || []).map((p) => [p.id, dt(p.name)]),
+                  (data.projects || []).map((p) => [p.id, `${dt(p.name)} · ${t("common." + p.defaultRegion)}`]),
                 )}
               />
             </Suspense>
