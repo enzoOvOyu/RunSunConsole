@@ -1,12 +1,12 @@
 import { Link, useLocation } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { StorageProduct, StorageVolume } from "../../types/storage";
+import type { FileAccessConfig, StorageProduct, StorageVolume } from "../../types/storage";
 import { selectFileMounts, selectVolumeRows, type VolumeRow } from "../shared/storageView";
 import { VolumeTable } from "./VolumeTable";
 import type { DeploymentOptions, Project, Quota, Resource } from "../../types/domain";
 import type { ClusterView } from "../../types/monitoring";
-import { EP, post, query, remove } from "../../lib/api-client";
+import { EP, patch, post, query, remove } from "../../lib/api-client";
 import { formatResourceId, resourceLink } from "../../lib/ids";
 import { useRegion } from "../../stores/region";
 import { useAuth } from "../../stores/auth";
@@ -18,6 +18,7 @@ import { confirmAction } from "../../components/ui/ConfirmAction";
 import { t, dt } from "../../i18n";
 import { date } from "../../lib/date";
 import { money } from "../../lib/money";
+import { cidrContains, vpcNetworkType } from "../../lib/network";
 import {
   PageHeader,
   Button,
@@ -53,6 +54,10 @@ export default function VolumePage() {
   useEffect(() => setZone(`${region}-a`), [region]);
   const [targetResource, setTargetResource] = useState("");
   const [mountPath, setMountPath] = useState("/mnt/storage");
+  const [fileAccess, setFileAccess] = useState<FileAccessConfig>({
+    protocol: "nfs4.1", vpcId: "", subnetId: "", allowedCidr: "",
+    accessMode: "read_write", rootSquash: true,
+  });
   const { id, setId } = useDrawer();
   const list = useData<VolumeRow[]>(
     ["storage-volumes", region],
@@ -111,6 +116,11 @@ export default function VolumePage() {
     : availableProjects.find((project) => project.id === activeProject)?.id ||
       availableProjects.find((project) => project.isDefault)?.id ||
       availableProjects[0]?.id || "";
+  const fileNetwork = useData<DeploymentOptions>(
+    ["storage-file-network", region, detail.data?.projectId || selectedProjectId],
+    EP.options + query({ region, project_id: detail.data?.projectId || selectedProjectId, kind: "gpu_vm" }),
+    { enabled: kind === "file" && !!(detail.data?.projectId || selectedProjectId) },
+  );
   const projectName = (value: string) =>
     dt(projects.data?.find((project) => project.id === value)?.name || value);
   const { all: kindRows, visible: rows } = selectVolumeRows(
@@ -120,6 +130,33 @@ export default function VolumePage() {
   );
   const filterActive = !!(search || projectFilter || tierFilter || statusFilter || zoneFilter);
   const v = detail.data;
+  const fileVpcs = (fileNetwork.data?.vpcs.filter((item) => vpcNetworkType(item) === "standard") || [])
+    .sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || Number(b.subnets.length > 0) - Number(a.subnets.length > 0));
+  const fileVpc = fileAccess.vpcId
+    ? fileVpcs.find((item) => item.id === fileAccess.vpcId)
+    : fileVpcs[0];
+  const fileSubnet = fileAccess.subnetId
+    ? fileVpc?.subnets.find((item) => item.id === fileAccess.subnetId)
+    : fileVpc?.subnets[0];
+  const effectiveFileAccess: FileAccessConfig = {
+    ...fileAccess,
+    vpcId: fileVpc?.id || "",
+    subnetId: fileSubnet?.id || "",
+    allowedCidr: fileAccess.allowedCidr,
+  };
+  const fileAccessValid = !!fileVpc && !!fileSubnet && cidrContains(fileVpc.cidr, effectiveFileAccess.allowedCidr);
+  useEffect(() => {
+    if (kind === "file" && fileVpc && fileSubnet && !fileAccess.vpcId) {
+      setFileAccess((current) => ({ ...current, vpcId: fileVpc.id,
+        subnetId: fileSubnet.id, allowedCidr: fileSubnet.cidr }));
+    }
+  }, [kind, fileVpc, fileSubnet, fileAccess.vpcId]);
+  useEffect(() => {
+    if (kind === "file" && v?.id) setFileAccess(v.fileAccess || {
+      protocol: "nfs4.1", vpcId: "", subnetId: "", allowedCidr: "",
+      accessMode: "read_write", rootSquash: true,
+    });
+  }, [kind, v?.id, v?.fileAccess]);
   const targetZone = (resource: Resource) => networkOptions.data?.vpcs
     .flatMap((vpc) => vpc.subnets)
     .find((subnet) => subnet.id === resource.spec.subnet)?.zone;
@@ -136,12 +173,22 @@ export default function VolumePage() {
   const { pv: linkedPv, pvc: linkedPvc, workloads: linkedWorkloads, pods: linkedPods, nodes: linkedNodeNames } =
     selectFileMounts(clusterRuntime.data, v?.id);
   const targetIsCluster = attachable.some((resource) => resource.resourceUuid === targetResource && resource.kind === "vgpu");
+  const boundFileVpc = fileVpcs.find((item) => item.id === v?.fileAccess?.vpcId);
+  const attachableClusters = (resources.data?.items || []).filter((resource) =>
+    resource.kind === "vgpu" && resource.projectId === v?.projectId &&
+    resource.region === v?.region && resource.status === "running" &&
+    resource.spec.vpc === v?.fileAccess?.vpcId &&
+    (resource.spec.subnets?.length ? resource.spec.subnets : [resource.spec.subnet]).every((subnetId) => {
+      const subnet = boundFileVpc?.subnets.find((item) => item.id === subnetId);
+      return !!subnet && !!v.fileAccess && cidrContains(v.fileAccess.allowedCidr, subnet.cidr);
+    }));
   const openCreate = () => {
     setProjectId(selectedProjectId);
     setTier(plans[0]?.tier || "");
     setSizeGb(plans[0]?.minGb || 100);
     setName("");
     setZone(`${region}-a`);
+    setFileAccess({ protocol: "nfs4.1", vpcId: "", subnetId: "", allowedCidr: "", accessMode: "read_write", rootSquash: true });
     setNewOpen(true);
   };
   return (
@@ -308,8 +355,18 @@ export default function VolumePage() {
                 </Link>
               )}
             </Panel>}
+            {kind === "file" && <Panel title={t("storage.fileAccessTitle")}>
+              <div className="stack">
+                <p className="muted">{t("storage.fileAccessIntro")}</p>
+                <FileAccessFields fileVpcs={fileVpcs} fileVpc={fileVpc} fileSubnet={fileSubnet} effectiveFileAccess={effectiveFileAccess} fileAccess={fileAccess} fileAccessValid={fileAccessValid} setFileAccess={setFileAccess} />
+                <Button variant="primary" disabled={!canWrite(role) || busy || !fileAccessValid || !!v.deletedAt}
+                  onClick={() => run(() => patch(`${EP.storageVolumes}/${v.id}/access`, effectiveFileAccess))}>
+                  {t("storage.fileSaveAccess")}
+                </Button>
+              </div>
+            </Panel>}
             {kind === "file" && <Panel title={t("storage.fileMountRelations")} className="storage-file-relations">
-              <p className="storage-file-relation-note">{t(v.resourceUuid ? "storage.fileLinkedHint" : "storage.fileUnlinkedHint")}</p>
+              <p className="storage-file-relation-note">{t(linkedResource?.kind === "vgpu" ? "storage.fileLinkedHint" : v.resourceUuid ? "storage.fileLegacyHint" : "storage.fileUnlinkedHint")}</p>
               <KeyValues items={[
                 [t("storage.fileSystem"), formatResourceId("fil", v.id)],
                 [t("storage.linkedCompute"), linkedResource ? `${dt(linkedResource.name)} · ${linkedResource.displayId}` : t("storage.unattached")],
@@ -327,8 +384,32 @@ export default function VolumePage() {
               {v.mountPath && linkedResource?.kind !== "vgpu" && <div className="row"><code>{v.mountPath}</code><CopyButton value={v.mountPath} /></div>}
               {linkedResource?.kind === "vgpu" && <small>{t("storage.fileNodePoolHint")}</small>}
               {v.resourceUuid && v.resourceKind && <Link to={resourceLink({ kind: v.resourceKind, resourceUuid: v.resourceUuid, region: v.region })}>{t("storage.viewResource")}</Link>}
+              {!v.deletedAt && v.role === "custom" && !v.resourceUuid && v.fileAccess && (
+                <div className="stack">
+                  <Field label={t("storage.fileBindCluster")} hint={t("storage.fileBindClusterHint")}>
+                    <select value={targetResource} onChange={(event) => setTargetResource(event.target.value)}>
+                      <option value="">{t("storage.fileSelectCluster")}</option>
+                      {attachableClusters.map((item) => <option key={item.resourceUuid} value={item.resourceUuid}>{dt(item.name)} · {item.displayId}</option>)}
+                    </select>
+                  </Field>
+                  {!attachableClusters.length && <small>{t("storage.fileNoCluster")}</small>}
+                  <Button variant="primary" disabled={!canWrite(role) || busy || !attachableClusters.some((item) => item.resourceUuid === targetResource)}
+                    onClick={async () => {
+                      const result = await run(() => post(`${EP.storageVolumes}/${v.id}/attach`, {
+                        resourceUuid: targetResource, mountPath: "/pvc/default/data",
+                      }));
+                      if (result) setTargetResource("");
+                    }}>{t("storage.fileCreatePvc")}</Button>
+                </div>
+              )}
+              {!v.deletedAt && v.role === "pvc" && v.resourceKind === "vgpu" && (
+                <Button disabled={!canWrite(role) || busy} onClick={async () => {
+                  if (!(await confirmAction(t("storage.fileDetachConfirm")))) return;
+                  await run(() => post(`${EP.storageVolumes}/${v.id}/detach`, {}));
+                }}>{t("storage.fileRemovePvc")}</Button>
+              )}
             </Panel>}
-            {!v.deletedAt && v.role === "custom" && !v.resourceUuid && (
+            {kind === "block" && !v.deletedAt && v.role === "custom" && !v.resourceUuid && (
               <Panel title={t("storage.useVolume")}>
                 <div className="stack">
                   <Field label={t("nav.resources")}>
@@ -392,7 +473,7 @@ export default function VolumePage() {
                 </div>
               </Panel>
             )}
-            {!v.deletedAt && v.resourceUuid && (v.role === "custom" || (v.kind === "file" && v.role === "pvc" && v.resourceKind === "vgpu")) && (
+            {kind === "block" && !v.deletedAt && v.resourceUuid && v.role === "custom" && (
               <Button
                 disabled={!canWrite(role) || busy}
                 onClick={async () => {
@@ -475,7 +556,10 @@ export default function VolumePage() {
             <Field label={t("common.project")}>
               <select
                 value={selectedProjectId}
-                onChange={(event) => setProjectId(event.target.value)}
+                onChange={(event) => {
+                  setProjectId(event.target.value);
+                  setFileAccess({ protocol: "nfs4.1", vpcId: "", subnetId: "", allowedCidr: "", accessMode: "read_write", rootSquash: true });
+                }}
               >
                 {availableProjects.map((project) => (
                   <option key={project.id} value={project.id}>
@@ -529,6 +613,12 @@ export default function VolumePage() {
               />
             </Field>
           </div>
+          {kind === "file" && <Panel title={t("storage.fileAccessTitle")}>
+            <div className="stack">
+              <p className="muted">{t("storage.fileAccessIntro")}</p>
+              <FileAccessFields fileVpcs={fileVpcs} fileVpc={fileVpc} fileSubnet={fileSubnet} effectiveFileAccess={effectiveFileAccess} fileAccess={fileAccess} fileAccessValid={fileAccessValid} setFileAccess={setFileAccess} />
+            </div>
+          </Panel>}
           <Panel title={t("storage.orderSummary")}>
             <KeyValues
               items={[
@@ -558,7 +648,8 @@ export default function VolumePage() {
               sizeGb < selectedPlan.minGb ||
               sizeGb > selectedPlan.maxGb ||
               sizeGb % selectedPlan.stepGb !== 0 ||
-              (!!capacity && sizeGb > capacity.limitGb - capacity.usedGb)
+              (!!capacity && sizeGb > capacity.limitGb - capacity.usedGb) ||
+              (kind === "file" && !fileAccessValid)
             }
             onClick={async () => {
               const created = await run(
@@ -571,6 +662,7 @@ export default function VolumePage() {
                     projectId: selectedProjectId,
                     region,
                     zone: kind === "block" ? zone : undefined,
+                    fileAccess: kind === "file" ? effectiveFileAccess : undefined,
                   }),
                 "success.created",
               );
@@ -590,4 +682,60 @@ export default function VolumePage() {
       </Modal>
     </>
   );
+}
+
+function FileAccessFields({ fileVpcs, fileVpc, fileSubnet, effectiveFileAccess, fileAccess, fileAccessValid, setFileAccess }: {
+  fileVpcs: DeploymentOptions["vpcs"];
+  fileVpc: DeploymentOptions["vpcs"][number] | undefined;
+  fileSubnet: DeploymentOptions["vpcs"][number]["subnets"][number] | undefined;
+  effectiveFileAccess: FileAccessConfig;
+  fileAccess: FileAccessConfig;
+  fileAccessValid: boolean;
+  setFileAccess: Dispatch<SetStateAction<FileAccessConfig>>;
+}) {
+  return <>
+    <div className="form-grid">
+      <Field label={t("storage.fileProtocol")}><strong>NFSv4.1 · TCP 2049</strong></Field>
+      <Field label={t("storage.fileExportPath")}><strong>/</strong></Field>
+      <Field label={t("storage.fileVpc")}>
+        <select value={fileVpc?.id || ""} onChange={(event) => {
+          const next = fileVpcs.find((item) => item.id === event.target.value);
+          setFileAccess((current) => ({ ...current, vpcId: event.target.value,
+            subnetId: next?.subnets[0]?.id || "", allowedCidr: next?.subnets[0]?.cidr || "" }));
+        }}>
+          {!fileVpcs.length && <option value="">{t("storage.fileNoVpc")}</option>}
+          {fileVpcs.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.cidr}</option>)}
+        </select>
+      </Field>
+      <Field label={t("storage.fileSubnet")}>
+        <select value={fileSubnet?.id || ""} onChange={(event) => {
+          const next = fileVpc?.subnets.find((item) => item.id === event.target.value);
+          setFileAccess((current) => ({ ...current, subnetId: event.target.value,
+            allowedCidr: next?.cidr || "" }));
+        }}>
+          {(fileVpc?.subnets || []).map((item) => <option key={item.id} value={item.id}>{item.name} · {item.zone} · {item.cidr}</option>)}
+        </select>
+      </Field>
+      <Field label={t("storage.fileAllowedCidr")} hint={t("storage.fileAllowedCidrHint")}>
+        <input className="input" value={effectiveFileAccess.allowedCidr}
+          aria-invalid={!fileAccessValid}
+          onChange={(event) => setFileAccess((current) => ({ ...current, allowedCidr: event.target.value }))} />
+        {!fileAccessValid && <small className="field-error">{t("storage.fileCidrInvalid")}</small>}
+      </Field>
+      <Field label={t("storage.fileAccessMode")}>
+        <select value={fileAccess.accessMode} onChange={(event) => setFileAccess((current) => ({ ...current, accessMode: event.target.value as FileAccessConfig["accessMode"] }))}>
+          <option value="read_write">{t("storage.fileReadWrite")}</option>
+          <option value="read_only">{t("storage.fileReadOnly")}</option>
+        </select>
+      </Field>
+      <Field label={t("storage.fileRootSquash")}>
+        <select value={fileAccess.rootSquash ? "on" : "off"} onChange={(event) => setFileAccess((current) => ({ ...current, rootSquash: event.target.value === "on" }))}>
+          <option value="on">{t("storage.fileRootSquashOn")}</option>
+          <option value="off">{t("storage.fileRootSquashOff")}</option>
+        </select>
+      </Field>
+    </div>
+    <small>{t("storage.fileMountPrerequisites")}</small>
+    {!fileVpcs.length && <Link to="/network/vpcs">{t("storage.fileCreateVpc")}</Link>}
+  </>;
 }

@@ -2,6 +2,7 @@ import type { Bucket, Kind } from "../../types/domain";
 import type { ClusterView } from "../../types/monitoring";
 import type { StorageVolume } from "../../types/storage";
 import { formatResourceId } from "../../lib/ids";
+import { isRegionalPoolVolume } from "../../lib/storage";
 
 export type VolumeRow = StorageVolume & {
   resourceName: string;
@@ -24,7 +25,7 @@ export function selectVolumeRows(
 ) {
   const all = volumes.filter(
     (volume) =>
-      volume.kind === kind && volume.inventoryScope !== "regional_pool",
+      volume.kind === kind && !isRegionalPoolVolume(volume),
   );
   const needle = filters.search.trim().toLowerCase();
   const visible = all.filter((volume) => {
@@ -33,6 +34,8 @@ export function selectVolumeRows(
       volume.id,
       formatResourceId(kind === "block" ? "blk" : "fil", volume.id),
       volume.resourceName,
+      volume.fileAccess?.vpcId,
+      volume.fileAccess?.allowedCidr,
       volume.projectId,
       formatResourceId("prj", volume.projectId),
       projectName(volume.projectId),

@@ -95,7 +95,7 @@ export function VolumeTable({ rows, kind, projectName, onDetails }: Props) {
                 <small>
                   {row.original.resourceKind === "vgpu"
                     ? t("storage.kubernetesCluster")
-                    : t("storage.computeResource")}
+                    : t(kind === "file" ? "storage.fileLegacyAssociation" : "storage.computeResource")}
                 </small>
               </div>
             ) : (
@@ -106,15 +106,16 @@ export function VolumeTable({ rows, kind, projectName, onDetails }: Props) {
           ? [
               {
                 accessorKey: "mountPath",
-                header: t("storage.accessPath"),
+                header: t("storage.fileProtocol"),
+                cell: () => "NFSv4.1",
+              },
+              {
+                accessorKey: "fileAccess",
+                header: t("storage.fileAccessMode"),
                 cell: ({ row }: { row: { original: VolumeRow } }) =>
-                  row.original.mountPath ? (
-                    <code className="storage-mount-path">
-                      {row.original.mountPath}
-                    </code>
-                  ) : (
-                    "—"
-                  ),
+                  row.original.fileAccess
+                    ? `${t(row.original.fileAccess.accessMode === "read_write" ? "storage.fileReadWrite" : "storage.fileReadOnly")} · ${row.original.fileAccess.allowedCidr}`
+                    : t(row.original.resourceUuid ? "storage.fileManagedAccess" : "storage.fileUnconfigured"),
               },
             ]
           : []),

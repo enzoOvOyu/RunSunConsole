@@ -21,6 +21,15 @@ export interface StorageRequest {
   mountPath: string;
 }
 
+export interface FileAccessConfig {
+  protocol: "nfs4.1";
+  vpcId: string;
+  subnetId: string;
+  allowedCidr: string;
+  accessMode: "read_only" | "read_write";
+  rootSquash: boolean;
+}
+
 export interface StorageVolume {
   id: string;
   name: string;
@@ -36,4 +45,5 @@ export interface StorageVolume {
   createdAt: string;
   deletedAt: string | null;
   inventoryScope?: "tenant" | "regional_pool";
+  fileAccess?: FileAccessConfig;
 }

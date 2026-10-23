@@ -188,6 +188,70 @@ it("creates and deletes standalone block and file volumes with regional quota up
   expect(blocked.status).toBe(409);
 });
 
+it("keeps legacy regional capacity pools out of tenant file systems", async () => {
+  const pool = db.volumes.find((item) => item.id === "vol-jp-file-allocated-1")!;
+  expect(pool).toBeDefined();
+  delete pool.inventoryScope;
+  const files = (await request("/storage/volumes?region=jp")).data;
+  expect(files.some((item: { id: string }) => item.id === pool.id)).toBe(false);
+  expect((await request(`/storage/volumes/${pool.id}`)).status).toBe(404);
+  expect(db.volumes.some((item) => item.id === pool.id && !item.deletedAt)).toBe(true);
+});
+
+it("keeps file-system NFS access scoped to its project and VPC", async () => {
+  const vpc = db.network.vpcs.find((item) => item.projectId === db.projects[0].id && item.region === "jp" && item.networkType !== "baremetal")!;
+  const subnet = db.network.subnets.find((item) => item.vpcId === vpc.id)!;
+  const access = { protocol: "nfs4.1", vpcId: vpc.id, subnetId: subnet.id,
+    allowedCidr: subnet.cidr, accessMode: "read_write", rootSquash: true };
+  const created = await request("/storage/volumes", "POST", {
+    name: "shared-nfs-test", kind: "file", tier: "nas_capacity", sizeGb: 200,
+    projectId: db.projects[0].id, region: "jp", fileAccess: access,
+  });
+  expect(created.status).toBe(201);
+  expect(created.data.fileAccess).toEqual(access);
+  expect((await request(`/storage/volumes/${created.data.id}/access`, "PATCH", {
+    ...access, accessMode: "read_only",
+  })).data.fileAccess.accessMode).toBe("read_only");
+  expect((await request(`/storage/volumes/${created.data.id}/access`, "PATCH", {
+    ...access, allowedCidr: "192.0.2.0/24",
+  })).status).toBe(422);
+  expect((await request(`/storage/volumes/${created.data.id}/access`, "PATCH", {
+    ...access, subnetId: "other-project-subnet",
+  })).status).toBe(422);
+  expect((await request(`/storage/volumes/${created.data.id}`)).data.fileAccess.accessMode).toBe("read_only");
+  const vm = db.resources.find((item) => item.kind === "gpu_vm" && item.projectId === db.projects[0].id && item.region === "jp" && item.status === "running")!;
+  expect((await request(`/storage/volumes/${created.data.id}/attach`, "POST", {
+    resourceUuid: vm.resourceUuid, mountPath: "/mnt/shared",
+  })).status).toBe(422);
+  expect(db.volumes.find((item) => item.id === created.data.id)?.resourceUuid).toBeNull();
+});
+
+it("links a shared file system through cluster PV/PVC only when node subnets are authorized", async () => {
+  const cluster = db.resources.find((item) => item.kind === "vgpu" && item.status === "running" &&
+    db.network.vpcs.some((vpc) => vpc.id === item.spec.vpc && vpc.networkType !== "baremetal"))!;
+  expect(cluster).toBeDefined();
+  if (cluster.kind !== "vgpu") throw new Error("Expected cluster");
+  const vpc = db.network.vpcs.find((item) => item.id === cluster.spec.vpc)!;
+  const subnet = db.network.subnets.find((item) => item.vpcId === vpc.id)!;
+  const created = await request("/storage/volumes", "POST", {
+    name: "cluster-shared-nfs", kind: "file", tier: "nas_capacity", sizeGb: 200,
+    projectId: cluster.projectId, region: cluster.region,
+    fileAccess: { protocol: "nfs4.1", vpcId: vpc.id, subnetId: subnet.id,
+      allowedCidr: vpc.cidr, accessMode: "read_write", rootSquash: true },
+  });
+  expect(created.status).toBe(201);
+  const linked = await request(`/storage/volumes/${created.data.id}/attach`, "POST", {
+    resourceUuid: cluster.resourceUuid, mountPath: "/pvc/default/data",
+  });
+  expect(linked.status).toBe(200);
+  expect(cluster.spec.volumeBindings?.some((item) => item.volumeId === created.data.id)).toBe(true);
+  expect((await request(`/storage/volumes/${created.data.id}/access`, "PATCH", {
+    ...created.data.fileAccess, allowedCidr: "192.0.2.0/24",
+  })).status).toBe(422);
+  expect((await request(`/storage/volumes/${created.data.id}/detach`, "POST", {})).status).toBe(200);
+  expect(cluster.spec.volumeBindings?.some((item) => item.volumeId === created.data.id)).toBe(false);
+});
+
 it("validates volume specs and keeps bucket ceilings separate from regional actual usage", async () => {
   const invalid = await request("/storage/volumes", "POST", {
     name: "invalid-size",

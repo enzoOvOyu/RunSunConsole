@@ -1,3 +1,5 @@
+import { isRegionalPoolVolume } from "../../lib/storage";
+import type { FileAccessConfig } from "../../types/storage";
 import type { ElasticIp, SecurityRule, IpsecTunnel } from "../../types/network";
 import {
   NetworkFailure,
@@ -1690,7 +1692,7 @@ async function dispatch(request: Request, settleBilling = true) {
           .filter(
             (volume) =>
               !volume.deletedAt &&
-              volume.inventoryScope !== "regional_pool" &&
+              !isRegionalPoolVolume(volume) &&
               (!region || volume.region === region) &&
               (!qs.get("project_id") ||
                 volume.projectId === qs.get("project_id")),
@@ -1750,6 +1752,7 @@ async function dispatch(request: Request, settleBilling = true) {
           requested: sizeGb,
         });
       const zone = kind === "block" ? z.enum([`${code}-a`, `${code}-b`] as [string, string]).parse(body.zone || `${code}-a`) : undefined;
+      const fileAccess = kind === "file" && body.fileAccess ? parseFileAccess(body.fileAccess, projectId, code) : undefined;
       const volume = {
         id: crypto.randomUUID(),
         name,
@@ -1762,6 +1765,7 @@ async function dispatch(request: Request, settleBilling = true) {
         zone,
         resourceUuid: null,
         mountPath: "",
+        fileAccess,
         createdAt: new Date().toISOString(),
         deletedAt: null,
       };
@@ -1769,6 +1773,46 @@ async function dispatch(request: Request, settleBilling = true) {
       persist();
       return json(volume, 201);
     }
+  }
+  function parseFileAccess(input: unknown, projectId: string, code: Region) {
+    const access = z.object({
+      protocol: z.literal("nfs4.1"),
+      vpcId: z.string().min(1),
+      subnetId: z.string().min(1),
+      allowedCidr: z.string().min(1),
+      accessMode: z.enum(["read_only", "read_write"]),
+      rootSquash: z.boolean(),
+    }).parse(input);
+    const vpc = db.network.vpcs.find((item) =>
+      item.id === access.vpcId && !item.deletedAt && item.projectId === projectId &&
+      item.region === code && vpcNetworkType(item) === "standard");
+    const subnet = db.network.subnets.find((item) =>
+      item.id === access.subnetId && !item.deletedAt && item.vpcId === vpc?.id &&
+      item.projectId === projectId && item.region === code);
+    if (!vpc || !subnet || !cidrContains(vpc.cidr, access.allowedCidr))
+      fail(422, "VALIDATION_ERROR");
+    return access;
+  }
+  function clusterCanUseFileAccess(cluster: Resource, access: FileAccessConfig) {
+    if (cluster.kind !== "vgpu" || cluster.spec.vpc !== access.vpcId) return false;
+    const subnetIds = cluster.spec.subnets?.length ? cluster.spec.subnets : [cluster.spec.subnet];
+    return subnetIds.every((id) => {
+      const subnet = db.network.subnets.find((item) => item.id === id && !item.deletedAt && item.vpcId === access.vpcId);
+      return !!subnet && cidrContains(access.allowedCidr, subnet.cidr);
+    });
+  }
+  const fileAccessMatch = path.match(/^\/api\/storage\/volumes\/([^/]+)\/access$/);
+  if (fileAccessMatch && method === "PATCH") {
+    if (!canWrite(role)) fail(403, "FORBIDDEN");
+    const volume = db.volumes.find((item) => item.id === fileAccessMatch[1] && !item.deletedAt && !isRegionalPoolVolume(item)) || fail(404, "NOT_FOUND");
+    if (volume.kind !== "file") fail(422, "VALIDATION_ERROR");
+    const nextAccess = parseFileAccess(body, volume.projectId, volume.region);
+    const linkedCluster = db.resources.find((item) => item.resourceUuid === volume.resourceUuid && !item.deletedAt);
+    if (linkedCluster && linkedCluster.kind === "vgpu" && !clusterCanUseFileAccess(linkedCluster, nextAccess))
+      fail(409, "HAS_DEPENDENCIES");
+    volume.fileAccess = nextAccess;
+    persist();
+    return json(volume);
   }
   const volumeActionMatch = path.match(
     /^\/api\/storage\/volumes\/([^/]+)\/(attach|detach)$/,
@@ -1779,7 +1823,7 @@ async function dispatch(request: Request, settleBilling = true) {
       db.volumes.find(
         (item) => item.id === volumeActionMatch[1] && !item.deletedAt,
       ) || fail(404, "NOT_FOUND");
-    if (volume.inventoryScope === "regional_pool") fail(404, "NOT_FOUND");
+    if (isRegionalPoolVolume(volume)) fail(404, "NOT_FOUND");
     const action = volumeActionMatch[2];
     const attachedCluster = db.resources.find((item) => item.resourceUuid === volume.resourceUuid && item.kind === "vgpu" && !item.deletedAt);
     const clusterBinding = attachedCluster?.kind === "vgpu" ? attachedCluster.spec.volumeBindings?.find((item) => item.volumeId === volume.id) : undefined;
@@ -1809,6 +1853,8 @@ async function dispatch(request: Request, settleBilling = true) {
       )
         fail(422, "VALIDATION_ERROR");
       if (volume.kind === "block" && targetSubnet?.zone !== (volume.zone || `${volume.region}-a`)) fail(422, "INVALID_ZONE");
+      if (volume.kind === "file" && (target.kind !== "vgpu" || !volume.fileAccess || !clusterCanUseFileAccess(target, volume.fileAccess)))
+        fail(422, "VALIDATION_ERROR");
       if (target.kind === "vgpu" && volume.kind === "file") {
         const bindings = target.spec.volumeBindings || [];
         const index = Array.from({ length: 8 }, (_, i) => i + 1).find((number) => !bindings.some((binding) => binding.pvName === `file-pv-${number}`));
@@ -1855,7 +1901,7 @@ async function dispatch(request: Request, settleBilling = true) {
     const volume =
       db.volumes.find((v) => v.id === volumeMatch[1]) ||
       fail(404, "NOT_FOUND");
-    if (volume.inventoryScope === "regional_pool") fail(404, "NOT_FOUND");
+    if (isRegionalPoolVolume(volume)) fail(404, "NOT_FOUND");
     if (method === "DELETE") {
       if (volume.deletedAt) fail(410, "GONE");
       if (volume.resourceUuid || volume.role !== "custom")

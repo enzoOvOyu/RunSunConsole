@@ -1,4 +1,4 @@
-import type { StorageProduct, StorageRequest } from "../types/storage";
+import type { StorageProduct, StorageRequest, StorageVolume } from "../types/storage";
 
 export const STORAGE_PRODUCTS: readonly StorageProduct[] = [
   {
@@ -69,4 +69,9 @@ export function storageExtraGb(requests: readonly StorageRequest[] = []) {
   return requests
     .filter((request) => request.kind !== "object")
     .reduce((sum, request) => sum + request.sizeGb * request.count, 0);
+}
+
+export function isRegionalPoolVolume(volume: Pick<StorageVolume, "id" | "inventoryScope">) {
+  return volume.inventoryScope === "regional_pool" ||
+    /^vol-(jp|sg|us)-(block|file)-allocated-\d+$/.test(volume.id);
 }
