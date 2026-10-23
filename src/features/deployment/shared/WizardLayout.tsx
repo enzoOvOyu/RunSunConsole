@@ -416,7 +416,7 @@ function WizardForm({
     const pool = context.pools.find((p) => p.code === code);
     return !pool?.available || count > pool.availableGpu;
   });
-  const poolStep = kind === "vgpu" ? 3 : kind === "gpu_vm" || kind === "gpu_baremetal" ? 1 : 2;
+  const poolStep = kind === "vgpu" ? 1 : kind === "gpu_vm" || kind === "gpu_baremetal" ? 1 : 2;
   const scalingRangeInvalid =
     !!values.spec.scaling &&
     (values.spec.scaling.min_size > currentSize ||

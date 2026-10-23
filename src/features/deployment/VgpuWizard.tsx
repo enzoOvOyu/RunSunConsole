@@ -51,7 +51,19 @@ function validStep(values: WizardValues, step: number, lookups?: { network?: Dep
   const spec = values.spec as VgpuSpec;
   if (step === 0) return ["1.31", "1.32", "1.33", "1.34", "1.35", "1.36", "1.37"].includes(spec.k8sVersion) &&
     ["standard", "ha"].includes(spec.controlPlaneTier) && (!spec.apiServerPublic || isCidr(spec.authorizedCidr));
-  if (step === 1) {
+  if (step === 1)
+    return z.array(nodePoolSchema).min(1).max(5).safeParse(spec.nodePools).success &&
+      new Set(spec.nodePools.map(poolName)).size === spec.nodePools.length &&
+      spec.nodePools.every((pool) => {
+        const hardware = lookups?.pools.find((item) => item.code === pool.poolCode);
+        const image = lookups?.images.find((item) => item.id === (pool.imageRef || "ubuntu-22.04"));
+        return !!hardware && hardware.available && pool.gpuPerNode === hardware.gpusPerNode &&
+          (pool.minNodes ?? 1) <= pool.nodeCount && pool.nodeCount <= (pool.maxNodes ?? 64) &&
+          (spec.localPvGb || 0) <= hardware.localNvmeGb &&
+          !!image && image.type === "os" && image.osFamily !== "Windows Server" &&
+          imageSupportsPool(image, pool.poolCode) && imageSupportsArchitecture(image, hardware.cpuArchitecture);
+      });
+  if (step === 2) {
     if (spec.apiServerPublic && !isCidr(spec.authorizedCidr)) return false;
     const subnets = selectedSubnets(spec);
     const vpc = lookups?.network?.vpcs.find((item) => item.id === spec.vpc && vpcNetworkType(item) === "standard");
@@ -65,7 +77,7 @@ function validStep(values: WizardValues, step: number, lookups?: { network?: Dep
       ["cilium", "calico"].includes(spec.networkPlugin) &&
       !!spec.securityGroups?.length && spec.securityGroups.every((id) => lookups?.network?.securityGroups.some((item) => item.id === id && item.vpcId === vpc.id));
   }
-  if (step === 2) {
+  if (step === 3) {
     const mode = spec.storageMode || "dynamic_block";
     const cloud = mode === "dynamic_block" || mode === "existing_block" || mode === "shared_file";
     return !!spec.storageClass && storageSelectionsSchema.safeParse(spec.storageSelections || []).success &&
@@ -74,18 +86,6 @@ function validStep(values: WizardValues, step: number, lookups?: { network?: Dep
         mode === "local_nvme" && spec.defaultPvcGb === 0 && Number.isInteger(spec.localPvGb) && !!spec.localPvGb &&
         spec.localPvGb <= Math.min(...spec.nodePools.map((pool) => lookups?.pools.find((item) => item.code === pool.poolCode)?.localNvmeGb || 0)));
   }
-  if (step === 3)
-    return z.array(nodePoolSchema).min(1).max(5).safeParse(spec.nodePools).success &&
-      new Set(spec.nodePools.map(poolName)).size === spec.nodePools.length &&
-      spec.nodePools.every((pool) => {
-        const hardware = lookups?.pools.find((item) => item.code === pool.poolCode);
-        const image = lookups?.images.find((item) => item.id === (pool.imageRef || "ubuntu-22.04"));
-        return !!hardware && hardware.available && pool.gpuPerNode === hardware.gpusPerNode &&
-          (pool.minNodes ?? 1) <= pool.nodeCount && pool.nodeCount <= (pool.maxNodes ?? 64) &&
-          (spec.localPvGb || 0) <= hardware.localNvmeGb &&
-          !!image && image.type === "os" && image.osFamily !== "Windows Server" &&
-          imageSupportsPool(image, pool.poolCode) && imageSupportsArchitecture(image, hardware.cpuArchitecture);
-      });
   if (step === 4)
     return (!spec.ingressEnabled || (spec.ingressClass === "nginx" && !!spec.vpc && selectedSubnets(spec).length > 0 && !!spec.securityGroups?.length)) &&
       (!spec.rbacDefaultAdmin || ["owner", "admin"].includes(useAuth.getState().role));
@@ -488,9 +488,9 @@ function ClusterAside() {
 
 export default function VgpuWizard() {
   return <WizardLayout kind="vgpu" clusterLayout aside={<ClusterAside />} firstStepContent={<ClusterBasics />}
-    steps={["clusterProject", "clusterNetwork", "clusterStorage", "clusterNodes", "clusterAddons", "clusterConfirm"]}
-    stepHints={["", "", "", "", "", ""].map((_, index) => t(`eks.stepHint${index + 1}`))}
+    steps={["clusterProject", "clusterNodes", "clusterNetwork", "clusterStorage", "clusterAddons", "clusterConfirm"]}
+    stepHints={[1, 4, 2, 3, 5, 6].map((index) => t(`eks.stepHint${index}`))}
     validateStep={validStep}
     validateFirstStep={(values) => validStep(values, 0)}
-    render={(context) => context.step === 1 ? <ClusterNetwork /> : context.step === 2 ? <ClusterStorage pools={context.pools} /> : context.step === 3 ? <ClusterNodes {...context} /> : context.step === 4 ? <ClusterAddons /> : <ClusterConfirm context={context} />} />;
+    render={(context) => context.step === 1 ? <ClusterNodes {...context} /> : context.step === 2 ? <ClusterNetwork /> : context.step === 3 ? <ClusterStorage pools={context.pools} /> : context.step === 4 ? <ClusterAddons /> : <ClusterConfirm context={context} />} />;
 }
