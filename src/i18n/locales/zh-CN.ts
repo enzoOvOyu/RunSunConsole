@@ -834,6 +834,11 @@ export default {
   "storage.kind.object": "对象存储",
   "storage.catalogError": "无法加载存储规格，请稍后重试。",
   "storage.additional": "附加存储",
+  "storage.deploymentBlockHint": "创建时仅附加云硬盘；交付后由用户在操作系统内分区、格式化和挂载。文件系统的权限与共享目录在文件存储中管理；对象 Bucket 在对象存储中管理。",
+  "storage.manageFileStorage": "管理文件存储",
+  "storage.manageObjectStorage": "管理对象存储",
+  "storage.legacySelectionHint": "旧草稿中的文件或对象存储不能在此创建，请移除此项并前往对应存储页面管理。",
+  "storage.osMountNote": "云硬盘已关联实例；请在操作系统内自行完成挂载。",
   "storage.add": "添加存储",
   "storage.item": "存储项 {count}",
   "storage.formHint":
@@ -1572,6 +1577,7 @@ export default {
   "network.topologyHint": "设备通过交换机接入 VPC，跨 VPC 不自动互通。",
   "network.resourceHint":
     "按每台设备展示实际地址。关机保留私网地址，删除或缩容释放对应地址；公网 EIP 继续独立保留。",
+  "common.storage": "存储",
   "common.eip": "弹性公网 IP",
   "network.action.create": "创建网络资源",
   "network.action.edit": "编辑基本信息",

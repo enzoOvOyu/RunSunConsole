@@ -47,7 +47,7 @@ export const STORAGE_PRODUCTS: readonly StorageProduct[] = [
     minGb: 100,
     maxGb: 1048500,
     stepGb: 100,
-    usdGbMonth: 0.023,
+    usdGbMonth: 0,
   },
   {
     kind: "object",
@@ -55,7 +55,7 @@ export const STORAGE_PRODUCTS: readonly StorageProduct[] = [
     minGb: 100,
     maxGb: 1048500,
     stepGb: 100,
-    usdGbMonth: 0.012,
+    usdGbMonth: 0,
   },
 ];
 

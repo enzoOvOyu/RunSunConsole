@@ -301,7 +301,7 @@ export interface Usage {
   displayId: DisplayId;
   projectId: string;
   region: Region;
-  kind: Kind | "eip";
+  kind: Kind | "eip" | "storage";
   usageHour: string;
   unit: BillingUnit;
   quantity: number;

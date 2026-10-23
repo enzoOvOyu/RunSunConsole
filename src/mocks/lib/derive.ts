@@ -84,16 +84,23 @@ export function estimate(
       spec.gpuCount,
       true,
     );
-  const baseStorage = Math.max(
-    0,
-    spec.storageGb - storageExtraGb(spec.storageSelections),
-  );
-  if (baseStorage > 0)
-    add("storage", "per_gb_hour",
-      kind === "vgpu" && "nodePools" in spec && spec.storageMode === "shared_file"
-        ? storageProduct("file", "nas_capacity")!.usdGbMonth / 730
-        : find("per_gb_hour", null),
-      baseStorage, kind !== "vgpu" || ("nodePools" in spec && spec.storageMode !== "shared_file" && spec.storageMode !== "local_nvme"));
+  if (kind === "gpu_vm" && "systemDiskGb" in spec) {
+    const quantity = spec.quantity;
+    add("storage:system", "per_gb_hour", storageProduct("block", spec.systemDiskType === "nvme_ssd" ? "essd_pl1" : "essd_pl0")!.usdGbMonth / 730, spec.systemDiskGb * quantity, false);
+    if (spec.dataDiskGb > 0)
+      add("storage:data", "per_gb_hour", storageProduct("block", spec.dataDiskType === "nvme_ssd" ? "essd_pl1" : "essd_pl0")!.usdGbMonth / 730, spec.dataDiskGb * quantity, false);
+  } else {
+    const baseStorage = Math.max(0, spec.storageGb - storageExtraGb(spec.storageSelections));
+    if (baseStorage > 0) {
+      const tier = kind === "vgpu" && "nodePools" in spec && spec.storageMode === "shared_file"
+        ? storageProduct("file", "nas_capacity")!
+        : kind === "vgpu" && "nodePools" in spec && spec.storageClass === "nvme"
+          ? storageProduct("block", "essd_pl2")!
+          : storageProduct("block", "essd_pl0")!;
+      add("storage", "per_gb_hour", tier.usdGbMonth / 730, baseStorage,
+        kind !== "vgpu" || ("nodePools" in spec && spec.storageMode !== "shared_file" && spec.storageMode !== "local_nvme"));
+    }
+  }
   for (const row of spec.storageSelections || []) {
     if (row.kind === "object") continue;
     const product = storageProduct(row.kind, row.tier);

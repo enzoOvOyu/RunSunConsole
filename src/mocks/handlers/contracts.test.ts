@@ -238,10 +238,10 @@ it("creates an order and materializes one matching policy", async () => {
     ),
   ).toHaveLength(1);
   expect(
-    result.data.order.price_snapshot.lines.every((l: { unitPrice: number }) =>
-      RATES.some(
-        (r) => r.region === "sg" && Math.abs(r.unitPrice - l.unitPrice) < 1e-9,
-      ),
+    result.data.order.price_snapshot.lines.every((l: { unit: string; unitPrice: number }) =>
+      l.unit === "per_gb_hour"
+        ? [0.09, 0.14, 0.22].some((price) => Math.abs(price / 730 - l.unitPrice) < 1e-9)
+        : RATES.some((r) => r.region === "sg" && Math.abs(r.unitPrice - l.unitPrice) < 1e-9),
     ),
   ).toBe(true);
 });
@@ -428,9 +428,11 @@ it("uses immutable regional rate rows and honors discounts", async () => {
     0.55,
   );
   expect(
-    spot.lines.find((l: { key: string }) => l.key === "storage").unitPrice,
-  ).toBe(
-    standard.lines.find((l: { key: string }) => l.key === "storage").unitPrice,
+    spot.lines.filter((l: { unit: string }) => l.unit === "per_gb_hour")
+      .map((l: { unitPrice: number }) => l.unitPrice),
+  ).toEqual(
+    standard.lines.filter((l: { unit: string }) => l.unit === "per_gb_hour")
+      .map((l: { unitPrice: number }) => l.unitPrice),
   );
 });
 it("does not permit a peak lower than requested current size", async () => {

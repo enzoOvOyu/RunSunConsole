@@ -226,8 +226,9 @@
 
 | 计费项 | 单位 | 单价 | 口径 |
 | --- | --- | --- | --- |
-| 块存储（跟随实例） | `$/GB·月` | 0.08 | 停止后仍计（PRD §7.4） |
-| 对象存储 | `$/GB·月` | 0.023 | 阶梯计价 v1 不启用 |
+| 云硬盘 ESSD PL0 / PL1 / PL2 | `$/GB·月` | 0.09 / 0.14 / 0.22 | 按规格和配置容量计费，实例停止后仍计 |
+| 文件存储容量型 / 性能型 | `$/GB·月` | 0.15 / 0.30 | 按文件系统配置容量计费，关联集群不重复计费 |
+| 对象存储 | — | 0 | 当前版本暂不计费 |
 | 出网流量 | `$/GB` | 0.05（同区免费 / 跨区 0.03） | 入网免费 |
 | 公网 IP | `$/小时` | 0.005 | 停止是否释放见实例策略 |
 | vGPU 控制面（托管 K8s） | `$/集群·小时` | 0.10 | Ha 控制面 ×3 时 0.30 |
@@ -706,7 +707,7 @@ amount     = quantity × unit_price                 # 不可变快照（改价�
 vgpu_control_plane: quantity = 1; unit = 'per_instance_hour'; unit_price = 0.10 (HA: 0.30)
 
 # 存储行（running 与 stopped 都写）
-storage: quantity = storage_gb; unit = 'per_gb_hour'; unit_price = 0.08 / 730
+storage: quantity = allocated_gb × billed_hours; unit = 'per_gb_hour'; unit_price = STORAGE_PRODUCTS[kind, tier].usdGbMonth / 730
 
 # ② 汇总（供详情页费用卡 / 状态栏 / 成本页）
 cost_per_hour  = Σ(当前生效单价行 amount)

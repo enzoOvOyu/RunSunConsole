@@ -95,7 +95,7 @@ export function volumesForResource(resource: Resource): StorageVolume[] {
         row.tier,
         "custom",
         row.sizeGb,
-        row.count === 1 ? row.mountPath : `${row.mountPath}-${i + 1}`,
+        row.kind === "block" && !row.key.startsWith("attached_") ? "" : row.count === 1 ? row.mountPath : `${row.mountPath}-${i + 1}`,
       );
   }
   return volumes;

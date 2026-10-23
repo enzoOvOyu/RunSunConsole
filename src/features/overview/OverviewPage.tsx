@@ -241,7 +241,7 @@ function buildOverviewMetrics(data: Overview) {
       ) as Record<(typeof resourceStatuses)[number], number>,
     };
   });
-  const spendMix = ([...KINDS, "eip"] as const)
+  const spendMix = ([...KINDS, "eip", "storage"] as const)
     .map((kind) => ({
       kind,
       amount: data.trend.reduce(
@@ -272,7 +272,7 @@ export default function OverviewPage() {
   const [expandedAlerts, setExpandedAlerts] = useState(false);
   const [hoveredGpuRegion, setHoveredGpuRegion] = useState<Region | null>(null);
   const [hoveredSpendKind, setHoveredSpendKind] = useState<
-    (typeof KINDS)[number] | "eip" | null
+    (typeof KINDS)[number] | "eip" | "storage" | null
   >(null);
   const role = useAuth((s) => s.role);
   const navigate = useNavigate();
@@ -811,7 +811,7 @@ export default function OverviewPage() {
                                 fill={
                                   item.kind === "eip"
                                     ? "var(--rs-info)"
-                                    : KIND_META[item.kind].color
+                                    : item.kind === "storage" ? "var(--rs-warning)" : KIND_META[item.kind].color
                                 }
                               />
                             ))}
@@ -845,7 +845,7 @@ export default function OverviewPage() {
                                 background:
                                   item.kind === "eip"
                                     ? "var(--rs-info)"
-                                    : KIND_META[item.kind].color,
+                                    : item.kind === "storage" ? "var(--rs-warning)" : KIND_META[item.kind].color,
                               }}
                             />
                             {t("common." + item.kind)}

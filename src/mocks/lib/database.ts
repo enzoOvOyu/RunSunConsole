@@ -87,7 +87,9 @@ export function normalizeDisplayIds(state: Database): boolean {
   for (const row of state.usage) {
     const expected = row.kind === "eip"
       ? formatResourceId("eip", row.resourceUuid)
-      : displayId(row.kind, row.resourceUuid);
+      : row.kind === "storage"
+        ? formatResourceId(state.volumes.find((volume) => volume.id === row.resourceUuid)?.kind === "file" ? "fil" : "blk", row.resourceUuid)
+        : displayId(row.kind, row.resourceUuid);
     if (row.displayId !== expected) {
       row.displayId = expected;
       changed = true;

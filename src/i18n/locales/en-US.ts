@@ -868,6 +868,11 @@ export default {
   "storage.catalogError":
     "Storage tiers could not be loaded. Please try again.",
   "storage.additional": "Additional storage",
+  "storage.deploymentBlockHint": "Only cloud block volumes can be added here. Partition, format and mount them in the guest OS after creation. Manage shared file access in File Storage and buckets in Object Storage.",
+  "storage.manageFileStorage": "Manage file storage",
+  "storage.manageObjectStorage": "Manage object storage",
+  "storage.legacySelectionHint": "This saved file or object storage selection is no longer created here. Remove it and use the relevant storage page.",
+  "storage.osMountNote": "The block volume is attached. Mount it in the guest OS.",
   "storage.add": "Add storage",
   "storage.item": "Storage item {count}",
   "storage.formHint":
@@ -1652,6 +1657,7 @@ export default {
     "Devices join the VPC through a vSwitch. Separate VPCs have no implicit connectivity.",
   "network.resourceHint":
     "Actual addresses are listed per device. Stop retains private addresses; deletion or scale-in releases them. EIPs remain independently allocated.",
+  "common.storage": "Storage",
   "common.eip": "Elastic IP",
   "network.action.create": "Create network resource",
   "network.action.edit": "Edit details",

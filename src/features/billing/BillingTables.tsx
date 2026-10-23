@@ -117,6 +117,11 @@ export function BillingUsageTable({
               const eip = usage.find(
                 (u) => u.resourceUuid === id && u.kind === "eip",
               );
+              const volume = usage.find((u) => u.resourceUuid === id && u.kind === "storage");
+              if (volume) {
+                navigate(`/storage/${volume.displayId.startsWith("fil-") ? "file" : "block"}?drawer=${id}&region=${volume.region}`);
+                return;
+              }
               if (eip) {
                 navigate(
                   `/network/eips?drawer=${id}&region=${eip.region}&project_id=${eip.projectId}`,

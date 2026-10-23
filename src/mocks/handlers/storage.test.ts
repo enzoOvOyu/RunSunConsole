@@ -78,14 +78,14 @@ it("validates storage tiers and prices allocated block and file capacity", () =>
   ).toBeCloseTo((200 * 0.15) / 730);
   expect(lines.some((line) => line.key === "storage:object-1")).toBe(false);
 });
-it("creates multiple volumes and an attached bucket with one deployment order", async () => {
+it("creates block volumes without assigning OS mount paths", async () => {
   const before = (await request("/quotas?region=jp")).data.find(
     (quota: { metric: string }) => quota.metric === "storage",
   );
   const pool = poolsFor("jp")[0];
   const spec = normalizeSpec({
     ...defaultSpec("gpu_vm", pool),
-    storageSelections: selections,
+    storageSelections: [selections[0]],
     sshPubkey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAISEED",
   });
   const order = await request("/deployment-orders", "POST", {
@@ -106,24 +106,18 @@ it("creates multiple volumes and an attached bucket with one deployment order", 
   );
   expect(
     volumes.filter((v: { role: string }) => v.role === "custom"),
-  ).toHaveLength(3);
-  expect(volumes.map((v: { tier: string }) => v.tier)).toContain(
-    "nas_capacity",
-  );
-  const bucket = db.buckets.find((b) => b.name === "runsun-test-object-bucket");
-  expect(bucket?.attachedResourceUuid).toBe(resource.resourceUuid);
-  expect(bucket?.quotaGb).toBe(500);
-  expect(bucket?.region).toBe("jp");
+  ).toHaveLength(2);
+  expect(volumes.filter((v: { role: string }) => v.role === "custom").every((v: { mountPath: string }) => !v.mountPath)).toBe(true);
   expect((await request("/storage/products")).data.length).toBeGreaterThan(5);
   const after = (await request("/quotas?region=jp")).data.find(
     (quota: { metric: string }) => quota.metric === "storage",
   );
-  expect(after.usedValue - before.usedValue).toBe(500);
+  expect(after.usedValue - before.usedValue).toBe(300);
   expect(after.storageBreakdown).toEqual(
     before.storageBreakdown.map(
       (item: { kind: string; usedGb: number; limitGb: number }) => ({
         ...item,
-        usedGb: item.usedGb + (item.kind === "block" ? 300 : item.kind === "file" ? 200 : 0),
+        usedGb: item.usedGb + (item.kind === "block" ? 300 : 0),
       }),
     ),
   );
@@ -404,4 +398,25 @@ it("keeps customer file systems linked to valid projects and compute mounts", as
       expect(clusterView(linked).storage.pvcs.some((item) => item.pvName === pv?.name && item.status === "Bound")).toBe(true);
     }
   }
+});
+
+it("meters a standalone file system by configured capacity and shares the catalog price", async () => {
+  const product = (await request("/storage/products")).data.find(
+    (item: { kind: string; tier: string }) => item.kind === "file" && item.tier === "nas_capacity",
+  );
+  const created = await request("/storage/volumes", "POST", {
+    name: "billing-file-system", kind: "file", tier: "nas_capacity", sizeGb: 200,
+    projectId: db.projects[0].id, region: "jp",
+  });
+  expect(created.status).toBe(201);
+  const volume = db.volumes.find((item) => item.id === created.data.id)!;
+  volume.createdAt = new Date(Date.now() - 3_600_000).toISOString();
+  db.billingCursors[volume.id] = Date.parse(volume.createdAt);
+  await request("/billing/report?billing_period=" + new Date().toISOString().slice(0, 7));
+  const rows = db.usage.filter((row) => row.resourceUuid === volume.id);
+  expect(rows.length).toBeGreaterThan(0);
+  expect(rows.every((row) => row.kind === "storage" && Math.abs(row.unitPrice - product.usdGbMonth / 730) < 1e-8)).toBe(true);
+  expect(rows.reduce((sum, row) => sum + row.amount, 0)).toBeCloseTo(200 * product.usdGbMonth / 730, 2);
+  expect((await request("/storage/products")).data.filter((item: { kind: string }) => item.kind === "object")
+    .every((item: { usdGbMonth: number }) => item.usdGbMonth === 0)).toBe(true);
 });

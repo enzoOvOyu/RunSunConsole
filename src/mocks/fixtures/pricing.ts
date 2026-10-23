@@ -6,6 +6,7 @@ import {
   type PoolCode,
   type Region,
 } from "../../types/domain";
+import { storageProduct } from "../../lib/storage";
 export const BASE_GPU: Record<PoolCode, number> = {
   H100_SXM: 3.49,
   H200_NVL: 4.79,
@@ -52,7 +53,7 @@ export const RATES: Rate[] = REGIONS.flatMap((region) => [
     pool: null,
     region,
     unit: "per_gb_hour" as const,
-    unitPrice: 0.08 / 730,
+    unitPrice: storageProduct("block", "essd_pl0")!.usdGbMonth / 730,
   },
   {
     kind: "public_ip" as const,

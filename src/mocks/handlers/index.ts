@@ -653,6 +653,53 @@ function settleEips() {
     }
   }
 }
+function settleVolumes() {
+  for (const volume of db.volumes) {
+    if (isRegionalPoolVolume(volume)) continue;
+    // Resource-created volumes are already included in their order price.
+    const independent = !volume.id.startsWith("vol-");
+    const chargedByResource = !!volume.resourceUuid && !(volume.kind === "file" && volume.role === "pvc" && independent);
+    if (!independent || chargedByResource) continue;
+    const product = STORAGE_PRODUCTS.find((item) => item.kind === volume.kind && item.tier === volume.tier);
+    if (!product) continue;
+    const now = Math.min(Date.now(), volume.deletedAt ? Date.parse(volume.deletedAt) : Infinity);
+    let cursor = db.billingCursors[volume.id] ?? Date.parse(volume.createdAt);
+    if (cursor >= now) continue;
+    const rate = product.usdGbMonth / 730;
+    let delta = 0;
+    while (cursor < now) {
+      const hour = Math.floor(cursor / 3600000) * 3600000;
+      const end = Math.min(now, hour + 3600000);
+      const at = new Date(hour).toISOString();
+      let usage = findUsage(volume.id, at, "per_gb_hour");
+      if (!usage) {
+        usage = { id: `${volume.id}-${hour}-per_gb_hour`, resourceUuid: volume.id as ResourceUuid,
+          displayId: formatResourceId(volume.kind === "file" ? "fil" : "blk", volume.id) as Usage["displayId"],
+          projectId: volume.projectId, region: volume.region, kind: "storage", usageHour: at,
+          unit: "per_gb_hour", quantity: 0, unitPrice: rate, amount: 0, status: "running" };
+        db.usage.push(usage);
+        usageIndex.set(usageKey(volume.id, at, "per_gb_hour"), usage);
+      }
+      const before = usage.amount;
+      const meter = db.usageMeters[usage.id] ?? { quantity: usage.quantity, amount: usage.quantity * usage.unitPrice };
+      meter.quantity += volume.sizeGb * (end - cursor) / 3600000;
+      meter.amount += volume.sizeGb * (end - cursor) / 3600000 * rate;
+      db.usageMeters[usage.id] = meter;
+      usage.quantity = round(meter.quantity, 4);
+      usage.unitPrice = meter.quantity ? meter.amount / meter.quantity : rate;
+      usage.amount = round(meter.amount, 4);
+      delta += usage.amount - before;
+      cursor = end;
+    }
+    db.billingCursors[volume.id] = now;
+    if (delta > 0) {
+      db.account.creditBalance = round(db.account.creditBalance - delta, 4);
+      db.transactions.push({ id: crypto.randomUUID(), resourceUuid: volume.id as ResourceUuid, at: new Date(now).toISOString(),
+        type: "charge", amount: -round(delta, 4), balanceAfter: db.account.creditBalance,
+        referenceId: `volume-${volume.id}-${Math.floor(now / 3600000)}` });
+    }
+  }
+}
 function tick(settleBilling = true) {
   let lifecycleChanged = false;
   if (db.account.creditBalance >= 0) db.account.depletedAt = null;
@@ -704,7 +751,7 @@ function tick(settleBilling = true) {
       }
     }
   }
-  if (settleBilling) settleEips();
+  if (settleBilling) { settleEips(); settleVolumes(); }
   if (lifecycleChanged) persist();
 }
 function summary(
@@ -763,7 +810,11 @@ function summary(
           (!resourceId || e.id === resourceId) &&
           (!projectId || e.projectId === projectId),
       )
-      .reduce((n, e) => n + ipHourly(e.region), 0);
+      .reduce((n, e) => n + ipHourly(e.region), 0) +
+    db.volumes.filter((v) => !v.deletedAt && !isRegionalPoolVolume(v) && !v.id.startsWith("vol-") &&
+      (!v.resourceUuid || (v.kind === "file" && v.role === "pvc")) &&
+      (!region || v.region === region) && (!resourceId || v.id === resourceId) && (!projectId || v.projectId === projectId))
+      .reduce((sum, v) => sum + v.sizeGb * (STORAGE_PRODUCTS.find((p) => p.kind === v.kind && p.tier === v.tier)?.usdGbMonth || 0) / 730, 0);
   const [year, monthOfPeriod] = billingPeriod.split("-").map(Number);
   const daysInPeriod =
     year && monthOfPeriod >= 1 && monthOfPeriod <= 12
@@ -780,7 +831,7 @@ function summary(
       date: day,
       amount: round(entry?.amount || 0),
       ...Object.fromEntries(
-        [...KINDS, "eip"].map((kind) => [kind, round(entry?.kinds[kind] || 0)]),
+        [...KINDS, "eip", "storage"].map((kind) => [kind, round(entry?.kinds[kind] || 0)]),
       ),
       ...Object.fromEntries(
         db.projects.map((project) => [
@@ -1770,6 +1821,7 @@ async function dispatch(request: Request, settleBilling = true) {
         deletedAt: null,
       };
       db.volumes.push(volume);
+      db.billingCursors[volume.id] = Date.parse(volume.createdAt);
       persist();
       return json(volume, 201);
     }
@@ -1831,12 +1883,9 @@ async function dispatch(request: Request, settleBilling = true) {
     if (action === "attach") {
       if (volume.resourceUuid) fail(409, "HAS_DEPENDENCIES");
       const resourceUuid = z.string().min(1).parse(body.resourceUuid);
-      const mountPath = z
-        .string()
-        .trim()
-        .regex(/^\/[A-Za-z0-9/._-]+$/)
-        .max(240)
-        .parse(body.mountPath);
+      const mountPath = volume.kind === "file"
+        ? z.string().trim().regex(/^\/[A-Za-z0-9/._-]+$/).max(240).parse(body.mountPath)
+        : "";
       const target =
         db.resources.find(
           (item) => item.resourceUuid === resourceUuid && !item.deletedAt,
@@ -1866,7 +1915,7 @@ async function dispatch(request: Request, settleBilling = true) {
         volume.mountPath = `/pvc/default/${binding.pvcName}`;
       } else {
         const selections = target.spec.storageSelections || [];
-        if (selections.some((row) => row.mountPath === mountPath)) fail(409, "VALIDATION_ERROR");
+        if (mountPath && selections.some((row) => row.mountPath === mountPath)) fail(409, "VALIDATION_ERROR");
         target.spec.storageSelections = [
           ...selections,
           { key: `attached_${volume.id}`, kind: volume.kind, tier: volume.tier, name: volume.name,
@@ -1892,6 +1941,7 @@ async function dispatch(request: Request, settleBilling = true) {
       }
       volume.resourceUuid = null;
       volume.mountPath = "";
+      db.billingCursors[volume.id] = Date.now();
     }
     persist();
     return json(volume);
@@ -2855,12 +2905,8 @@ async function dispatch(request: Request, settleBilling = true) {
       if (spec.localPvGb && spec.nodePools.some((nodePool) => spec.localPvGb! > GPU_SPECS[nodePool.poolCode].localNvmeGb))
         fail(422, "INVALID_LOCAL_PV_SIZE");
     }
-    for (const row of spec.storageSelections || [])
-      if (
-        row.kind === "object" &&
-        db.buckets.some((bucket) => bucket.name === row.name)
-      )
-        fail(409, "BUCKET_NAME_CONFLICT");
+    if (parsed.kind !== "vgpu" && (spec.storageSelections || []).some((row) => row.kind !== "block"))
+      fail(422, "INVALID_STORAGE_SPEC");
     const r = {
       ...parsed,
       spec,

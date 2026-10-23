@@ -53,7 +53,6 @@ export default function VolumePage() {
   const [zone, setZone] = useState(`${region}-a`);
   useEffect(() => setZone(`${region}-a`), [region]);
   const [targetResource, setTargetResource] = useState("");
-  const [mountPath, setMountPath] = useState("/mnt/storage");
   const [fileAccess, setFileAccess] = useState<FileAccessConfig>({
     protocol: "nfs4.1", vpcId: "", subnetId: "", allowedCidr: "",
     accessMode: "read_write", rootSquash: true,
@@ -335,10 +334,6 @@ export default function VolumePage() {
                     t("storage.attached"),
                     v.resourceName || t("storage.unattached"),
                   ],
-                  [
-                    t("storage.mountPath"),
-                    v.mountPath || t("storage.notMounted"),
-                  ],
                   [t("storage.role"), t(`storage.role.${v.role}`)],
                   ...(kind === "block" ? [[t("eks.availableZones"), v.zone || `${v.region}-a`] as [string, string]] : []),
                 ]}
@@ -432,37 +427,19 @@ export default function VolumePage() {
                     </select>
                   </Field>
                   {targetIsCluster && <small>{t("storage.clusterFileBindingHint")}</small>}
-                  {!targetIsCluster && <Field
-                    label={t("storage.mountPath")}
-                    hint={t("storage.mountPathHint")}
-                  >
-                    <input
-                      className="input"
-                      value={mountPath}
-                      aria-invalid={
-                        !/^\/[A-Za-z0-9/._-]+$/.test(mountPath.trim())
-                      }
-                      onChange={(event) => setMountPath(event.target.value)}
-                    />
-                    {!/^\/[A-Za-z0-9/._-]+$/.test(mountPath.trim()) && (
-                      <small className="field-error">
-                        {t("storage.mountPathInvalid")}
-                      </small>
-                    )}
-                  </Field>}
+                  <small>{t("storage.osMountNote")}</small>
                   <Button
                     variant="primary"
                     disabled={
                       !canWrite(role) ||
                       busy ||
-                      !targetResource ||
-                      (!targetIsCluster && !/^\/[A-Za-z0-9/._-]+$/.test(mountPath.trim()))
+                      !targetResource
                     }
                     onClick={async () => {
                       const result = await run(() =>
                         post(`${EP.storageVolumes}/${v.id}/attach`, {
                           resourceUuid: targetResource,
-                          mountPath: targetIsCluster ? "/pvc/default/data" : mountPath.trim(),
+                          mountPath: targetIsCluster ? "/pvc/default/data" : "",
                         }),
                       );
                       if (result) setTargetResource("");

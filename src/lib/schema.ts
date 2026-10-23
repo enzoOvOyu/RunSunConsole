@@ -73,7 +73,7 @@ export const storageSelectionsSchema = z
         (row.kind === "object" &&
           (row.count !== 1 ||
             !/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(row.name))) ||
-        (row.kind !== "object" && !/^\/[A-Za-z0-9/._-]+$/.test(row.mountPath))
+        (row.kind === "file" && !/^\/[A-Za-z0-9/._-]+$/.test(row.mountPath))
       )
         ctx.addIssue({
           code: "custom",

@@ -32,7 +32,7 @@ describe("derived business contracts", () => {
     const r = seedResources()[0];
     r.status = "stopped";
     expect(costPerHour(r, RATES)).toBeCloseTo(
-      (r.spec.storageGb * 0.08) / 730,
+      estimate(r, RATES).lines.filter((line) => line.unit === "per_gb_hour").reduce((sum, line) => sum + line.hourly, 0),
       5,
     );
     r.status = "provisioning";

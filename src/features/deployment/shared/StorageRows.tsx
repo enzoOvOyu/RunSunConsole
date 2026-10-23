@@ -1,20 +1,15 @@
 import { Button, Field, Panel } from "../../../components/ui";
+import { Link } from "react-router-dom";
 import { t } from "../../../i18n";
 import { EP } from "../../../lib/api-client";
 import { useData } from "../../shared/hooks";
 import type {
-  StorageKind,
   StorageProduct,
   StorageRequest,
 } from "../../../types/storage";
 import { useSpec } from "./fields";
 import { clientUuid } from "../../../lib/uuid";
 
-const kindNames: Record<StorageKind, string> = {
-  block: "storage.kind.block",
-  file: "storage.kind.file",
-  object: "storage.kind.object",
-};
 export function StorageRows() {
   const { spec, update } = useSpec();
   const rows = spec.storageSelections || [];
@@ -22,7 +17,7 @@ export function StorageRows() {
     ["storage-products"],
     EP.storageProducts,
   );
-  const products = catalog.data || [];
+  const products = (catalog.data || []).filter((product) => product.kind === "block");
   const change = (key: string, patch: Partial<StorageRequest>) =>
     update({
       storageSelections: rows.map((row) =>
@@ -39,7 +34,7 @@ export function StorageRows() {
             const product = products[0];
             if (!product) return;
             let suffix = 1;
-            while (rows.some((row) => row.mountPath === `/mnt/data-${suffix}`))
+            while (rows.some((row) => row.name === `data-${suffix}`))
               suffix++;
             update({
               storageSelections: [
@@ -51,7 +46,7 @@ export function StorageRows() {
                   name: `data-${suffix}`,
                   sizeGb: product.minGb,
                   count: 1,
-                  mountPath: `/mnt/data-${suffix}`,
+                  mountPath: "",
                 },
               ],
             });
@@ -62,7 +57,11 @@ export function StorageRows() {
       }
     >
       <div className="stack">
-        <small>{t("storage.formHint")}</small>
+        <small>{t("storage.deploymentBlockHint")}</small>
+        <div className="row" style={{ gap: 16, flexWrap: "wrap" }}>
+          <Link to="/storage/file">{t("storage.manageFileStorage")}</Link>
+          <Link to="/storage/object">{t("storage.manageObjectStorage")}</Link>
+        </div>
         {catalog.error && (
           <span className="field-error">{t("storage.catalogError")}</span>
         )}
@@ -72,7 +71,13 @@ export function StorageRows() {
           );
           const product =
             options.find((p) => p.tier === row.tier) || options[0];
-          if (!product) return null;
+          if (row.kind !== "block" || !product) return (
+            <div className="panel stack" key={row.key} style={{ padding: 16 }}>
+              <strong>{row.name}</strong>
+              <small>{t("storage.legacySelectionHint")}</small>
+              <Button onClick={() => update({ storageSelections: rows.filter((item) => item.key !== row.key) })}>{t("common.delete")}</Button>
+            </div>
+          );
           return (
             <div className="panel stack" key={row.key} style={{ padding: 16 }}>
               <div className="between">
@@ -88,31 +93,6 @@ export function StorageRows() {
                 </Button>
               </div>
               <div className="form-grid">
-                <Field label={t("common.type")}>
-                  <select
-                    value={row.kind}
-                    onChange={(e) => {
-                      const kind = e.target.value as StorageKind;
-                      const next = products.find((p) => p.kind === kind)!;
-                      change(row.key, {
-                        kind,
-                        tier: next.tier,
-                        sizeGb: next.minGb,
-                        count: 1,
-                        mountPath:
-                          kind === "object"
-                            ? ""
-                            : row.mountPath || `/mnt/data-${index + 1}`,
-                      });
-                    }}
-                  >
-                    {(["block", "file", "object"] as const).map((kind) => (
-                      <option key={kind} value={kind}>
-                        {t(kindNames[kind])}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
                 <Field label={t("storage.tier")}>
                   <select
                     value={row.tier}
@@ -134,11 +114,7 @@ export function StorageRows() {
                   </select>
                 </Field>
                 <Field
-                  label={
-                    row.kind === "object"
-                      ? t("storage.bucketName")
-                      : t("common.name")
-                  }
+                  label={t("common.name")}
                 >
                   <input
                     className="input"
@@ -147,11 +123,7 @@ export function StorageRows() {
                   />
                 </Field>
                 <Field
-                  label={
-                    row.kind === "object"
-                      ? t("storage.quotaGb")
-                      : t("storage.sizeGb")
-                  }
+                  label={t("storage.sizeGb")}
                   hint={`${product.minGb}–${product.maxGb} GB · ${product.stepGb} GB`}
                 >
                   <input
@@ -166,36 +138,19 @@ export function StorageRows() {
                     }
                   />
                 </Field>
-                {row.kind !== "object" && (
-                  <>
-                    <Field label={t("storage.count")}>
-                      <input
-                        className="input"
-                        type="number"
-                        min={1}
-                        max={16}
-                        value={row.count}
-                        onChange={(e) =>
-                          change(row.key, { count: Number(e.target.value) })
-                        }
-                      />
-                    </Field>
-                    <Field label={t("storage.mountPath")}>
-                      <input
-                        className="input"
-                        value={row.mountPath}
-                        onChange={(e) =>
-                          change(row.key, { mountPath: e.target.value })
-                        }
-                      />
-                    </Field>
-                  </>
-                )}
+                <Field label={t("storage.count")}>
+                  <input
+                    className="input"
+                    type="number"
+                    min={1}
+                    max={8}
+                    value={row.count}
+                    onChange={(e) => change(row.key, { count: Number(e.target.value) })}
+                  />
+                </Field>
               </div>
               <small>
-                {row.kind === "object"
-                  ? t("storage.objectBilling")
-                  : `${t("storage.monthlyEstimate")}: $${(row.sizeGb * row.count * product.usdGbMonth).toFixed(2)}`}
+                {`${t("storage.monthlyEstimate")}: $${(row.sizeGb * row.count * product.usdGbMonth).toFixed(2)}`}
               </small>
             </div>
           );
