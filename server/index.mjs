@@ -131,10 +131,17 @@ async function dispatch(request) {
       loadedVersion = loaded.version;
     }
     db.objectContent = objectStoreSnapshot();
-    before = structuredClone(db);
-    dirty = false;
     const settleBilling =
-      request.method !== "GET" || Date.now() - lastMeteredAt >= 10_000;
+      request.method !== "GET" || Date.now() - lastMeteredAt >= 60_000;
+    const fastRead = request.method === "GET" && !settleBilling &&
+      !db.account.depletedAt && db.account.creditBalance >= 0 &&
+      !db.resources.some((resource) => resource.status === "provisioning" ||
+        (resource.kind === "vgpu" && resource.spec.deploymentMode === "slice" && resource.status === "error")) &&
+      !["/api/deployment-options", "/api/billing/report", "/api/billing/invoices"].includes(
+        new URL(request.url).pathname,
+      );
+    before = fastRead ? null : structuredClone(db);
+    dirty = false;
     const response = await handleMockRequest(request, {
       delayMs: 0,
       settleBilling,
@@ -147,7 +154,8 @@ async function dispatch(request) {
       loadObjectStore(db.objectContent || []);
       return response;
     }
-    const changed = dirty || JSON.stringify(before) !== JSON.stringify(db);
+    if (fastRead && dirty) throw new Error("Read-only request changed state");
+    const changed = fastRead ? false : dirty || JSON.stringify(before) !== JSON.stringify(db);
     if (changed) await saveState(client, before, db, loadedVersion + 1);
     const derivedResponse = await deriveResponse(client, request, response);
     await client.query("COMMIT");

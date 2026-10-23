@@ -319,11 +319,14 @@ it("keeps project cost trends scoped to that project", async () => {
     )
     .reduce((a, u) => a + u.amount, 0);
   expect(summary.monthCost).toBeCloseTo(expected, 1);
-  const day = summary.costTrend7d.at(-2).date;
+  expect(summary.costTrendMonth[0].date).toBe(`${new Date().toISOString().slice(0, 7)}-01`);
+  expect(summary.costTrendMonth.at(-1).date).toBe(new Date().toISOString().slice(0, 10));
+  expect(Math.abs(summary.costTrendMonth.reduce((sum: number, row: { amount: number }) => sum + row.amount, 0) - summary.monthCost)).toBeLessThan(0.5);
+  const day = summary.costTrendMonth.at(-2).date;
   const dayCost = db.usage
     .filter((u) => u.projectId === "production" && u.usageHour.startsWith(day))
     .reduce((a, u) => a + u.amount, 0);
-  expect(summary.costTrend7d.at(-2).amount).toBeCloseTo(dayCost, 1);
+  expect(summary.costTrendMonth.at(-2).amount).toBeCloseTo(dayCost, 1);
 });
 it("isolates object prefixes and uploads, signs and deletes content", async () => {
   const before = (await request("/buckets/bucket-jp/objects?prefix=models/"))

@@ -3323,12 +3323,12 @@ async function dispatch(request: Request, settleBilling = true) {
         ),
         quotas: quotas(),
         myRole: role,
-        costTrend7d: summary(
-          null,
+        costTrendMonth: summary(
+          p.defaultRegion,
           new Date().toISOString().slice(0, 7),
           null,
           p.id,
-        ).trend.slice(-7),
+        ).trend.filter((point) => point.date <= new Date().toISOString().slice(0, 10)),
       });
     }
     if (method === "DELETE") {

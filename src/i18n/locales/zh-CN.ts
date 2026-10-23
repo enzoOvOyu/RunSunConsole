@@ -635,7 +635,7 @@ export default {
   "project.sharedQuotas": "组织共享区域配额",
   "project.sharedQuotasScope": "当前组织在各区域的共享配额，非项目独享额度。",
   "project.costUsageBasis": "按本月已产生的计量用量汇总，包含所有区域。",
-  "project.costTrendScope": "当前项目近 7 日用量费用 · USD",
+  "project.costTrendScope": "当前项目本月逐日用量费用 · USD",
   "project.settings": "项目设置",
   "project.myRole": "我的角色",
   "project.id": "项目 ID",

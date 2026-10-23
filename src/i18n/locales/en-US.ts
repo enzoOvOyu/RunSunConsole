@@ -663,7 +663,7 @@ export default {
   "project.costUsageBasis":
     "Billed usage accrued this month across all regions.",
   "project.costTrendScope":
-    "Usage charges for this project over the last 7 days · USD",
+    "Daily usage charges for this project this month · USD",
   "project.settings": "Project settings",
   "project.myRole": "My role",
   "project.id": "Project ID",

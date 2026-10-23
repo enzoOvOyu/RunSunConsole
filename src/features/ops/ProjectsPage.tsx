@@ -48,7 +48,7 @@ interface ProjectSummary extends Project {
   resourceItems: Resource[];
   quotas: Quota[];
   myRole: Role;
-  costTrend7d: Record<string, unknown>[];
+  costTrendMonth: Record<string, unknown>[];
 }
 export default function ProjectsPage() {
   const [params, setParams] = useSearchParams();
@@ -551,7 +551,7 @@ export function ProjectDetail() {
             hint={`${t("project.costTrendScope")} · ${t("common." + p.defaultRegion)}`}
           >
             <Suspense fallback={<Loading />}>
-              <TrendChart data={p.costTrend7d} />
+              <TrendChart data={p.costTrendMonth} />
             </Suspense>
           </Panel>
         </div>
