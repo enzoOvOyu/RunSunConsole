@@ -573,6 +573,8 @@ export default {
   "sshKeys.importTitle": "Import SSH public key",
   "sshKeys.name": "Name",
   "sshKeys.file": "Import from file",
+  "sshKeys.chooseFile": "Choose .pub file",
+  "sshKeys.noFileSelected": "No file selected",
   "sshKeys.fileHint": "Choose an OpenSSH .pub public key file.",
   "sshKeys.publicKey": "Public key",
   "sshKeys.formatHint": "Supports ssh-ed25519 and ssh-rsa formats.",

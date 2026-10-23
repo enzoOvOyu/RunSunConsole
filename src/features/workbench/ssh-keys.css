@@ -1,0 +1,12 @@
+.ssh-key-file-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rs-s2);
+  min-width: 0;
+  font-size: var(--rs-fs-sm);
+  line-height: var(--rs-lh-sm);
+}
+
+.ssh-key-file-field .row {
+  flex-wrap: wrap;
+}

@@ -1,16 +1,19 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Copy, KeyRound, Trash2, Upload } from "lucide-react";
 import { Button, Empty, Field, PageHeader, Panel, toast } from "../../components/ui";
 import { confirmAction } from "../../components/ui/ConfirmAction";
 import { clientUuid } from "../../lib/uuid";
 import { isValidSshPublicKey, readSshKeys, writeSshKeys, type SshKey } from "../../lib/ssh-keys";
 import { t } from "../../i18n";
+import "./ssh-keys.css";
 
 export default function SshKeysPage() {
   const [keys, setKeys] = useState<SshKey[]>(readSshKeys);
   const [name, setName] = useState("");
   const [publicKey, setPublicKey] = useState("");
   const [invalid, setInvalid] = useState(false);
+  const [fileName, setFileName] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const save = () => {
     const normalized = publicKey.trim();
@@ -26,12 +29,14 @@ export default function SshKeysPage() {
     setKeys(next);
     setName("");
     setPublicKey("");
+    setFileName("");
     setInvalid(false);
     toast(t("success.saved"));
   };
 
   const importFile = async (file?: File) => {
     if (!file) return;
+    setFileName(file.name);
     const value = (await file.text()).trim();
     setPublicKey(value);
     setName((current) => current || file.name.replace(/\.pub$/i, ""));
@@ -55,14 +60,29 @@ export default function SshKeysPage() {
             <Field label={t("sshKeys.name")}>
               <input className="input" value={name} onChange={(event) => setName(event.target.value)} />
             </Field>
-            <Field label={t("sshKeys.file")} hint={t("sshKeys.fileHint")}>
-              <input
-                className="input"
-                type="file"
-                accept=".pub,text/plain"
-                onChange={(event) => void importFile(event.target.files?.[0])}
-              />
-            </Field>
+            <div className="ssh-key-file-field">
+              <span className="field-label">{t("sshKeys.file")}</span>
+              <div className="row">
+                <Button onClick={() => fileInputRef.current?.click()}>
+                  <Upload size={15} aria-hidden="true" />
+                  {t("sshKeys.chooseFile")}
+                </Button>
+                <small className="muted">
+                  {fileName || t("sshKeys.noFileSelected")}
+                </small>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pub,text/plain"
+                  hidden
+                  onChange={(event) => {
+                    void importFile(event.target.files?.[0]);
+                    event.target.value = "";
+                  }}
+                />
+              </div>
+              <small>{t("sshKeys.fileHint")}</small>
+            </div>
           </div>
           <Field label={t("sshKeys.publicKey")} hint={t("sshKeys.formatHint")}>
             <textarea
@@ -71,6 +91,7 @@ export default function SshKeysPage() {
               value={publicKey}
               onChange={(event) => {
                 setPublicKey(event.target.value);
+                setFileName("");
                 setInvalid(false);
               }}
               aria-invalid={invalid && !isValidSshPublicKey(publicKey)}

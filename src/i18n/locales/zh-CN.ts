@@ -555,6 +555,8 @@ export default {
   "sshKeys.importTitle": "导入 SSH 公钥",
   "sshKeys.name": "名称",
   "sshKeys.file": "从文件导入",
+  "sshKeys.chooseFile": "选择 .pub 文件",
+  "sshKeys.noFileSelected": "未选择文件",
   "sshKeys.fileHint": "选择 OpenSSH .pub 公钥文件。",
   "sshKeys.publicKey": "公钥内容",
   "sshKeys.formatHint": "支持 ssh-ed25519 和 ssh-rsa 格式。",
