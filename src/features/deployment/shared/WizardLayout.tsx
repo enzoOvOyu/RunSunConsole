@@ -259,8 +259,16 @@ function WizardForm({
   const navigate = useNavigate();
   const pool = context.pools.find((p) => p.available)!;
   const initial = (): WizardValues => {
+    const availableProjects = context.projects.filter((item) => !item.deletedAt);
+    const defaultProjectId =
+      availableProjects.find((item) => item.isDefault)?.id ||
+      availableProjects[0]?.id ||
+      "";
+    const initialProjectId = availableProjects.some((item) => item.id === project)
+      ? project
+      : defaultProjectId;
     const base: WizardValues = {
-      projectId: project || context.projects[0]?.id || "",
+      projectId: initialProjectId,
       region,
       name: `${KIND_META[kind].prefix}new`,
       nodePool: pool.code,
@@ -275,6 +283,8 @@ function WizardForm({
       if (stored && !clone && !source.model && !source.image && !source.runtime) {
         const draft = JSON.parse(stored) as WizardValues;
         if (kind === "gpu_vm") draft.spec = normalizeServerCompute(draft.spec);
+        if (!availableProjects.some((item) => item.id === draft.projectId))
+          draft.projectId = initialProjectId;
         return draft;
       }
     } catch {
