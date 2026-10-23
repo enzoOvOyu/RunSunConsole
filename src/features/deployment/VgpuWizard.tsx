@@ -49,7 +49,7 @@ const plannedSubnets = (cidr: string, region: string) => {
 
 function validStep(values: WizardValues, step: number, lookups?: { network?: DeploymentOptions; pools: Pool[]; images: Image[] }) {
   const spec = values.spec as VgpuSpec;
-  if (step === 0) return ["1.28", "1.29", "1.30", "1.31"].includes(spec.k8sVersion) &&
+  if (step === 0) return ["1.31", "1.32", "1.33", "1.34", "1.35", "1.36", "1.37"].includes(spec.k8sVersion) &&
     ["standard", "ha"].includes(spec.controlPlaneTier) && (!spec.apiServerPublic || isCidr(spec.authorizedCidr));
   if (step === 1) {
     if (spec.apiServerPublic && !isCidr(spec.authorizedCidr)) return false;

@@ -218,7 +218,7 @@ export const vgpuSchema = z.object({
     tolerateGpuTaint: z.boolean(),
   })).optional(),
   ...common,
-  k8sVersion: z.enum(["1.28", "1.29", "1.30", "1.31"]),
+  k8sVersion: z.enum(["1.31", "1.32", "1.33", "1.34", "1.35", "1.36", "1.37"]),
   controlPlaneTier: z.enum(["standard", "ha"]),
   nodePools: z.array(nodePoolSchema).min(1).max(5).refine(
     (pools) => pools.every((p) => (p.minNodes ?? 1) <= p.nodeCount && p.nodeCount <= (p.maxNodes ?? 64)) &&
