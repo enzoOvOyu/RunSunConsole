@@ -179,14 +179,8 @@ export const router = createBrowserRouter([
           ),
         }),
       },
-      {
-        path: "workbench/images",
-        element: <Navigate to="/workbench/models" replace />,
-      },
-      {
-        path: "workbench/apps",
-        element: <Navigate to="/workbench/models" replace />,
-      },
+      { path: "workbench/images", element: <Navigate to="/workbench/models" replace /> },
+      { path: "workbench/apps", element: <Navigate to="/workbench/models" replace /> },
       {
         path: "workbench/scaling",
         lazy: async () => ({

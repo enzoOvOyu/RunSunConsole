@@ -154,18 +154,11 @@ export function normalizeSpec<S extends Resource["spec"]>(spec: S): S {
     next.gpuCount = next.gpuDisabled ? 0 : next.gpuPerInstance * next.quantity;
   }
   if ("nodePools" in next) {
-    next.gpuCount =
-      next.deploymentMode === "slice"
-        ? 0
-        : next.nodePools.reduce((a, p) => a + p.nodeCount * p.gpuPerNode, 0);
-    next.storageGb =
-      next.defaultPvcGb *
-        (next.deploymentMode === "slice" ||
-        next.storageMode === "shared_file" ||
-        !next.storageMode
-          ? 1
-          : next.nodePools.reduce((count, pool) => count + pool.nodeCount, 0)) +
-      storageExtraGb(next.storageSelections);
+    next.gpuCount = next.deploymentMode === "slice" ? 0 : next.nodePools.reduce(
+      (a, p) => a + p.nodeCount * p.gpuPerNode,
+      0,
+    );
+    next.storageGb = next.defaultPvcGb * (next.deploymentMode === "slice" || next.storageMode === "shared_file" || !next.storageMode ? 1 : next.nodePools.reduce((count, pool) => count + pool.nodeCount, 0)) + storageExtraGb(next.storageSelections);
   }
   if ("replicas" in next) next.gpuCount = next.replicas * next.gpuPerReplica;
   if (!("systemDiskGb" in next) && !("nodePools" in next)) {

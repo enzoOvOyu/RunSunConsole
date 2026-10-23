@@ -260,11 +260,7 @@ export function Tabs({
   className?: string;
 }) {
   return (
-    <ShadTabs
-      value={value}
-      onValueChange={onChange}
-      className={className ? `tabs ${className}` : "tabs"}
-    >
+    <ShadTabs value={value} onValueChange={onChange} className={className ? `tabs ${className}` : "tabs"}>
       <TabsList>
         {items.map((item) => (
           <TabsTrigger

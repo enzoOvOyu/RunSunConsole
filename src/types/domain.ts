@@ -194,8 +194,7 @@ export interface VgpuSpec extends CommonSpec {
   subnets?: string[];
   volumeBindings?: ClusterVolumeBinding[];
   localPvGb?: number;
-  storageMode?:
-    "dynamic_block" | "existing_block" | "local_nvme" | "shared_file";
+  storageMode?: "dynamic_block" | "existing_block" | "local_nvme" | "shared_file";
   description?: string;
   podCidr?: string;
   serviceCidr?: string;
@@ -517,13 +516,7 @@ export interface Bucket {
   blockPublicAccess?: boolean;
   defaultEncryption?: boolean;
   versioning?: boolean;
-  fileInterface?: {
-    id: string;
-    prefix: string;
-    vpcId: string;
-    createdAt: string;
-    status: "simulated";
-  };
+  fileInterface?: { id: string; prefix: string; vpcId: string; createdAt: string; status: "simulated" };
   tags?: Record<string, string>;
   status: "active";
   quotaGb: number;

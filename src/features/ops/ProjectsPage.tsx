@@ -1,7 +1,11 @@
 import { useUrlState } from "../shared/useUrlState";
 import { confirmAction } from "../../components/ui/ConfirmAction";
 import { useState, lazy, Suspense } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import {
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import { Folder, Plus } from "lucide-react";
 import {
   KINDS,
@@ -76,29 +80,10 @@ export default function ProjectsPage() {
         }
       />
       <div className="toolbar">
-        <select
-          aria-label={t("common.region")}
-          value={
-            REGIONS.includes(selectedRegion as Region) ? selectedRegion! : "all"
-          }
-          onChange={(event) =>
-            setParams(
-              (current) => {
-                const next = new URLSearchParams(current);
-                if (event.target.value === "all") next.delete("region");
-                else next.set("region", event.target.value);
-                return next;
-              },
-              { replace: true },
-            )
-          }
-        >
+        <select aria-label={t("common.region")} value={REGIONS.includes(selectedRegion as Region) ? selectedRegion! : "all"}
+          onChange={(event) => setParams((current) => { const next = new URLSearchParams(current); if (event.target.value === "all") next.delete("region"); else next.set("region", event.target.value); return next; }, { replace: true })}>
           <option value="all">{t("common.allRegions")}</option>
-          {REGIONS.map((value) => (
-            <option key={value} value={value}>
-              {t("common." + value)}
-            </option>
-          ))}
+          {REGIONS.map((value) => <option key={value} value={value}>{t("common." + value)}</option>)}
         </select>
         <input
           className="input search"
@@ -114,11 +99,7 @@ export default function ProjectsPage() {
       ) : q.data?.length ? (
         <div className="stack">
           {q.data
-            .filter(
-              (p) =>
-                !REGIONS.includes(selectedRegion as Region) ||
-                p.defaultRegion === selectedRegion,
-            )
+            .filter((p) => !REGIONS.includes(selectedRegion as Region) || p.defaultRegion === selectedRegion)
             .filter((p) =>
               [dt(p.name), formatResourceId("prj", p.id)].some((value) =>
                 value.toLowerCase().includes(search.toLowerCase()),
@@ -168,10 +149,7 @@ export default function ProjectsPage() {
                 "success.created",
               );
               if (result) {
-                if (
-                  REGIONS.includes(selectedRegion as Region) &&
-                  selectedRegion !== projectRegion
-                ) {
+                if (REGIONS.includes(selectedRegion as Region) && selectedRegion !== projectRegion) {
                   const next = new URLSearchParams(params);
                   next.delete("region");
                   setParams(next, { replace: true });
@@ -210,12 +188,12 @@ function ProjectCard({ project: p }: { project: Project }) {
           <strong>{dt(p.name)}</strong>
           <div>
             <small>{t("project.id")}: </small>
-            <small className="resource-id">
-              {formatResourceId("prj", p.id)}
-            </small>
+            <small className="resource-id">{formatResourceId("prj", p.id)}</small>
           </div>
           <small>{t("common." + p.defaultRegion)}</small>
-          {p.isDefault && <span className="chip">{t("project.default")}</span>}
+          {p.isDefault && (
+            <span className="chip">{t("project.default")}</span>
+          )}
         </div>
       </div>
       <div>
@@ -298,18 +276,16 @@ export function ProjectDetail() {
       <div className="project-detail-tabbar">
         <Tabs
           className="tall-tabs"
-          items={["overview", "resources", "members", "quotas", "cost"].map(
-            (id) => ({
-              id,
-              label: t(
-                id === "overview"
-                  ? "tab.overview"
-                  : id === "members"
-                    ? "project.members"
-                    : `nav.${id}`,
-              ),
-            }),
-          )}
+          items={["overview", "resources", "members", "quotas", "cost"].map((id) => ({
+            id,
+            label: t(
+              id === "overview"
+                ? "tab.overview"
+                : id === "members"
+                  ? "project.members"
+                  : `nav.${id}`,
+            ),
+          }))}
           value={tab}
           onChange={setTab}
         />
@@ -317,13 +293,7 @@ export function ProjectDetail() {
           variant="danger"
           disabled={!canManageOrg(role) || !!p.deletedAt || p.isDefault || busy}
           onClick={async () => {
-            if (
-              !(await confirmAction(
-                t("common.delete") + " " + dt(p.name),
-                formatResourceId("prj", p.id),
-              ))
-            )
-              return;
+            if (!(await confirmAction(t("common.delete") + " " + dt(p.name), formatResourceId("prj", p.id)))) return;
             const deleted = await run(async () => {
               await remove(`${EP.projects}/${p.id}`);
               return true;
@@ -427,17 +397,13 @@ export function ProjectDetail() {
                 </Field>
                 <Button
                   disabled={
-                    !canManageOrg(role) ||
-                    !!p.deletedAt ||
-                    busy ||
+                    !canManageOrg(role) || !!p.deletedAt || busy ||
                     (name.trim() || p.name).length < 2 ||
                     (name.trim() || p.name) === p.name
                   }
                   onClick={async () => {
                     const nextName = name.trim() || p.name;
-                    const saved = await run(() =>
-                      patch(`${EP.projects}/${p.id}`, { name: nextName }),
-                    );
+                    const saved = await run(() => patch(`${EP.projects}/${p.id}`, { name: nextName }));
                     if (saved) setName(nextName);
                   }}
                 >

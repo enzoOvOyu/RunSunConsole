@@ -38,11 +38,7 @@ import { defaultScaling, normalizeSpec } from "../../../lib/config";
 import { formatResourceId } from "../../../lib/ids";
 import { SCALING_METRIC_LIMITS } from "../../../lib/schema";
 import { vpcNetworkType } from "../../../lib/network";
-import {
-  isWindowsImage,
-  WINDOWS_LOGIN_USER,
-  WINDOWS_RDP_PORT,
-} from "../../../lib/windows-image";
+import { isWindowsImage, WINDOWS_LOGIN_USER, WINDOWS_RDP_PORT } from "../../../lib/windows-image";
 import { NetworkEditor } from "../../network/NetworkEditor";
 import { readSshKeys } from "../../../lib/ssh-keys";
 import {
@@ -514,9 +510,7 @@ export function ImageCards({
   const compatible = images.filter(
     (image) =>
       image.type === (runtime ? "container" : os ? "os" : image.type) &&
-      (!excludeWindows ||
-        image.type !== "os" ||
-        image.osFamily !== "Windows Server") &&
+      (!excludeWindows || image.type !== "os" || image.osFamily !== "Windows Server") &&
       (!architecture || imageSupportsArchitecture(image, architecture)) &&
       (!gpuModel || imageSupportsPool(image, gpuModel)) &&
       (!runtime || !osFamily || imageCompatibleWithOs(image, osFamily)),
@@ -582,12 +576,7 @@ export function ImageCards({
                 : t("images.noneIncluded")}
             </small>
             {os && isWindowsImage(image) && (
-              <small>
-                {t("images.windowsPasswordLogin", {
-                  user: WINDOWS_LOGIN_USER,
-                  port: WINDOWS_RDP_PORT,
-                })}
-              </small>
+              <small>{t("images.windowsPasswordLogin", { user: WINDOWS_LOGIN_USER, port: WINDOWS_RDP_PORT })}</small>
             )}
             {runtime && (
               <small>
@@ -614,9 +603,7 @@ export function NetworkFields({
   const region = form.watch("region"),
     projectId = form.watch("projectId");
   const [allocatingEip, setAllocatingEip] = useState(false);
-  const projects = useData<Project[]>(["projects"], EP.projects, {
-    enabled: allocatingEip,
-  });
+  const projects = useData<Project[]>(["projects"], EP.projects, { enabled: allocatingEip });
   const options = useData<DeploymentOptions>(
     ["deployment-network", region, projectId, dedicatedBaremetal],
     EP.options +
@@ -852,9 +839,7 @@ export function NetworkFields({
                       ))}
                     </select>
                     {!options.data.eips.length && (
-                      <small className="muted">
-                        {t("network.noAvailableEip")}
-                      </small>
+                      <small className="muted">{t("network.noAvailableEip")}</small>
                     )}
                   </Field>
                 )}
@@ -868,29 +853,22 @@ export function NetworkFields({
           </div>
         )}
       </div>
-      {allocatingEip &&
-        (projects.isPending ? (
-          <Loading />
-        ) : projects.error ? (
-          <ErrorState error={projects.error} />
-        ) : (
-          <NetworkEditor
-            key={`${projectId}-${region}`}
-            kind="eips"
-            state={{ action: "create" }}
-            region={region}
-            projectId={projectId}
-            projects={(projects.data || []).filter(
-              (project) => project.id === projectId && !project.deletedAt,
-            )}
-            onAllocated={(eip) => {
-              form.setValue("allocatedEip", eip);
-              update({ publicIp: true, eipId: eip.id });
-              void options.refetch();
-            }}
-            onClose={() => setAllocatingEip(false)}
-          />
-        ))}
+      {allocatingEip && (projects.isPending ? <Loading /> : projects.error ? <ErrorState error={projects.error} /> : (
+        <NetworkEditor
+          key={`${projectId}-${region}`}
+          kind="eips"
+          state={{ action: "create" }}
+          region={region}
+          projectId={projectId}
+          projects={(projects.data || []).filter((project) => project.id === projectId && !project.deletedAt)}
+          onAllocated={(eip) => {
+            form.setValue("allocatedEip", eip);
+            update({ publicIp: true, eipId: eip.id });
+            void options.refetch();
+          }}
+          onClose={() => setAllocatingEip(false)}
+        />
+      ))}
     </div>
   );
 }
@@ -969,35 +947,31 @@ export function Review({ hideSpec = false }: { hideSpec?: boolean } = {}) {
           ],
           [t("common.region"), t("common." + values.region)],
           [t("common.name"), values.name],
-          ...(hideSpec
-            ? []
-            : Object.entries(spec)
-                .filter(
-                  ([key, value]) =>
-                    (!("machineType" in spec) || key !== "migPartition") &&
-                    (!("modelRef" in spec) || key !== "ports") &&
-                    (!("nodePools" in spec) || key !== "workloads") &&
-                    (!("gpuPerInstance" in spec) ||
-                      (key !== "env" &&
-                        key !== "entrypoint" &&
-                        (key !== "runtimeImageRef" ||
-                          (!!value &&
-                            images.data?.some(
-                              (image) => image.id === value,
-                            ))))),
-                )
-                .map(([key, value]): [string, string] => [
-                  "gpuPerInstance" in spec && key === "vcpu"
-                    ? t("images.vcpuPerInstance")
-                    : "gpuPerInstance" in spec && key === "memoryGb"
-                      ? t("images.memoryPerInstance")
-                      : "gpuPerInstance" in spec && key === "gpuCount"
-                        ? t("images.totalGpuCount")
-                        : key === "runtimeImageRef"
-                          ? t("wizard.runtimeImage")
-                          : t("field." + key),
-                  renderValue(key, value),
-                ])),
+          ...(hideSpec ? [] : Object.entries(spec)
+            .filter(
+              ([key, value]) =>
+                (!("machineType" in spec) || key !== "migPartition") &&
+                (!("modelRef" in spec) || key !== "ports") &&
+                (!("nodePools" in spec) || key !== "workloads") &&
+                (!("gpuPerInstance" in spec) ||
+                (key !== "env" &&
+                  key !== "entrypoint" &&
+                  (key !== "runtimeImageRef" ||
+                    (!!value &&
+                      images.data?.some((image) => image.id === value))))),
+            )
+            .map(([key, value]): [string, string] => [
+              "gpuPerInstance" in spec && key === "vcpu"
+                ? t("images.vcpuPerInstance")
+                : "gpuPerInstance" in spec && key === "memoryGb"
+                  ? t("images.memoryPerInstance")
+                  : "gpuPerInstance" in spec && key === "gpuCount"
+                    ? t("images.totalGpuCount")
+                    : key === "runtimeImageRef"
+                      ? t("wizard.runtimeImage")
+                      : t("field." + key),
+              renderValue(key, value),
+            ])),
         ]}
       />
       <Check
@@ -1021,13 +995,11 @@ export function ProjectSelect({
     <div className="row">
       <select aria-label={t("common.project")} {...form.register("projectId")}>
         <option value="">{t("common.project")}</option>
-        {projects
-          .filter((p) => !p.deletedAt && p.defaultRegion === region)
-          .map((p) => (
-            <option key={p.id} value={p.id}>
-              {dt(p.name)} · {formatResourceId("prj", p.id)}
-            </option>
-          ))}
+        {projects.filter((p) => !p.deletedAt && p.defaultRegion === region).map((p) => (
+          <option key={p.id} value={p.id}>
+            {dt(p.name)} · {formatResourceId("prj", p.id)}
+          </option>
+        ))}
       </select>
       <Button onClick={onCreate}>{t("wizard.projectNew")}</Button>
     </div>

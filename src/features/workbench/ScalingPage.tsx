@@ -94,40 +94,24 @@ export default function ScalingPage() {
     (kind !== "gpu_baremetal" ||
       (config.cooldown_s >= 600 && config.cooldown_s <= 1800));
   const fieldNames: Record<string, string> = {
-    trigger_metric: t("common.metric"),
-    target_value: t("scaling.targetValue"),
-    min_size: t("scaling.minSize"),
-    max_size: t("scaling.maxSize"),
-    scale_to_zero: t("scaling.zero"),
-    drain_timeout_s: t("scaling.drain"),
-    fallback_enabled: t("scaling.fallback"),
-    cooldown_s: t("scaling.cooldown"),
-    warm_pool: t("scaling.warmPool"),
-    weight_cache: t("scaling.cache"),
-    canary_percent: t("wizard.canary"),
-    maintenance_window: t("scaling.maintenance"),
+    trigger_metric: t("common.metric"), target_value: t("scaling.targetValue"),
+    min_size: t("scaling.minSize"), max_size: t("scaling.maxSize"),
+    scale_to_zero: t("scaling.zero"), drain_timeout_s: t("scaling.drain"),
+    fallback_enabled: t("scaling.fallback"), cooldown_s: t("scaling.cooldown"),
+    warm_pool: t("scaling.warmPool"), weight_cache: t("scaling.cache"),
+    canary_percent: t("wizard.canary"), maintenance_window: t("scaling.maintenance"),
   };
   const changeSummary = Object.entries(config)
-    .filter(
-      ([key, value]) =>
-        !editing || value !== editing.config[key as keyof ScalingConfig],
-    )
-    .map(([key, value]) => ({
-      key: fieldNames[key] || key,
-      before: editing
-        ? String(editing.config[key as keyof ScalingConfig])
-        : "—",
-      after: String(value),
-    }));
+    .filter(([key, value]) => key !== "readiness_gate" && (!editing || value !== editing.config[key as keyof ScalingConfig]))
+    .map(([key, value]) => ({ key: fieldNames[key] || key, before: editing ? String(editing.config[key as keyof ScalingConfig]) : "—", after: String(value) }));
+  const changeRows = (changes.data || []).filter((event) =>
+    rs.some((item) => item.resourceUuid === event.resourceUuid && item.kind === kind),
+  );
   const changeDescription = (event: ResourceEvent) => {
-    if (event.type === "scaling_policy_created")
-      return t("scaling.changeCreated");
-    if (event.type === "scaling_policy_deleted")
-      return t("scaling.changeDeleted");
-    if (event.type === "scaling_policy_paused")
-      return t("scaling.changePaused");
-    if (event.type === "scaling_policy_resumed")
-      return t("scaling.changeResumed");
+    if (event.type === "scaling_policy_created") return t("scaling.changeCreated");
+    if (event.type === "scaling_policy_deleted") return t("scaling.changeDeleted");
+    if (event.type === "scaling_policy_paused") return t("scaling.changePaused");
+    if (event.type === "scaling_policy_resumed") return t("scaling.changeResumed");
     try {
       const previous = JSON.parse(event.before) as Record<string, unknown>;
       const next = JSON.parse(event.after) as Record<string, unknown>;
@@ -135,21 +119,10 @@ export default function ScalingPage() {
       const after = (next.config || next) as Record<string, unknown>;
       const previousStatus = previous.status as string | undefined;
       const nextStatus = next.status as string | undefined;
-      const changed = Object.keys(after).filter(
-        (key) => before[key] !== after[key],
-      );
+      const changed = Object.keys(after).filter((key) => key !== "readiness_gate" && before[key] !== after[key]);
       if (previousStatus !== nextStatus && nextStatus) changed.push("status");
-      return changed.length
-        ? changed
-            .map(
-              (key) =>
-                `${fieldNames[key] || t("common.status")}: ${String(before[key] ?? previousStatus ?? "—")} → ${String(after[key] ?? nextStatus ?? "—")}`,
-            )
-            .join(" · ")
-        : t("scaling.changeNoDetails");
-    } catch {
-      return `${event.before} → ${event.after}`;
-    }
+      return changed.length ? changed.map((key) => `${fieldNames[key] || t("common.status")}: ${String(before[key] ?? previousStatus ?? "—")} → ${String(after[key] ?? nextStatus ?? "—")}`).join(" · ") : t("scaling.changeNoDetails");
+    } catch { return `${event.before} → ${event.after}`; }
   };
   return (
     <>
@@ -346,54 +319,17 @@ export default function ScalingPage() {
           />
         </Panel>
         <Panel title={t("scaling.changeHistory")}>
-          {changes.isPending ? (
-            <Loading />
-          ) : changes.error ? (
-            <ErrorState error={changes.error} />
-          ) : (
+          {changes.isPending ? <Loading /> : changes.error ? <ErrorState error={changes.error} /> : changeRows.length ? (
             <DataTable
-              data={(changes.data || []).filter((event) =>
-                rs.some(
-                  (item) =>
-                    item.resourceUuid === event.resourceUuid &&
-                    item.kind === kind,
-                ),
-              )}
+              data={changeRows}
               columns={[
-                {
-                  accessorKey: "at",
-                  header: t("common.time"),
-                  cell: ({ row }) => date(row.original.at),
-                },
-                {
-                  id: "resource",
-                  header: t("nav.resources"),
-                  cell: ({ row }) => {
-                    const linked = rs.find(
-                      (item) => item.resourceUuid === row.original.resourceUuid,
-                    );
-                    return linked ? (
-                      <Link to={resourceLink(linked)}>
-                        {dt(linked.name)} · {linked.displayId}
-                      </Link>
-                    ) : (
-                      "—"
-                    );
-                  },
-                },
-                {
-                  accessorKey: "type",
-                  header: t("common.type"),
-                  cell: ({ row }) => t(`scaling.${row.original.type}`),
-                },
-                {
-                  id: "change",
-                  header: t("scaling.changeInfo"),
-                  cell: ({ row }) => changeDescription(row.original),
-                },
+                { accessorKey: "at", header: t("common.time"), cell: ({ row }) => date(row.original.at) },
+                { id: "resource", header: t("scaling.resource"), cell: ({ row }) => { const linked = rs.find((item) => item.resourceUuid === row.original.resourceUuid); return linked ? <Link to={resourceLink(linked)}>{linked.displayId}</Link> : "—"; } },
+                { accessorKey: "type", header: t("common.type"), cell: ({ row }) => t(`scaling.${row.original.type}`) },
+                { id: "change", header: t("scaling.changeInfo"), cell: ({ row }) => changeDescription(row.original) },
               ]}
             />
-          )}
+          ) : <Empty text={t("scaling.noChanges")} />}
         </Panel>
       </div>
       <Modal
@@ -405,58 +341,50 @@ export default function ScalingPage() {
         <div className="stack">
           {editing ? (
             <Field label={t("scaling.resource")}>
-              {target ? (
-                <Link className="mono" to={resourceLink(target)}>
-                  {target.displayId}
-                </Link>
-              ) : (
-                <span className="mono">{editing.resourceUuid}</span>
-              )}
+              {target ? <Link className="mono" to={resourceLink(target)}>{target.displayId}</Link> : <span className="mono">{editing.resourceUuid}</span>}
             </Field>
-          ) : (
-            <Field label={t("scaling.resource")}>
-              <select
-                value={resource}
-                onChange={(e) => {
-                  const nextId = e.target.value;
-                  setResource(nextId);
-                  const selected = rs.find(
-                    (item) => item.resourceUuid === nextId,
-                  );
-                  if (selected) {
-                    const actual =
-                      "quantity" in selected.spec
-                        ? selected.spec.quantity
-                        : "machineCount" in selected.spec
-                          ? selected.spec.machineCount
-                          : "nodePools" in selected.spec
-                            ? selected.spec.nodePools.reduce(
-                                (sum, item) => sum + item.nodeCount,
-                                0,
-                              )
-                            : selected.spec.replicas;
-                    setConfig((current) => ({
-                      ...current,
-                      min_size: actual,
-                      max_size: Math.min(
-                        kind === "inference" || kind === "gpu_baremetal"
-                          ? 32
-                          : 64,
-                        Math.max(actual, actual * 2),
-                      ),
-                    }));
-                  }
-                }}
-              >
-                <option value="">{t("nav.resources")}</option>
-                {available.map((r) => (
-                  <option key={r.resourceUuid} value={r.resourceUuid}>
-                    {dt(r.name)} · {r.displayId}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          )}
+          ) : <Field label={t("scaling.resource")}>
+            <select
+              value={resource}
+              onChange={(e) => {
+                const nextId = e.target.value;
+                setResource(nextId);
+                const selected = rs.find(
+                  (item) => item.resourceUuid === nextId,
+                );
+                if (selected) {
+                  const actual =
+                    "quantity" in selected.spec
+                      ? selected.spec.quantity
+                      : "machineCount" in selected.spec
+                        ? selected.spec.machineCount
+                        : "nodePools" in selected.spec
+                          ? selected.spec.nodePools.reduce(
+                              (sum, item) => sum + item.nodeCount,
+                              0,
+                            )
+                          : selected.spec.replicas;
+                  setConfig((current) => ({
+                    ...current,
+                    min_size: actual,
+                    max_size: Math.min(
+                      kind === "inference" || kind === "gpu_baremetal"
+                        ? 32
+                        : 64,
+                      Math.max(actual, actual * 2),
+                    ),
+                  }));
+                }
+              }}
+            >
+              <option value="">{t("nav.resources")}</option>
+              {available.map((r) => (
+                <option key={r.resourceUuid} value={r.resourceUuid}>
+                  {dt(r.name)} · {r.displayId}
+                </option>
+              ))}
+            </select>
+          </Field>}
           {configNotice && <p className="notice">{configNotice}</p>}
           <ScalingFields kind={kind} full value={config} onChange={setConfig} />
           {kind === "vgpu" && (

@@ -8,12 +8,7 @@ import {
 } from "../../components/ModelPublisherLogo";
 import { poolDisplayName } from "../../lib/gpu-labels";
 import { compareFeaturedModels } from "../../lib/model-order";
-import {
-  isWindowsImage,
-  WINDOWS_LOGIN_USER,
-  WINDOWS_MIN_SYSTEM_DISK_GB,
-  WINDOWS_RDP_PORT,
-} from "../../lib/windows-image";
+import { isWindowsImage, WINDOWS_LOGIN_USER, WINDOWS_MIN_SYSTEM_DISK_GB, WINDOWS_RDP_PORT } from "../../lib/windows-image";
 import { supportsChatInference } from "../../lib/inference-precision";
 import type { Image, Model } from "../../types/domain";
 import { useAuth } from "../../stores/auth";
@@ -119,9 +114,7 @@ export default function ImagesPage() {
     <>
       <PageHeader
         title={t(showImages ? "nav.os-images" : "nav.models")}
-        subtitle={t(
-          showImages ? "pageDescription.osImages" : "pageDescription.models",
-        )}
+        subtitle={t(showImages ? "pageDescription.osImages" : "pageDescription.models")}
       />
       {!showImages && (
         <div className="model-catalog-summary">
@@ -139,9 +132,7 @@ export default function ImagesPage() {
         <input
           className="input search"
           aria-label={t("common.search")}
-          placeholder={t(
-            showImages ? "common.search" : "images.searchPlaceholder",
-          )}
+          placeholder={t(showImages ? "common.search" : "images.searchPlaceholder")}
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         />
@@ -424,14 +415,7 @@ export default function ImagesPage() {
                         ? item.frameworks.join(", ")
                         : t("images.noneIncluded")}
                     </small>
-                    {isWindowsImage(item) && (
-                      <small>
-                        {t("images.windowsPasswordLogin", {
-                          user: WINDOWS_LOGIN_USER,
-                          port: WINDOWS_RDP_PORT,
-                        })}
-                      </small>
-                    )}
+                    {isWindowsImage(item) && <small>{t("images.windowsPasswordLogin", { user: WINDOWS_LOGIN_USER, port: WINDOWS_RDP_PORT })}</small>}
                     <div className="model-catalog-tags">
                       {item.supportedGpuModels.map((gpu) => (
                         <span className="chip" key={gpu}>
@@ -611,31 +595,15 @@ export default function ImagesPage() {
                   ],
                   [t("common.size"), image.sizeGb + " GB"],
                   [t("common.source"), image.source],
-                  [
-                    t("common.description"),
-                    isWindowsImage(image)
-                      ? t("images.windowsDescription")
-                      : image.description,
-                  ],
-                  ...(isWindowsImage(image)
-                    ? ([
-                        [
-                          t("images.windowsEdition"),
-                          t("images.desktopExperience"),
-                        ],
-                        [t("images.loginUser"), WINDOWS_LOGIN_USER],
-                        [t("field.authMethod"), t("wizard.password")],
-                        [
-                          t("images.remoteProtocol"),
-                          `RDP · TCP ${WINDOWS_RDP_PORT}`,
-                        ],
-                        [t("images.deployScope"), t("images.windowsVmOnly")],
-                        [
-                          t("images.systemDiskMinimum"),
-                          `${WINDOWS_MIN_SYSTEM_DISK_GB} GB`,
-                        ],
-                      ] as [string, string][])
-                    : []),
+                  [t("common.description"), isWindowsImage(image) ? t("images.windowsDescription") : image.description],
+                  ...(isWindowsImage(image) ? [
+                    [t("images.windowsEdition"), t("images.desktopExperience")],
+                    [t("images.loginUser"), WINDOWS_LOGIN_USER],
+                    [t("field.authMethod"), t("wizard.password")],
+                    [t("images.remoteProtocol"), `RDP · TCP ${WINDOWS_RDP_PORT}`],
+                    [t("images.deployScope"), t("images.windowsVmOnly")],
+                    [t("images.systemDiskMinimum"), `${WINDOWS_MIN_SYSTEM_DISK_GB} GB`],
+                  ] as [string, string][] : []),
                 ]}
               />
             </Panel>
