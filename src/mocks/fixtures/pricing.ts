@@ -71,3 +71,7 @@ export const RATES: Rate[] = REGIONS.flatMap((region) => [
     unitPrice: 0.005,
   },
 ]);
+
+export function setRates(next: Rate[]) {
+  RATES.splice(0, RATES.length, ...next);
+}

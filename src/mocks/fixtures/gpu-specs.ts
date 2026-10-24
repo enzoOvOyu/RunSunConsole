@@ -106,6 +106,12 @@ const supply: Record<Region, Partial<Record<PoolCode, number>>> = {
     GB300_NVL72: 16 * GPU_SPECS.GB300_NVL72.gpusPerNode,
   },
 };
+export function gpuCatalogSnapshot() {
+  return {
+    specs: structuredClone(GPU_SPECS),
+    supply: structuredClone(supply),
+  };
+}
 export const poolsFor = (region: Region): Pool[] =>
   Object.values(GPU_SPECS).map((spec) => ({
     ...spec,
@@ -113,3 +119,15 @@ export const poolsFor = (region: Region): Pool[] =>
     available: !!supply[region][spec.code],
     licenseAvailable: (supply[region][spec.code] || 0) * 7,
   }));
+
+export type PoolSpec = Omit<Pool, "availableGpu" | "available" | "licenseAvailable">;
+
+export function setGpuCatalog(
+  next: Record<PoolCode, PoolSpec>,
+  nextSupply: Record<Region, Partial<Record<PoolCode, number>>>,
+) {
+  for (const code of Object.keys(GPU_SPECS) as PoolCode[]) delete GPU_SPECS[code];
+  Object.assign(GPU_SPECS, next);
+  for (const region of Object.keys(supply) as Region[]) delete supply[region];
+  Object.assign(supply, nextSupply);
+}

@@ -1,4 +1,6 @@
 import { createServer as createHttpServer } from "node:http";
+import { gzip } from "node:zlib";
+import { promisify } from "node:util";
 import { createServer as createViteServer } from "vite";
 import {
   begin,
@@ -9,6 +11,8 @@ import {
   setResourceAllocationDeriver,
 } from "./database.mjs";
 import { deriveResponse } from "./derived.mjs";
+import { catalogSeed, loadCatalog, seedCatalog } from "./catalog.mjs";
+const gzipAsync = promisify(gzip);
 
 const vite = await createViteServer({
   configFile: false,
@@ -34,6 +38,29 @@ const { handleMockRequest } = await vite.ssrLoadModule(
 const { objectStoreSnapshot, loadObjectStore } = await vite.ssrLoadModule(
   "/src/mocks/lib/object-store.ts",
 );
+const pricing = await vite.ssrLoadModule("/src/mocks/fixtures/pricing.ts");
+const gpuSpecs = await vite.ssrLoadModule("/src/mocks/fixtures/gpu-specs.ts");
+const slices = await vite.ssrLoadModule("/src/mocks/fixtures/slices.ts");
+const storage = await vite.ssrLoadModule("/src/lib/storage.ts");
+
+function applyCatalog(catalog) {
+  pricing.setRates(catalog.rates);
+  gpuSpecs.setGpuCatalog(catalog.pools, catalog.supply);
+  storage.setStorageProducts(catalog.storageProducts);
+  slices.setSliceSkus(catalog.sliceSkus);
+}
+
+function defaultCatalog() {
+  const { specs, supply } = gpuSpecs.gpuCatalogSnapshot();
+  return catalogSeed({
+    rates: pricing.RATES,
+    pools: specs,
+    supply,
+    storageProducts: storage.STORAGE_PRODUCTS,
+    sliceSkus: slices.SLICE_SKUS,
+    sliceInventory: slices.seedSliceInventory(),
+  });
+}
 await migrate();
 let loadedVersion = -1;
 let lastMeteredAt = 0;
@@ -66,6 +93,7 @@ function scheduleProvisioning() {
 async function initialize() {
   const client = await pool.connect();
   try {
+    await seedCatalog(client, defaultCatalog());
     await begin(client);
     let loaded = await loadState(client);
     if (!loaded) {
@@ -91,6 +119,7 @@ async function initialize() {
       }
     }
     await client.query("COMMIT");
+    applyCatalog(await loadCatalog(client));
     Object.assign(db, loaded.state);
     loadObjectStore(db.objectContent || []);
     loadedVersion = loaded.version;
@@ -102,6 +131,7 @@ async function initialize() {
   }
 }
 await initialize();
+await dispatch(new Request("http://localhost/api/account"));
 scheduleProvisioning();
 
 function broadcast(version) {
@@ -116,31 +146,85 @@ function broadcast(version) {
   }
 }
 
+function sameState(a, b) {
+  if (a === b) return true;
+  if (!a || !b || typeof a !== "object" || typeof b !== "object") return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  for (const key of aKeys) {
+    if (!Object.hasOwn(b, key) || !sameState(a[key], b[key])) return false;
+  }
+  return true;
+}
+
 async function dispatch(request) {
+  const path = new URL(request.url).pathname;
+  const estimateOnly = path === "/api/deployment-orders/estimate";
+  const settleBilling = estimateOnly
+    ? false
+    : request.method !== "GET" || Date.now() - lastMeteredAt >= 60_000;
+  const pureRead = request.method === "GET" || path === "/api/deployment-orders/estimate";
+  const fastRead = pureRead && !settleBilling &&
+    !db.account.depletedAt && db.account.creditBalance >= 0 &&
+    !db.resources.some((resource) => resource.status === "provisioning" ||
+      (resource.kind === "vgpu" && resource.spec.deploymentMode === "slice" && resource.status === "error")) &&
+    !["/api/billing/report", "/api/billing/invoices"].includes(path);
+  if (fastRead) {
+    let fallback = false;
+    try {
+      const current = await pool.query("SELECT version FROM app_state WHERE id = 1");
+      if (Number(current.rows[0].version) === loadedVersion) {
+        dirty = false;
+        const response = await handleMockRequest(request, { delayMs: 0, settleBilling });
+        if (!dirty) return await deriveResponse(pool, request, response);
+        fallback = true;
+      }
+    } catch (error) {
+      console.error("Read-only request failed; reloading database state", error);
+      fallback = true;
+    }
+    if (fallback) {
+      const reloadClient = await pool.connect();
+      try {
+        await begin(reloadClient);
+        const loaded = await loadState(reloadClient);
+        if (loaded) {
+          Object.assign(db, loaded.state);
+          loadObjectStore(db.objectContent || []);
+          loadedVersion = loaded.version;
+          dirty = false;
+        }
+        await reloadClient.query("COMMIT");
+      } catch (error) {
+        await reloadClient.query("ROLLBACK").catch(() => {});
+        console.error("Database reload failed", error);
+        return Response.json({ code: "INTERNAL" }, { status: 500 });
+      } finally {
+        reloadClient.release();
+      }
+    }
+  }
   const client = await pool.connect();
   let before;
+  let committed = false;
   try {
     await begin(client);
-    const current = await client.query(
-      "SELECT version FROM app_state WHERE id = 1",
-    );
-    if (Number(current.rows[0].version) !== loadedVersion) {
+    const current = await client.query("SELECT version FROM app_state WHERE id = 1");
+    let version = Number(current.rows[0].version);
+    let reload = false;
+    if (version !== loadedVersion) {
       const loaded = await loadState(client);
       Object.assign(db, loaded.state);
       loadObjectStore(db.objectContent || []);
       loadedVersion = loaded.version;
+      version = loaded.version;
+      applyCatalog(await loadCatalog(client));
+      reload = true;
     }
     db.objectContent = objectStoreSnapshot();
-    const settleBilling =
-      request.method !== "GET" || Date.now() - lastMeteredAt >= 60_000;
-    const fastRead = request.method === "GET" && !settleBilling &&
-      !db.account.depletedAt && db.account.creditBalance >= 0 &&
-      !db.resources.some((resource) => resource.status === "provisioning" ||
-        (resource.kind === "vgpu" && resource.spec.deploymentMode === "slice" && resource.status === "error")) &&
-      !["/api/deployment-options", "/api/billing/report", "/api/billing/invoices"].includes(
-        new URL(request.url).pathname,
-      );
-    before = fastRead ? null : structuredClone(db);
+    before = structuredClone(db);
     dirty = false;
     const response = await handleMockRequest(request, {
       delayMs: 0,
@@ -154,27 +238,28 @@ async function dispatch(request) {
       loadObjectStore(db.objectContent || []);
       return response;
     }
-    if (fastRead && dirty) throw new Error("Read-only request changed state");
-    const changed = fastRead ? false : dirty || JSON.stringify(before) !== JSON.stringify(db);
-    if (changed) await saveState(client, before, db, loadedVersion + 1);
+    const changed = dirty || !sameState(before, db);
+    if (changed) await saveState(client, before, db, version + 1);
     const derivedResponse = await deriveResponse(client, request, response);
     await client.query("COMMIT");
+    committed = true;
     if (changed) {
-      loadedVersion++;
+      loadedVersion = version + 1;
       // Metering advances during reads; broadcasting those writes would make
       // each cache refresh trigger another refresh without a user action.
       if (
         (request.method !== "GET" || dirty) &&
-        new URL(request.url).pathname !== "/api/deployment-orders/estimate"
+        path !== "/api/deployment-orders/estimate"
       ) {
         const version = loadedVersion;
         setTimeout(() => broadcast(version), 100);
       }
     }
+    if (reload && !changed) loadedVersion = version;
     return derivedResponse;
   } catch (error) {
-    await client.query("ROLLBACK").catch(() => {});
-    if (before) {
+    if (!committed) await client.query("ROLLBACK").catch(() => {});
+    if (!committed && before) {
       Object.assign(db, before);
       loadObjectStore(db.objectContent || []);
     }
@@ -228,8 +313,21 @@ const server = createHttpServer(async (incoming, outgoing) => {
       ...(chunks.length ? { body: Buffer.concat(chunks) } : {}),
     });
     const response = await dispatch(request);
-    outgoing.writeHead(response.status, Object.fromEntries(response.headers));
-    outgoing.end(Buffer.from(await response.arrayBuffer()));
+    const body = Buffer.from(await response.arrayBuffer());
+    const headers = Object.fromEntries(response.headers);
+    const acceptsGzip = /\bgzip\b/.test(incoming.headers["accept-encoding"] || "");
+    if (acceptsGzip && body.length > 1024 && !headers["content-encoding"]) {
+      const compressed = await gzipAsync(body, { level: 4 });
+      headers["content-encoding"] = "gzip";
+      headers.vary = headers.vary ? `${headers.vary}, Accept-Encoding` : "Accept-Encoding";
+      headers["content-length"] = String(compressed.length);
+      outgoing.writeHead(response.status, headers);
+      outgoing.end(compressed);
+      return;
+    }
+    headers["content-length"] = String(body.length);
+    outgoing.writeHead(response.status, headers);
+    outgoing.end(body);
   } catch (error) {
     console.error("HTTP request failed", error);
     outgoing.writeHead(500, { "Content-Type": "application/json" });

@@ -24,6 +24,9 @@ export const SLICE_SKUS: SliceSku[] = definitions.map((item) => ({
   cudaBaseline: "CUDA 12",
 }));
 export const sliceSku = (id: string) => SLICE_SKUS.find((item) => item.id === id);
+export function setSliceSkus(next: SliceSku[]) {
+  SLICE_SKUS.splice(0, SLICE_SKUS.length, ...next);
+}
 export function seedSliceInventory(): SliceInventoryItem[] {
   const gpuCount: Record<Region, Partial<Record<PoolCode, number>>> = {
     jp: { H100_SXM: 2, H200_NVL: 1, B200_NVL72: 1 },

@@ -125,6 +125,8 @@ const tables = [
     table: "billing_usage",
     path: "usage",
     id: "id",
+    orderBy: "usage_hour, id",
+    chunk: 2000,
     fields: {
       project_id: "projectId",
       region: "region",
@@ -161,6 +163,7 @@ const projection = (item, selector) =>
 function auxiliary(state) {
   const rest = structuredClone(state);
   for (const config of tables) set(rest, config.path, []);
+  delete rest.sliceInventory;
   return rest;
 }
 
@@ -205,15 +208,46 @@ export async function loadState(client) {
   if (!meta.rowCount) return null;
   const state = meta.rows[0].auxiliary;
   for (const config of tables) {
-    const result = await client.query(
-      `SELECT data FROM ${config.table} ORDER BY ${config.orderBy || "id"}`,
-    );
-    set(
-      state,
-      config.path,
-      result.rows.map((row) => row.data),
-    );
+      if (!config.chunk) {
+        const result = await client.query(
+          `SELECT data FROM ${config.table} ORDER BY ${config.orderBy || "id"}`,
+        );
+        set(state, config.path, result.rows.map((row) => row.data));
+        continue;
+      }
+      const items = [];
+      let after = null;
+      for (;;) {
+        const result = await client.query(
+          `SELECT data FROM ${config.table}
+           ${after === null ? "" : `WHERE (${config.orderBy}) > (${after.map((_, i) => `$${i + 1}`).join(", ")})`}
+           ORDER BY ${config.orderBy} LIMIT ${config.chunk}`,
+          after === null ? [] : after,
+        );
+        if (!result.rows.length) break;
+        for (const row of result.rows) items.push(row.data);
+        const last = result.rows.at(-1).data;
+        after = config.orderBy.split(",").map((column) => {
+          const key = column.trim();
+          if (key === "id") return last.id;
+          if (key === "usage_hour") return last.usageHour;
+          return last[key];
+        });
+      }
+        set(state, config.path, items);
   }
+  const slices = await client.query(
+    "SELECT id, region, sku_id, layout_id, physical_gpu_id, state, resource_id FROM slice_inventory ORDER BY id",
+  );
+  state.sliceInventory = slices.rows.map((row) => ({
+    id: row.id,
+    region: row.region,
+    skuId: row.sku_id,
+    layoutId: row.layout_id,
+    physicalGpuId: row.physical_gpu_id,
+    state: row.state,
+    resourceUuid: row.resource_id,
+  }));
   return { version: Number(meta.rows[0].version), state };
 }
 
@@ -257,6 +291,22 @@ export async function saveState(client, before, after, version) {
      ON CONFLICT (id) DO UPDATE SET version = EXCLUDED.version, auxiliary = EXCLUDED.auxiliary`,
     [version, JSON.stringify(auxiliary(after))],
   );
+  const oldSlices = new Map((before?.sliceInventory || []).map((item) => [item.id, item]));
+  const newSlices = new Map((after.sliceInventory || []).map((item) => [item.id, item]));
+  for (const [id, item] of newSlices) {
+    if (JSON.stringify(oldSlices.get(id)) === JSON.stringify(item)) continue;
+    await client.query(
+      `INSERT INTO slice_inventory(id, region, sku_id, layout_id, physical_gpu_id, state, resource_id, updated_at)
+       VALUES($1,$2,$3,$4,$5,$6,$7,now())
+       ON CONFLICT (id) DO UPDATE SET region=EXCLUDED.region, sku_id=EXCLUDED.sku_id,
+         layout_id=EXCLUDED.layout_id, physical_gpu_id=EXCLUDED.physical_gpu_id,
+         state=EXCLUDED.state, resource_id=EXCLUDED.resource_id, updated_at=now()`,
+      [item.id, item.region, item.skuId, item.layoutId, item.physicalGpuId, item.state, item.resourceUuid],
+    );
+  }
+  for (const id of oldSlices.keys())
+    if (!newSlices.has(id))
+      await client.query("DELETE FROM slice_inventory WHERE id = $1", [id]);
 }
 
 export async function begin(client) {

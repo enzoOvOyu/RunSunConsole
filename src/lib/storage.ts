@@ -1,7 +1,7 @@
 import type { Bucket, StorageObject } from "../types/domain";
 import type { StorageProduct, StorageRequest, StorageVolume } from "../types/storage";
 
-export const STORAGE_PRODUCTS: readonly StorageProduct[] = [
+export const STORAGE_PRODUCTS: StorageProduct[] = [
   {
     kind: "block",
     tier: "essd_pl0",
@@ -64,6 +64,10 @@ export function storageProduct(kind: string, tier: string) {
   return STORAGE_PRODUCTS.find(
     (product) => product.kind === kind && product.tier === tier,
   );
+}
+
+export function setStorageProducts(next: StorageProduct[]) {
+  STORAGE_PRODUCTS.splice(0, STORAGE_PRODUCTS.length, ...next);
 }
 
 export function storageExtraGb(requests: readonly StorageRequest[] = []) {
