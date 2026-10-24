@@ -57,6 +57,7 @@ import {
 } from "@tanstack/react-table";
 import { create } from "zustand";
 import { useQueryClient } from "@tanstack/react-query";
+import { invalidateData } from "../../lib/query-cache";
 import { t, errorText } from "../../i18n";
 import { date } from "../../lib/date";
 import type { ResourceEvent } from "../../types/domain";
@@ -182,7 +183,7 @@ export function Empty({ text, action }: { text?: string; action?: ReactNode }) {
       {action || (
         <div className="row">
           <FilterReset />
-          <Button onClick={() => void client.invalidateQueries()}>
+          <Button onClick={() => invalidateData(client, { delay: 0 })}>
             {t("common.refresh")}
           </Button>
         </div>
@@ -620,7 +621,8 @@ const useToast = create<{
 export const toast = (message: string, error = false) =>
   useToast.getState().push(message, error);
 export function Toasts() {
-  const { items, remove } = useToast();
+  const items = useToast((state) => state.items);
+  const remove = useToast((state) => state.remove);
   return (
     <div className="toasts" aria-live="polite">
       {items.map((item) => (

@@ -1,6 +1,6 @@
 import { useUrlState } from "../../shared/useUrlState";
 import { useResourceTransition } from "../../../stores/resourceTransition";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -17,6 +17,7 @@ import { useAuth } from "../../../stores/auth";
 import { canWrite } from "../../../lib/rbac";
 import { KIND_META, formatResourceId, resourceLink } from "../../../lib/ids";
 import { EP, post, remove, query } from "../../../lib/api-client";
+import { invalidateData } from "../../../lib/query-cache";
 import { useAction, useData, useDebounced } from "../../shared/hooks";
 import { t, dt, errorText } from "../../../i18n";
 import {
@@ -101,6 +102,10 @@ export function ResourceListShell<K extends Kind>({
   const action = useAction();
   const client = useQueryClient();
   const status = params.get("status") || "";
+  const selectedIds = useMemo(
+    () => new Set<string>(selected),
+    [selected],
+  );
   const resources = useData<{
     items: Extract<Resource, { kind: K }>[];
     total: number;
@@ -126,7 +131,7 @@ export function ResourceListShell<K extends Kind>({
   useEffect(() => {
     setSelected([]);
     setPage(0);
-  }, [status, q]);
+  }, [status, q, released]);
   const transition = useResourceTransition((s) => s.items);
   const items = useMemo(() => {
     const fetched = resources.data?.items || [];
@@ -150,32 +155,36 @@ export function ResourceListShell<K extends Kind>({
         : shown.slice(activePage * pageSize, (activePage + 1) * pageSize),
     [activePage, pageSize, shown],
   );
-  const pageIds = pageResources.map((resource) => resource.resourceUuid);
-  const chosen = shown.filter((r) => selected.includes(r.resourceUuid));
-  const toggle = (id: string) =>
-    setSelected((s) =>
-      s.includes(id) ? s.filter((x) => x !== id) : [...s, id],
-    );
-  const checkbox: ColumnDef<Extract<Resource, { kind: K }>> = {
+  const pageIds = useMemo(
+    () => pageResources.map((resource) => resource.resourceUuid as string),
+    [pageResources],
+  );
+  const chosen = useMemo(
+    () => shown.filter((r) => selectedIds.has(r.resourceUuid)),
+    [shown, selectedIds],
+  );
+  const toggle = useCallback(
+    (id: string) =>
+      setSelected((s) =>
+        s.includes(id) ? s.filter((x) => x !== id) : [...s, id],
+      ),
+    [],
+  );
+  const pageIdSet = useMemo(() => new Set(pageIds), [pageIds]);
+  const pageAllSelected =
+    pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
+  const pageSomeSelected = pageIds.some((id) => selectedIds.has(id));
+  const checkbox = useMemo<ColumnDef<Extract<Resource, { kind: K }>>>(() => ({
     id: "select",
     enableSorting: false,
     header: () => (
       <Checkbox
         aria-label={t("resource.selectPage")}
-        checked={
-          pageIds.length > 0 && pageIds.every((id) => selected.includes(id))
-            ? true
-            : pageIds.some((id) => selected.includes(id))
-              ? "indeterminate"
-              : false
-        }
+        checked={pageAllSelected ? true : pageSomeSelected ? "indeterminate" : false}
         onCheckedChange={(checked) =>
           setSelected((current) => {
-            const pageSet = new Set<string>(pageIds);
-            const withoutPage = current.filter((id) => !pageSet.has(id));
-            return checked === true
-              ? [...withoutPage, ...pageIds]
-              : withoutPage;
+            const withoutPage = current.filter((id) => !pageIdSet.has(id));
+            return checked === true ? [...withoutPage, ...pageIds] : withoutPage;
           })
         }
       />
@@ -183,13 +192,16 @@ export function ResourceListShell<K extends Kind>({
     cell: ({ row }) => (
       <Checkbox
         aria-label={row.original.displayId}
-        checked={selected.includes(row.original.resourceUuid)}
+        checked={selectedIds.has(row.original.resourceUuid)}
         onClick={(event) => event.stopPropagation()}
         onCheckedChange={() => toggle(row.original.resourceUuid)}
       />
     ),
-  };
-  const visibleCols = columns.filter((_, i) => !hidden.includes(String(i)));
+  }), [pageAllSelected, pageSomeSelected, pageIdSet, pageIds, selectedIds, toggle]);
+  const visibleCols = useMemo(
+    () => columns.filter((_, i) => !hidden.includes(String(i))),
+    [columns, hidden],
+  );
   const batch = async (op: "start" | "stop" | "delete") => {
     if (chosen.length > 20) {
       toast(t("resource.batchLimit"), true);
@@ -209,7 +221,7 @@ export function ResourceListShell<K extends Kind>({
     setSelected([]);
     setDeleteMany(false);
     setConfirm("");
-    await client.invalidateQueries();
+    invalidateData(client, { delay: 0 });
   };
   return (
     <>

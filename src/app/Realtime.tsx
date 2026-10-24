@@ -1,30 +1,25 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useConnection } from "../stores/connection";
+import { invalidateData } from "../lib/query-cache";
 export function Realtime() {
   const client = useQueryClient();
   useEffect(() => {
-    let invalidateTimer: ReturnType<typeof setTimeout> | null = null;
-    const invalidate = () => {
-      if (invalidateTimer) clearTimeout(invalidateTimer);
-      invalidateTimer = setTimeout(() => {
-        invalidateTimer = null;
-        void client.invalidateQueries();
-      }, 150);
-    };
+    const invalidate = (nonPollingOnly = false) =>
+      invalidateData(client, { delay: 150, nonPollingOnly });
     const endpoint = import.meta.env.VITE_WS_URL;
     if (!endpoint && import.meta.env.VITE_ENABLE_MOCK === "false") {
       const stream = new EventSource("/api/events/stream");
       stream.onopen = () => useConnection.getState().setMode("stream");
       stream.addEventListener("change", () => {
         useConnection.getState().setMode("stream");
-        invalidate();
+        invalidate(true);
       });
       stream.onerror = () => useConnection.getState().setMode("polling");
       const fallback = setInterval(
         () => {
           if (useConnection.getState().mode !== "stream")
-            invalidate();
+            invalidate(true);
         },
         Math.max(
           30_000,
@@ -32,7 +27,6 @@ export function Realtime() {
         ),
       );
       return () => {
-        if (invalidateTimer) clearTimeout(invalidateTimer);
         clearInterval(fallback);
         stream.close();
       };
@@ -53,7 +47,7 @@ export function Realtime() {
     ws.onmessage = () => {
       lastMessage = Date.now();
       useConnection.getState().setMode("websocket");
-      invalidate();
+      invalidate(true);
     };
     ws.onerror = () => useConnection.getState().setMode("polling");
     ws.onclose = () => useConnection.getState().setMode("polling");
@@ -62,7 +56,6 @@ export function Realtime() {
         useConnection.getState().setMode("polling");
     }, 5000);
     return () => {
-      if (invalidateTimer) clearTimeout(invalidateTimer);
       clearInterval(heartbeat);
       ws.close();
     };

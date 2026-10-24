@@ -208,11 +208,15 @@ function buildOverviewMetrics(data: Overview) {
     total: REGIONS.reduce((sum, region) => sum + gpuByModel[code][region], 0),
   })).sort((left, right) => right.total - left.total);
   const largestGpuModel = Math.max(1, ...gpuModels.map((model) => model.total));
+  const resourcesByProject = new Map<string, Resource[]>();
+  for (const resource of data.resources) {
+    const list = resourcesByProject.get(resource.projectId);
+    if (list) list.push(resource);
+    else resourcesByProject.set(resource.projectId, [resource]);
+  }
   const projects = data.projects
     .map((project) => {
-      const resources = data.resources.filter(
-        (r) => r.projectId === project.id,
-      );
+      const resources = resourcesByProject.get(project.id) || [];
       return {
         ...project,
         resourceCount: resources.length,
@@ -226,10 +230,14 @@ function buildOverviewMetrics(data: Overview) {
       };
     })
     .sort((a, b) => b.spend30d - a.spend30d);
+  const resourcesByKind = new Map<string, Resource[]>();
+  for (const resource of data.resources) {
+    const list = resourcesByKind.get(resource.kind);
+    if (list) list.push(resource);
+    else resourcesByKind.set(resource.kind, [resource]);
+  }
   const health = KINDS.map((kind) => {
-    const resources = data.resources.filter(
-      (resource) => resource.kind === kind,
-    );
+    const resources = resourcesByKind.get(kind) || [];
     return {
       kind,
       total: resources.length,

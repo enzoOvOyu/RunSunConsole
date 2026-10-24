@@ -5,6 +5,7 @@ export const CATALOG_TABLES = {
   storageProducts: "storage_products",
   sliceSkus: "slice_skus",
   sliceInventory: "slice_inventory",
+  quotas: "region_quotas",
 };
 
 const REGIONS = ["jp", "sg", "us"];
@@ -53,6 +54,7 @@ export async function loadCatalog(client) {
   const storageProducts = await client.query("SELECT kind, tier, min_gb, max_gb, step_gb, usd_gb_month FROM storage_products ORDER BY kind, tier");
   const sliceSkus = await client.query("SELECT id, pool_code, gpu_model, profile, memory_gb, layout_id, slices_per_gpu, isolation, kubernetes_resource, cuda_baseline, hourly_usd, workload, k8s_version, gpu_operator, driver_branch FROM slice_skus ORDER BY id");
   const sliceInventory = await client.query("SELECT id, region, sku_id, layout_id, physical_gpu_id, state, resource_id FROM slice_inventory ORDER BY id");
+  const quotas = await client.query("SELECT region, metric, kind, limit_value FROM region_quotas ORDER BY region, metric, kind NULLS FIRST");
   const supply = {};
   for (const region of REGIONS) supply[region] = {};
   for (const row of inventory.rows) supply[row.region][row.pool_code] = row.available_gpu;
@@ -80,6 +82,9 @@ export async function loadCatalog(client) {
     sliceInventory: sliceInventory.rows.map((row) => ({
       id: row.id, region: row.region, skuId: row.sku_id, layoutId: row.layout_id,
       physicalGpuId: row.physical_gpu_id, state: row.state, resourceUuid: row.resource_id,
+    })),
+    quotas: quotas.rows.map((row) => ({
+      region: row.region, metric: row.metric, kind: row.kind, limitValue: Number(row.limit_value),
     })),
   };
 }

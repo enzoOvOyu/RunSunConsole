@@ -273,8 +273,13 @@ export default function TicketsPage() {
   });
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase();
+    const resourcesById = new Map(
+      allResources.map((resource) => [resource.resourceUuid, resource]),
+    );
     return (ticketsQuery.data || []).filter((ticket) => {
-      const resource = allResources.find((item) => item.resourceUuid === ticket.resourceUuid);
+      const resource = ticket.resourceUuid
+        ? resourcesById.get(ticket.resourceUuid)
+        : undefined;
       return (
         (!status || ticket.status === status) &&
         (!filterCategory || ticket.category === filterCategory) &&

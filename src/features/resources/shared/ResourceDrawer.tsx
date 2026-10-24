@@ -1,5 +1,5 @@
 import { useResourceTransition } from "../../../stores/resourceTransition";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import type { Resource } from "../../../types/domain";
 import { useAuth } from "../../../stores/auth";
@@ -40,15 +40,26 @@ export function ResourceDrawer() {
   const [credential, setCredential] = useState("");
   const [operation, setOperation] = useState("");
   const [count, setCount] = useState(1);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const role = useAuth((s) => s.role);
   const { run, busy } = useAction();
   const navigate = useNavigate();
   const r = q.data;
   const close = () => {
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
     const p = new URLSearchParams(params);
     p.delete("drawer");
     setParams(p);
   };
+  useEffect(
+    () => () => {
+      if (closeTimer.current) clearTimeout(closeTimer.current);
+    },
+    [],
+  );
   const allowed = canWrite(role) && !r?.deletedAt;
   const act = async (action: string, body: unknown = {}) => {
     if (!r) return undefined;
@@ -78,7 +89,8 @@ export function ResourceDrawer() {
       toast(t("resource.deleted"));
       setDeleting(false);
       await q.refetch();
-      setTimeout(close, 1800);
+      if (closeTimer.current) clearTimeout(closeTimer.current);
+      closeTimer.current = setTimeout(close, 1800);
     } catch (e) {
       setError(e);
     }

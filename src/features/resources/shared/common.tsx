@@ -50,25 +50,32 @@ const MetricCard = memo(function MetricCard({
   window: string;
 }) {
   useLocale((state) => state.locale);
-  const lastPoint = series.points.at(-1);
-  const last = lastPoint?.value;
-  const lastTime = lastPoint ? new Date(lastPoint.at).getTime() : 0;
-  const recent =
-    series.comparison === "below" && series.threshold != null
-      ? series.points.filter(
-          (point) => new Date(point.at).getTime() >= lastTime - 1800000,
-        )
-      : [];
-  const sustained =
-    recent.length > 1 &&
-    new Date(recent[0].at).getTime() <= lastTime - 1740000 &&
-    recent.every(
-      (point) => point.value !== null && point.value < series.threshold!,
-    );
-  const warning =
-    last != null &&
-    series.threshold != null &&
-    (series.comparison === "below" ? sustained : last >= series.threshold);
+  const { last, warning } = useMemo(() => {
+    const lastPoint = series.points.at(-1);
+    const last = lastPoint?.value;
+    const lastTime = lastPoint ? new Date(lastPoint.at).getTime() : 0;
+    const recent =
+      series.comparison === "below" && series.threshold != null
+        ? series.points.filter(
+            (point) => new Date(point.at).getTime() >= lastTime - 1800000,
+          )
+        : [];
+    const sustained =
+      recent.length > 1 &&
+      new Date(recent[0].at).getTime() <= lastTime - 1740000 &&
+      recent.every(
+        (point) => point.value !== null && point.value < series.threshold!,
+      );
+    const warning =
+      last != null &&
+      series.threshold != null &&
+      (series.comparison === "below" ? sustained : last >= series.threshold);
+    return { last, warning };
+  }, [series]);
+  const chartData = useMemo(
+    () => series.points.map((point) => ({ date: point.at, value: point.value })),
+    [series.points],
+  );
   const [key, card] = series.key.split(":");
   return (
     <Panel title={t("metric." + key) + (card ? ` · GPU ${card}` : "")}>
@@ -89,10 +96,7 @@ const MetricCard = memo(function MetricCard({
       )}
       <Suspense fallback={<Loading />}>
         <TrendChart
-          data={series.points.map((point) => ({
-            date: point.at,
-            value: point.value,
-          }))}
+          data={chartData}
           keys={["value"]}
           currency={false}
           timeWindow={window}

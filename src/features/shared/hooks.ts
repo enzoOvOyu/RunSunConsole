@@ -1,7 +1,8 @@
 import { useConnection } from "../../stores/connection";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { api } from "../../lib/api-client";
+import { invalidateData } from "../../lib/query-cache";
 import { toast } from "../../components/ui";
 import { errorText, t } from "../../i18n";
 export const pollInterval = Number(
@@ -26,6 +27,13 @@ export function useData<T>(
 export function useAction() {
   const client = useQueryClient();
   const [busy, setBusy] = useState(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   async function run<T>(
     action: () => Promise<T>,
     success = "success.saved",
@@ -33,14 +41,14 @@ export function useAction() {
     setBusy(true);
     try {
       const result = await action();
-      setTimeout(() => void client.invalidateQueries(), 100);
+      if (mounted.current) invalidateData(client, { delay: 100 });
       toast(t(success));
       return result;
     } catch (error) {
       toast(errorText(error), true);
       return undefined;
     } finally {
-      setBusy(false);
+      if (mounted.current) setBusy(false);
     }
   }
   return { run, busy };

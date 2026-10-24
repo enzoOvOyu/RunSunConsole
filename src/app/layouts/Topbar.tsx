@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Search,
@@ -28,22 +28,26 @@ export function Topbar({
   onMenu: () => void;
 }) {
   const [menu, setMenu] = useState("");
-  const { role, setRole } = useAuth();
-  const { locale, setLocale } = useLocale();
-  const { theme, toggle } = useTheme();
+  const role = useAuth((state) => state.role);
+  const setRole = useAuth((state) => state.setRole);
+  const locale = useLocale((state) => state.locale);
+  const setLocale = useLocale((state) => state.setLocale);
+  const theme = useTheme((state) => state.theme);
+  const toggle = useTheme((state) => state.toggle);
   const navigate = useNavigate();
   const location = useLocation();
   const account = useData<Account>(["account"], EP.account);
   const notifications = useData<
     { id: string; resource?: Resource; messageKey?: string; href?: string }[]
   >(["notifications"], EP.notifications, { poll: true });
-  const item =
-    buildGroups(role)
-      .flatMap((g) => g.items)
-      .find((i) => location.pathname.startsWith(i.path)) ||
-    buildGroups("owner")
-      .flatMap((g) => g.items)
-      .find((i) => location.pathname.startsWith(i.path));
+  const item = useMemo(() => {
+    const findItem = (items: ReturnType<typeof buildGroups>[number]["items"]) =>
+      items.find((i) => location.pathname.startsWith(i.path));
+    return (
+      findItem(buildGroups(role).flatMap((g) => g.items)) ||
+      findItem(buildGroups("owner").flatMap((g) => g.items))
+    );
+  }, [role, location.pathname]);
   const toggleMenu = (name: string) => setMenu(menu === name ? "" : name);
   return (
     <header className={styles.topbar}>

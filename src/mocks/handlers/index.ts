@@ -161,6 +161,28 @@ const storageLimits: Record<
   sg: { block: 225_000, file: 175_000, object: 100_000 },
   us: { block: 450_000, file: 325_000, object: 225_000 },
 };
+/** Replace quota ceilings with the values stored in the region_quotas table. */
+export function setRegionQuotaLimits(
+  rows: {
+    region: Region;
+    metric: string;
+    kind: string | null;
+    limitValue: number;
+  }[],
+) {
+  for (const row of rows) {
+    if (!REGIONS.includes(row.region)) continue;
+    if (row.metric === "storage") {
+      if (row.kind === "block" || row.kind === "file" || row.kind === "object")
+        storageLimits[row.region][row.kind] = row.limitValue;
+      continue;
+    }
+    if (row.metric in networkLimits[row.region])
+      networkLimits[row.region][row.metric as NetworkMetric] = row.limitValue;
+    else if (QUOTA_METRICS.includes(row.metric as Quota["metric"]))
+      limits[row.region][row.metric as Quota["metric"]] = row.limitValue;
+  }
+}
 const initialAllocations = seedResources();
 function storageQuotaBreakdown(region: Region, exclude?: string) {
   return (["block", "file", "object"] as const).map((kind) => ({

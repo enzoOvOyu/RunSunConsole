@@ -1,6 +1,8 @@
 import { createServer as createHttpServer } from "node:http";
 import { gzip } from "node:zlib";
 import { promisify } from "node:util";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { createServer as createViteServer } from "vite";
 import {
   begin,
@@ -13,9 +15,12 @@ import {
 import { deriveResponse } from "./derived.mjs";
 import { catalogSeed, loadCatalog, seedCatalog } from "./catalog.mjs";
 const gzipAsync = promisify(gzip);
+const rootDir = path.dirname(fileURLToPath(import.meta.url));
 
 const vite = await createViteServer({
   configFile: false,
+  root: path.resolve(rootDir, ".."),
+  resolve: { alias: { "@": path.resolve(rootDir, "../src") } },
   server: { middlewareMode: true, hmr: false },
   appType: "custom",
 });
@@ -32,7 +37,7 @@ setResourceAllocationDeriver((resource) => {
   const active = { ...resource, status: "running", deletedAt: null };
   return { vcpu: quotaUse(active, "vcpu"), memory: quotaUse(active, "memory") };
 });
-const { handleMockRequest } = await vite.ssrLoadModule(
+const { handleMockRequest, setRegionQuotaLimits } = await vite.ssrLoadModule(
   "/src/mocks/handlers/index.ts",
 );
 const { objectStoreSnapshot, loadObjectStore } = await vite.ssrLoadModule(
@@ -48,6 +53,7 @@ function applyCatalog(catalog) {
   gpuSpecs.setGpuCatalog(catalog.pools, catalog.supply);
   storage.setStorageProducts(catalog.storageProducts);
   slices.setSliceSkus(catalog.sliceSkus);
+  setRegionQuotaLimits(catalog.quotas || []);
 }
 
 function defaultCatalog() {
