@@ -13,33 +13,49 @@ import {
   setResourceAllocationDeriver,
 } from "./database.mjs";
 import { deriveResponse } from "./derived.mjs";
-import { catalogSeed, loadCatalog, seedCatalog } from "./catalog.mjs";
+import { catalogSeed, catalogVersion, loadCatalog, seedCatalog, initializeInventoryBaseline } from "./catalog.mjs";
 const gzipAsync = promisify(gzip);
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 
 const vite = await createViteServer({
   configFile: false,
   root: path.resolve(rootDir, ".."),
+  cacheDir: "node_modules/.vite-server",
   resolve: { alias: { "@": path.resolve(rootDir, "../src") } },
+  optimizeDeps: { noDiscovery: true, include: [] },
   server: { middlewareMode: true, hmr: false },
   appType: "custom",
 });
 const { db, makeDatabase, normalizeDisplayIds, setPersistHook } = await vite.ssrLoadModule(
   "/src/mocks/lib/database.ts",
 );
+const { MODELS } = await vite.ssrLoadModule("/src/mocks/fixtures/content.ts");
 let dirty = false;
 setPersistHook(() => {
   dirty = true;
 });
-const { quotaUse, provisioningSeconds } = await vite.ssrLoadModule("/src/mocks/lib/derive.ts");
-const { reconcileSliceInventory } = await vite.ssrLoadModule("/src/mocks/fixtures/slices.ts");
+const { quotaUse, provisioningSeconds, setBillingDiscounts } = await vite.ssrLoadModule("/src/mocks/lib/derive.ts");
 setResourceAllocationDeriver((resource) => {
   const active = { ...resource, status: "running", deletedAt: null };
   return { vcpu: quotaUse(active, "vcpu"), memory: quotaUse(active, "memory") };
 });
-const { handleMockRequest, setRegionQuotaLimits } = await vite.ssrLoadModule(
-  "/src/mocks/handlers/index.ts",
-);
+const {
+  handleMockRequest,
+  setRegionQuotaLimits,
+  setImageCatalog,
+  setModelCatalog,
+  setCatalogWriter,
+  setAllocationBaseline,
+  setAppCatalog,
+  appCatalogSnapshot,
+  setDeploymentConfiguration,
+} = await vite.ssrLoadModule("/src/mocks/handlers/index.ts");
+const { saveCatalogEntity } = await import("./catalog.mjs");
+let catalogWrites = [];
+setCatalogWriter((table, row) => {
+  dirty = true;
+  catalogWrites.push({ table, row: structuredClone(row) });
+});
 const { objectStoreSnapshot, loadObjectStore } = await vite.ssrLoadModule(
   "/src/mocks/lib/object-store.ts",
 );
@@ -47,13 +63,33 @@ const pricing = await vite.ssrLoadModule("/src/mocks/fixtures/pricing.ts");
 const gpuSpecs = await vite.ssrLoadModule("/src/mocks/fixtures/gpu-specs.ts");
 const slices = await vite.ssrLoadModule("/src/mocks/fixtures/slices.ts");
 const storage = await vite.ssrLoadModule("/src/lib/storage.ts");
+const { IMAGES } = await vite.ssrLoadModule("/src/mocks/fixtures/content.ts");
 
-function applyCatalog(catalog) {
+let catalog = null;
+let loadedCatalogVersion = -1;
+
+function applyCatalog(next) {
+  catalog = next;
   pricing.setRates(catalog.rates);
   gpuSpecs.setGpuCatalog(catalog.pools, catalog.supply);
   storage.setStorageProducts(catalog.storageProducts);
   slices.setSliceSkus(catalog.sliceSkus);
   setRegionQuotaLimits(catalog.quotas || []);
+  setImageCatalog(catalog.images);
+  setModelCatalog(catalog.models);
+  setAllocationBaseline(catalog.allocationBaseline);
+  setBillingDiscounts(catalog.billingModes);
+  setAppCatalog(catalog.apps);
+  setDeploymentConfiguration(catalog.configuration);
+}
+
+async function refreshCatalog(client = pool, force = false) {
+  const version = await catalogVersion(client);
+  if (!force && version === loadedCatalogVersion && catalog) return false;
+  const next = await loadCatalog(client);
+  applyCatalog(next);
+  loadedCatalogVersion = version;
+  return true;
 }
 
 function defaultCatalog() {
@@ -65,6 +101,9 @@ function defaultCatalog() {
     storageProducts: storage.STORAGE_PRODUCTS,
     sliceSkus: slices.SLICE_SKUS,
     sliceInventory: slices.seedSliceInventory(),
+    images: IMAGES,
+    models: MODELS,
+    apps: appCatalogSnapshot(),
   });
 }
 await migrate();
@@ -99,8 +138,13 @@ function scheduleProvisioning() {
 async function initialize() {
   const client = await pool.connect();
   try {
-    await seedCatalog(client, defaultCatalog());
     await begin(client);
+    const bootstrap = await client.query("SELECT bootstrap_complete FROM catalog_state WHERE id = 1");
+    if (!bootstrap.rows[0].bootstrap_complete) {
+      await seedCatalog(client, defaultCatalog());
+      await client.query("UPDATE catalog_state SET bootstrap_complete = true WHERE id = 1");
+    }
+    await refreshCatalog(client, true);
     let loaded = await loadState(client);
     if (!loaded) {
       const seed = makeDatabase();
@@ -117,15 +161,15 @@ async function initialize() {
         loaded.version++;
       }
       const beforeUpgrade = structuredClone(loaded.state);
-      loaded.state.sliceInventory = reconcileSliceInventory(loaded.state.sliceInventory);
       const idsChanged = normalizeDisplayIds(loaded.state);
-      if (idsChanged || JSON.stringify(beforeUpgrade.sliceInventory) !== JSON.stringify(loaded.state.sliceInventory)) {
+      if (idsChanged) {
         await saveState(client, beforeUpgrade, loaded.state, loaded.version + 1);
         loaded.version++;
       }
     }
+    await initializeInventoryBaseline(client);
     await client.query("COMMIT");
-    applyCatalog(await loadCatalog(client));
+    await refreshCatalog(client, true);
     Object.assign(db, loaded.state);
     loadObjectStore(db.objectContent || []);
     loadedVersion = loaded.version;
@@ -167,13 +211,20 @@ function sameState(a, b) {
 
 async function dispatch(request) {
   const path = new URL(request.url).pathname;
-  const estimateOnly = path === "/api/deployment-orders/estimate";
+  const estimateOnly = path === "/api/deployment-orders/estimate" || path === "/api/storage/estimate";
   const settleBilling = estimateOnly
     ? false
     : request.method !== "GET" || Date.now() - lastMeteredAt >= 60_000;
-  const pureRead = request.method === "GET" || path === "/api/deployment-orders/estimate";
+  // Concurrent requests arriving after the interval must not each queue on the
+  // advisory lock. Claim the metering slot synchronously; the slow path below
+  // still records the exact completion time.
+  if (settleBilling && request.method === "GET" && !estimateOnly)
+    lastMeteredAt = Date.now();
+  const pureRead = request.method === "GET" || estimateOnly;
+  // A depleted account must not force every GET through the advisory-locked
+  // transaction: tick() still performs one-time lifecycle transitions and any
+  // such change sets `dirty`, which makes the fast path fall back and persist.
   const fastRead = pureRead && !settleBilling &&
-    !db.account.depletedAt && db.account.creditBalance >= 0 &&
     !db.resources.some((resource) => resource.status === "provisioning" ||
       (resource.kind === "vgpu" && resource.spec.deploymentMode === "slice" && resource.status === "error")) &&
     !["/api/billing/report", "/api/billing/invoices"].includes(path);
@@ -182,8 +233,12 @@ async function dispatch(request) {
     try {
       const current = await pool.query("SELECT version FROM app_state WHERE id = 1");
       if (Number(current.rows[0].version) === loadedVersion) {
+        await refreshCatalog(pool);
         dirty = false;
-        const response = await handleMockRequest(request, { delayMs: 0, settleBilling });
+        const response = await handleMockRequest(request, {
+          delayMs: 0,
+          settleBilling,
+        });
         if (!dirty) return await deriveResponse(pool, request, response);
         fallback = true;
       }
@@ -192,9 +247,14 @@ async function dispatch(request) {
       fallback = true;
     }
     if (fallback) {
+      // Reads must not queue behind the advisory lock held by a metering write.
+      // A read-only repeatable-read snapshot reloads the same committed state
+      // without blocking or being blocked by the writer.
       const reloadClient = await pool.connect();
       try {
-        await begin(reloadClient);
+        await reloadClient.query(
+          "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY",
+        );
         const loaded = await loadState(reloadClient);
         if (loaded) {
           Object.assign(db, loaded.state);
@@ -202,6 +262,7 @@ async function dispatch(request) {
           loadedVersion = loaded.version;
           dirty = false;
         }
+        await refreshCatalog(reloadClient);
         await reloadClient.query("COMMIT");
       } catch (error) {
         await reloadClient.query("ROLLBACK").catch(() => {});
@@ -220,18 +281,19 @@ async function dispatch(request) {
     const current = await client.query("SELECT version FROM app_state WHERE id = 1");
     let version = Number(current.rows[0].version);
     let reload = false;
+    if (await refreshCatalog(client)) reload = true;
     if (version !== loadedVersion) {
       const loaded = await loadState(client);
       Object.assign(db, loaded.state);
       loadObjectStore(db.objectContent || []);
       loadedVersion = loaded.version;
       version = loaded.version;
-      applyCatalog(await loadCatalog(client));
       reload = true;
     }
     db.objectContent = objectStoreSnapshot();
     before = structuredClone(db);
     dirty = false;
+    catalogWrites = [];
     const response = await handleMockRequest(request, {
       delayMs: 0,
       settleBilling,
@@ -244,7 +306,8 @@ async function dispatch(request) {
       loadObjectStore(db.objectContent || []);
       return response;
     }
-    const changed = dirty || !sameState(before, db);
+    const changed = dirty || catalogWrites.length > 0 || !sameState(before, db);
+    for (const { table, row } of catalogWrites) await saveCatalogEntity(client, table, row);
     if (changed) await saveState(client, before, db, version + 1);
     const derivedResponse = await deriveResponse(client, request, response);
     await client.query("COMMIT");
@@ -268,6 +331,7 @@ async function dispatch(request) {
     if (!committed && before) {
       Object.assign(db, before);
       loadObjectStore(db.objectContent || []);
+      loadedCatalogVersion = -1;
     }
     console.error("API transaction failed", error);
     return Response.json({ code: "INTERNAL" }, { status: 500 });

@@ -14,7 +14,7 @@
 | ------ | --------------------------------------------------- |
 | 前端框架   | **React 19**（并发特性、Actions、`use()`）                  |
 | 语言     | **TypeScript 5**（strict 模式，禁止 `any` 泄露到领域层）          |
-| 本次范围   | 默认 Mock；可选内部 PostgreSQL API                             |
+| 本次范围   | 默认内部 PostgreSQL API；独立 Mock 测试预览                             |
 | 未来后端存储 | **PostgreSQL 15+（pg）**，实现见 `server/migrations/`              |
 | 包管理    | pnpm                                                |
 | 构建     | Vite 6                                              |
@@ -973,7 +973,7 @@ CREATE INDEX idx_notifications_org_user ON notifications(org_id, user_id, read_a
 
 | 变量                         | 类型      | 默认值                       | 消费位置                                | 说明             |
 | -------------------------- | ------- | ------------------------- | ----------------------------------- | -------------- |
-| `VITE_ENABLE_MOCK`         | boolean | `true`                    | `app/providers.tsx`（MSW 初始化开关）       | `false` 时不再拦截请求 |
+| `VITE_ENABLE_MOCK`         | boolean | `false`                    | `app/providers.tsx`（MSW 初始化开关）       | `false` 时不再拦截请求 |
 | `VITE_API_BASE_URL`        | string  | 空值（同源）              | `lib/api-client`（baseURL）           | Mock 关闭时的网关地址  |
 | `VITE_DEFAULT_REGION`      | enum    | `jp`                      | `stores/region` 初始值                  | ∈ jp/sg/us  |
 | `VITE_WS_URL`              | string  | 空                         | `lib/api-client`（实时通道）              | 为空则退化为轮询       |
@@ -1437,3 +1437,12 @@ Mock `Database.network` 保存实体、历史接口、审计和地址池序号�
 ### 公网 HTTP 开发访问与 Mock
 
 浏览器 Service Worker 只在安全上下文可用；HTTP 公网 IP 不满足该条件。`VITE_ENABLE_MOCK=true` 时优先由 MSW Service Worker 拦截 `/api/*`；不可用时由浏览器内同源 `fetch` Mock 回退调用同一 `handleMockRequest`，保持接口与持久化逻辑一致。非安全上下文也可能没有 `crypto.randomUUID()`，初始化时使用 `crypto.getRandomValues()` 生成符合 UUID v4 位布局的标识。`VITE_API_BASE_URL` 默认为空，仅在关闭 Mock 时使用；真实后端需通过同源网关或明确配置公网可达地址，不能使用访客电脑的 `localhost`。
+
+
+### 创建配置与数据库目录
+
+5173 使用 `VITE_ENABLE_MOCK=false`，同源 `/api` 代理至内部 API。四类资源的数量由后端重算；硬件规格、可用库存、区域配额、镜像、模型、应用模板、价格与计费折扣分别从 PostgreSQL 目录读取。`deployment_configuration` 保存云服务器 CPU/内存组合、GPU 选项与 Kubernetes 版本，`billing_modes` 保存计费折扣。前端仅展示报价和校验接口下发的规格，不决定最终价格。
+
+`POST /api/deployment-orders/estimate` 返回费用明细及后端核算的 `spec`；`POST /api/storage/estimate` 接收 `selections`（key、kind、tier、sizeGb、count）并返回每项 `PriceEstimate`。创建订单在同一事务内保存核算后的规格、价格快照与资源；目录写入也在提交后返回。缺失价格或目录引用返回 422，不回退种子数据。
+
+`node_pool_inventory.available_gpu` 是建立基线时的空闲供给；`baseline_allocated_gpu` 一次记录数据库中原有资源的占用，可用量按「空闲供给 + 基线占用 − 当前占用」计算。新增订单不进入基线，停止/释放归还占用。目录变更触发 `catalog_state.version` 更新，后端据此刷新缓存。初始目录只引导一次，重启不会补回已删除的目录或切片库存。GPU 利用率、温度与 QPS 继续沿用监控模拟方案。

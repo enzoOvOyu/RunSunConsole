@@ -177,3 +177,14 @@ it("adds secure defaults to persisted Buckets and objects without changing their
   expect(bucket.objects[0]).toMatchObject({ encryption: "SSE", tags: {}, size: originalSize });
   expect(normalizeDisplayIds(state)).toBe(false);
 });
+
+it("restoring saved network state does not allocate unrelated regional VPCs", () => {
+  const original = makeDatabase();
+  const expected = original.network.vpcs.map((vpc) => vpc.id).sort();
+  vi.stubGlobal("localStorage", { getItem: () => JSON.stringify(original) });
+  try {
+    expect(restoreDatabase().network.vpcs.map((vpc) => vpc.id).sort()).toEqual(expected);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

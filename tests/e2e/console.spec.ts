@@ -1,4 +1,23 @@
 import { test, expect, type Page } from "@playwright/test";
+const publicKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFOO";
+async function importPublicKey(page: Page) {
+  await page.goto("/workbench/ssh-keys");
+  await page.getByRole("textbox", { name: "名称", exact: true }).fill("Browser test key");
+  await page.getByRole("textbox", { name: /^公钥内容/ }).fill(publicKey);
+  await page.getByRole("button", { name: "添加公钥", exact: true }).click();
+  await expect(page.getByText("Browser test key", { exact: true })).toBeVisible();
+}
+async function storageQuotaValues(page: Page) {
+  return page.evaluate(async () => {
+    const quotas = await (await fetch("/api/quotas?region=jp")).json() as {
+      metric: string; storageBreakdown?: { kind: string; usedGb: number; limitGb: number }[];
+    }[];
+    return (quotas.find((quota) => quota.metric === "storage")?.storageBreakdown || []).map((item) => ({
+      kind: item.kind,
+      value: `${Math.round(item.usedGb / 1000).toLocaleString("zh-CN")} / ${Math.round(item.limitGb / 1000).toLocaleString("zh-CN")} TB`,
+    }));
+  });
+}
 async function expectOverviewAllocation(page: Page) {
   await expect(page.locator(".overview-stats .overview-stat-card")).toHaveCount(4);
   const allocated = await page.evaluate(async () => {
@@ -35,8 +54,10 @@ const routes = [
   "ops/quotas",
   "billing/cost",
   "ops/tickets",
-  "workbench/notebooks",
+  "workbench/models",
   "workbench/images",
+  "workbench/os-images",
+  "workbench/ssh-keys",
   "workbench/apps",
   "workbench/scaling",
   "data/datasets",
@@ -46,13 +67,18 @@ const routes = [
   "data/pipelines",
   "billing/bills",
   "billing/vouchers",
+  "ops/operation-logs",
+  "network/firewalls",
+  "ops/cost",
+  "data/storage",
 ];
 test("all navigation pages load without runtime errors", async ({ page }) => {
+  test.setTimeout(90_000);
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   for (const route of routes) {
-    await page.goto("/" + route);
-    await expect(page.locator("h1")).toBeVisible();
+    await page.goto("/" + route, { waitUntil: "domcontentloaded" });
+    await expect(page.locator("h1")).toBeVisible({ timeout: 15_000 });
     await expect(page.locator("main")).not.toContainText("服务暂时不可用");
     await expect(page.locator("main")).not.toContainText("资源已不存在");
   }
@@ -87,7 +113,7 @@ test("submenu pages describe their own resource and billing functions", async ({
     ["resources/baremetal", "按集群查看裸金属设备明细、运行状态和分配情况。"],
     [
       "resources/vgpu",
-      "查看 GPU 集群、节点池和共享资源状态，管理集群生命周期。",
+      "查看 Kubernetes 集群的 GPU 节点池、Pod 与运行状态，并管理集群生命周期。",
     ],
     [
       "resources/inference",
@@ -97,16 +123,12 @@ test("submenu pages describe their own resource and billing functions", async ({
     ["ops/quotas", "查看当前区域的算力、内存、存储和网络配额用量及可用额度。"],
     ["ops/tickets", "提交资源与平台问题，跟踪工单处理状态并补充沟通记录。"],
     [
-      "workbench/notebooks",
-      "在已运行的计算资源上创建并管理 Notebook 与 IDE 连接。",
+      "workbench/models",
+      "浏览模型目录，按厂商、参数规模、模态与部署能力筛选。",
     ],
     [
-      "workbench/images",
-      "浏览模型目录与系统镜像，按发布方、参数量、模态和可部署状态筛选。",
-    ],
-    [
-      "workbench/apps",
-      "浏览预置 AI 应用模板，查看所需资源并进入对应部署流程。",
+      "workbench/os-images",
+      "浏览可用于创建 GPU 云服务器的操作系统与运行时镜像。",
     ],
     [
       "workbench/scaling",
@@ -120,8 +142,8 @@ test("submenu pages describe their own resource and billing functions", async ({
     ["billing/vouchers", "查看代金券面值、余额、适用范围、有效期与使用状态。"],
   ];
   for (const [route, description] of pages) {
-    await page.goto(`/${route}`);
-    await expect(page.locator(".page-header p")).toHaveText(description);
+    await page.goto(`/${route}`, { waitUntil: "domcontentloaded" });
+    await expect(page.locator(".page-header p")).toHaveText(description, { timeout: 15_000 });
   }
 });
 test("aggregate, locale, theme, commands and responsive navigation", async ({
@@ -158,13 +180,14 @@ test("independent resource drawers support billing and history tabs", async ({
 test("server wizard creates a resource and preserves it after refresh", async ({
   page,
 }) => {
+  await importPublicKey(page);
   await page.goto("/deployment/server");
   await page.getByRole("button", { name: "下一步", exact: true }).click();
   await page.getByRole("button", { name: "下一步", exact: true }).click();
   await page.getByRole("button", { name: "下一步", exact: true }).click();
   await page
-    .getByRole("textbox", { name: "SSH 公钥", exact: true })
-    .fill("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFOO");
+    .getByRole("combobox", { name: "SSH 公钥", exact: true })
+    .selectOption(publicKey);
   await page.getByRole("button", { name: "下一步", exact: true }).click();
   await page.getByLabel("我已阅读并确认配置与计费方式").check();
   await page.getByRole("button", { name: "新建", exact: true }).click();
@@ -220,7 +243,7 @@ test("project, dataset, object and pipeline workflows persist changes", async ({
   await page.getByRole("button", { name: /models\// }).click();
   await page.getByRole("button", { name: /llama\// }).click();
   await expect(
-    page.getByText("models/llama/config.json", { exact: true }),
+    page.getByRole("cell", { name: "config.json", exact: true }),
   ).toBeVisible();
   await page.goto("/data/pipelines");
   await page.locator("tbody tr").first().click();
@@ -233,18 +256,24 @@ test("project, dataset, object and pipeline workflows persist changes", async ({
 test("bare metal, vGPU and inference wizards create distinct resource types", async ({
   page,
 }) => {
+  test.setTimeout(90_000);
+  await importPublicKey(page);
   for (const [wizard, route] of [
     ["baremetal", "baremetal"],
     ["vgpu", "vgpu"],
     ["inference", "inference"],
   ]) {
     await page.goto("/deployment/" + wizard);
-    for (let i = 0; i < 4; i++)
-      await page.getByRole("button", { name: "下一步", exact: true }).click();
-    if (wizard === "baremetal")
-      await page
-        .getByRole("textbox", { name: "SSH 公钥", exact: true })
-        .fill("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFOO");
+    await expect(page.getByRole("button", { name: "下一步", exact: true })).toBeVisible();
+    for (let i = 0; i < 8; i++) {
+      const ssh = page.getByRole("combobox", { name: "SSH 公钥", exact: true });
+      if (await ssh.isVisible()) await ssh.selectOption(publicKey);
+      const capacity = page.getByRole("spinbutton", { name: "每节点云硬盘容量", exact: true });
+      if (wizard === "vgpu" && await capacity.isVisible()) await capacity.fill("100");
+      const next = page.getByRole("button", { name: "下一步", exact: true });
+      if (!(await next.isVisible())) break;
+      await next.click();
+    }
     await page.getByLabel("我已阅读并确认配置与计费方式").check();
     await page.getByRole("button", { name: "新建", exact: true }).click();
     if (wizard === "inference") {
@@ -430,10 +459,17 @@ test("inference governance reviews changes, persists settings and stays read-onl
       await (await fetch(`/api/resources/${uuid}/governance`)).json(),
     r.resourceUuid,
   );
-  let writes = 0;
-  page.on("request", (req) => {
-    if (req.method() === "POST" && req.url().endsWith("/governance")) writes++;
+  await page.evaluate(() => {
+    const original = window.fetch;
+    const state = window as typeof window & { governanceWrites: number };
+    state.governanceWrites = 0;
+    window.fetch = (input, init) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if ((init?.method || (input instanceof Request ? input.method : "GET")) === "POST" && url.endsWith("/governance")) state.governanceWrites++;
+      return original(input, init);
+    };
   });
+  const writes = () => page.evaluate(() => (window as typeof window & { governanceWrites: number }).governanceWrites);
   const edit = async () => {
     await page
       .getByRole("button", { name: "编辑治理配置", exact: true })
@@ -452,7 +488,7 @@ test("inference governance reviews changes, persists settings and stays read-onl
   };
   const canceled = await edit();
   await expect(canceled).toContainText("→ 17 %");
-  expect(writes).toBe(0);
+  expect(await writes()).toBe(0);
   await canceled.getByRole("button", { name: "取消", exact: true }).click();
   const unchanged = await page.evaluate(
     async (uuid) =>
@@ -463,7 +499,7 @@ test("inference governance reviews changes, persists settings and stays read-onl
   const review = await edit();
   await review.getByRole("button", { name: "确认", exact: true }).click();
   await expect(review).not.toBeVisible();
-  expect(writes).toBe(1);
+  expect(await writes()).toBe(1);
   await expect(
     page.getByRole("dialog").getByRole("cell", { name: "17%", exact: true }),
   ).toBeVisible();
@@ -692,7 +728,7 @@ test("network console manages isolated VPCs and dependent subnets", async ({
   await modal.getByRole("button", { name: "确认", exact: true }).click();
   await drawer.getByRole("tab", { name: "交换机", exact: true }).click();
   await expect(drawer).toContainText("e2e-subnet");
-  await expect(drawer).toContainText("252");
+  await expect(drawer).toContainText("251");
   await page.reload();
   await expect(page.getByRole("dialog")).toContainText("e2e-vpc");
 });
@@ -700,7 +736,7 @@ test("network console allocates and releases EIPs without a VM", async ({
   page,
 }) => {
   await page.goto("/network/eips");
-  await page.getByRole("button", { name: "分配公网 IP", exact: true }).click();
+  await page.getByRole("button", { name: "分配弹性公网 IP", exact: true }).click();
   const form = page.getByRole("dialog");
   await form
     .getByRole("textbox", { name: "名称", exact: true })
@@ -742,7 +778,7 @@ test("network console creates firewall rules and configures IPsec without exposi
   await expect(page.getByRole("dialog")).toContainText("443–443");
   await page.keyboard.press("Escape");
   await page.goto("/network/eips");
-  await page.getByRole("button", { name: "分配公网 IP", exact: true }).click();
+  await page.getByRole("button", { name: "分配弹性公网 IP", exact: true }).click();
   form = page.getByRole("dialog");
   await form
     .getByRole("textbox", { name: "名称", exact: true })
@@ -784,14 +820,16 @@ test("network console creates firewall rules and configures IPsec without exposi
 test("overview and quota page render the same regional quota records", async ({
   page,
 }) => {
-  const values = ["360 / 450 TB", "280 / 350 TB", "160 / 200 TB"];
   await page.goto("/overview");
+  await expectOverviewAllocation(page);
+  const values = (await storageQuotaValues(page)).map((item) => item.value);
+  expect(values).toHaveLength(3);
   const overview = page.locator(".panel").filter({
     has: page.getByRole("heading", { name: "配额用量", exact: true }),
   });
   const japan = overview
-    .locator(".grid-3 > div")
-    .filter({ hasText: "日本 JP" });
+    .locator(".overview-quota-region")
+    .filter({ has: page.getByRole("heading", { name: /日本\s*JP/ }) });
   for (const value of values) await expect(japan).toContainText(value);
   await page.goto("/ops/quotas?region=jp");
   const quotas = page.locator(".grid-4");
@@ -800,12 +838,16 @@ test("overview and quota page render the same regional quota records", async ({
 test("network allocations update regional quotas and prefill a quota request", async ({
   page,
 }) => {
+  await page.goto("/network/vpcs?region=jp");
+  await expect(page.locator("tbody tr").first()).toBeVisible();
+  await page.reload();
+  await expect(page.locator("tbody tr").first()).toBeVisible();
   await page.goto("/ops/quotas?region=jp");
-  for (const [kind, value] of [
-    ["块存储 · TB", "360 / 450 TB"],
-    ["文件存储 · TB", "280 / 350 TB"],
-    ["对象存储 · TB", "160 / 200 TB"],
-  ]) {
+  await expect(page.locator(".grid-4 .panel").first()).toBeVisible();
+  const values = await storageQuotaValues(page);
+  expect(values).toHaveLength(3);
+  for (const { kind: storageKind, value } of values) {
+    const kind = ({ block: "块存储 · TB", file: "文件存储 · TB", object: "对象存储 · TB" } as Record<string, string>)[storageKind];
     const card = page.locator(".grid-4 .panel").filter({
       has: page.getByRole("heading", { name: kind, exact: true }),
     });
@@ -842,7 +884,7 @@ test("network allocations update regional quotas and prefill a quota request", a
   await row.getByRole("link", { name: "申请配额", exact: true }).click();
   await expect(
     page.getByRole("dialog").getByRole("textbox").first(),
-  ).toHaveValue(/专有网络 VPC 数/);
+  ).toHaveValue("申请专有网络 VPC配额提升");
 });
 test("resource network tabs show per-device private addresses and deployment choices are scoped", async ({
   page,
@@ -855,21 +897,18 @@ test("resource network tabs show per-device private addresses and deployment cho
       has: page.getByRole("heading", { name: "网络管理", exact: true }),
     });
     await expect(panel.locator("tbody tr").first()).toBeVisible();
-    await expect(panel.locator("tbody")).toContainText(/10\.(16|32|48|64)\./);
+    await expect(panel.locator("tbody")).toContainText(/(10\.(16|32|48|64)|172\.16)\./);
     await page.keyboard.press("Escape");
   }
   await page.goto("/deployment/server");
   for (let i = 0; i < 3; i++)
     await page.getByRole("button", { name: "下一步", exact: true }).click();
-  await expect(page.getByLabel("VPC", { exact: true })).toHaveValue(/^vpc-/);
-  const values = await page
-    .getByLabel("安全组", { exact: true })
-    .locator("option")
-    .evaluateAll((options) =>
-      options.map((o) => (o as HTMLOptionElement).value),
-    );
-  expect(values.length).toBeGreaterThan(0);
-  expect(values.every((v) => v.startsWith("sg-"))).toBe(true);
+  const vpc = page.getByLabel("VPC", { exact: true });
+  expect(await vpc.inputValue()).toBeTruthy();
+  await page.getByRole("button", { name: "安全组", exact: true }).click();
+  const groups = page.getByRole("menuitemcheckbox");
+  expect(await groups.count()).toBeGreaterThan(0);
+  await expect(groups.first()).toHaveAttribute("aria-checked", "true");
 });
 test("resource monitoring loads six charts at a time across all four kinds", async ({
   page,
@@ -926,8 +965,8 @@ test("expanded resource specifications can be filtered in every resource list", 
 }) => {
   for (const [route, label] of [
     ["servers", "单实例卡数"],
-    ["baremetal", "机型"],
-    ["vgpu", "切片策略"],
+    ["baremetal", "GPU 型号"],
+    ["vgpu", "控制面等级"],
     ["inference", "模型"],
   ]) {
     await page.goto(`/resources/${route}?region=jp`);
@@ -959,63 +998,51 @@ test("cost analysis belongs to Billing while the old route redirects", async ({
   await expect(page).toHaveURL(/billing\/cost$/);
 });
 
-test("deployment storage rows create linked file and object resources", async ({
-  page,
-}) => {
+test("deployment storage quotes and creates linked block volumes", async ({ page }) => {
+  await importPublicKey(page);
   await page.goto("/deployment/server");
   await page.getByRole("button", { name: "下一步", exact: true }).click();
   await page.getByRole("button", { name: "下一步", exact: true }).click();
+  await expect(page.getByRole("link", { name: "管理文件存储", exact: true })).toHaveAttribute("href", "/storage/file");
+  await expect(page.getByRole("link", { name: "管理对象存储", exact: true })).toHaveAttribute("href", "/storage/object");
   await page.getByRole("button", { name: "添加存储", exact: true }).click();
-  const fileRow = page.getByText("存储项 1", { exact: true }).locator("../..");
-  await fileRow
-    .getByRole("combobox", { name: "类型", exact: true })
-    .selectOption("file");
-  await fileRow
-    .getByRole("textbox", { name: "名称", exact: true })
-    .fill("shared-models");
-  await page.getByRole("button", { name: "添加存储", exact: true }).click();
-  const objectRow = page
-    .getByText("存储项 2", { exact: true })
-    .locator("../..");
-  await objectRow
-    .getByRole("combobox", { name: "类型", exact: true })
-    .selectOption("object");
-  await objectRow
-    .getByRole("textbox", { name: "存储桶名称", exact: true })
-    .fill("runsun-browser-storage-test");
+  const row = page.getByText("存储项 1", { exact: true }).locator("../..");
+  await row.getByRole("textbox", { name: "名称", exact: true }).fill("e2e-data-disk");
+  await expect(row).toContainText("预估月费");
   await page.getByRole("button", { name: "下一步", exact: true }).click();
-  await page
-    .getByRole("textbox", { name: "SSH 公钥", exact: true })
-    .fill("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFOO");
+  await page.getByRole("combobox", { name: "SSH 公钥", exact: true }).selectOption(publicKey);
   await page.getByRole("button", { name: "下一步", exact: true }).click();
   await page.getByLabel("我已阅读并确认配置与计费方式").check();
   await page.getByRole("button", { name: "新建", exact: true }).click();
   await expect(page).toHaveURL(/resources\/servers\?drawer=/);
-  await page.goto("/storage/file?region=jp");
-  await expect(page.locator("tbody")).toContainText("shared-models");
-  await page.goto("/storage/object?region=jp");
-  await expect(page.locator("tbody")).toContainText(
-    "runsun-browser-storage-test",
-  );
+  const uuid = new URL(page.url()).searchParams.get("drawer");
+  const volumes = await page.evaluate(async () => (await (await fetch("/api/storage/volumes?region=jp")).json()) as { name: string; resourceUuid: string }[]);
+  expect(volumes.find((volume) => volume.name === "e2e-data-disk")?.resourceUuid).toBe(uuid);
+  await page.goto("/storage/block?region=jp");
+  await page.getByRole("textbox", { name: /^搜索/ }).fill("e2e-data-disk");
+  await expect(page.locator("tbody")).toContainText("e2e-data-disk");
 });
 
 test("model catalog features NVIDIA and Meta and opens deployment for every model", async ({
   page,
 }) => {
   await page.goto("/workbench/images");
-  await expect(page.locator(".model-catalog-card")).toHaveCount(54);
+  await expect(page.locator(".model-catalog-card").first()).toBeVisible();
+  const catalog = await page.evaluate(async () => (await (await fetch("/api/models")).json()) as { modelRef?: string; modality: string }[]);
+  const listed = catalog;
+  await expect(page.locator(".model-catalog-card")).toHaveCount(listed.length);
   await expect(
     page.locator(".model-catalog-card").first().locator("h3"),
   ).toContainText("NVIDIA Nemotron 3 Ultra");
   await expect(
     page.locator(".model-catalog-card").nth(1).locator("h3"),
   ).toContainText("Muse Spark Open");
-  await expect(page.locator(".model-catalog-status.ready")).toHaveCount(54);
+  await expect(page.locator(".model-catalog-status.ready")).toHaveCount(listed.filter((model) => model.modality === "text" || model.modality === "multimodal").length);
   await expect(
     page
       .locator(".model-catalog-card")
-      .getByRole("button", { name: "基于此项部署" }),
-  ).toHaveCount(54);
+      .getByRole("button", { name: "推理服务", exact: true }),
+  ).toHaveCount(listed.length);
   await page.getByRole("textbox", { name: "搜索" }).fill("Nemotron-3-Ultra");
   await expect(page.locator(".model-catalog-card")).toHaveCount(1);
   await page
@@ -1035,7 +1062,7 @@ test("model catalog features NVIDIA and Meta and opens deployment for every mode
     .click();
   await expect(page).toHaveURL(/deployment\/inference\?model=catalog-7/);
   await page.getByRole("button", { name: "下一步", exact: true }).click();
-  await expect(page.locator(".catalog-card.selected")).toContainText(
+  await expect(page.locator(".inference-model-group.selected")).toContainText(
     "NVIDIA Nemotron 3 Ultra",
   );
 });

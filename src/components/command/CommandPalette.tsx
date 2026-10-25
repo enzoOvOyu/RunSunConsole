@@ -9,7 +9,7 @@ import { EP, query } from "../../lib/api-client";
 import { useData } from "../../features/shared/hooks";
 import { resourceLink } from "../../lib/ids";
 import type { Resource } from "../../types/domain";
-import { t, dt } from "../../i18n";
+import { setLocale as changeLocale, t, dt } from "../../i18n";
 import "./palette.css";
 export function CommandPalette({
   open,
@@ -21,7 +21,8 @@ export function CommandPalette({
   const [search, setSearch] = useState("");
   const role = useAuth((s) => s.role);
   const navigate = useNavigate();
-  const { locale, setLocale } = useLocale();
+  const { locale } = useLocale();
+  const setLocale = (next: "zh-CN" | "en-US") => void changeLocale(next);
   const toggle = useTheme((s) => s.toggle);
   const resources = useData<{ items: Resource[] }>(
     ["command-resources"],
@@ -59,16 +60,17 @@ export function CommandPalette({
       <Command.List>
         <Command.Empty>{t("command.empty")}</Command.Empty>
         <Command.Group heading={t("command.resources")}>
-          {open && resources.data?.items.map((r) => (
-            <Command.Item
-              key={r.resourceUuid}
-              value={`${r.displayId} ${r.resourceUuid} ${r.name} ${dt(r.name)}`}
-              onSelect={() => select(() => navigate(resourceLink(r)))}
-            >
-              <span>{dt(r.name)}</span>
-              <small className="resource-id">{r.displayId}</small>
-            </Command.Item>
-          ))}
+          {open &&
+            resources.data?.items.map((r) => (
+              <Command.Item
+                key={r.resourceUuid}
+                value={`${r.displayId} ${r.resourceUuid} ${r.name} ${dt(r.name)}`}
+                onSelect={() => select(() => navigate(resourceLink(r)))}
+              >
+                <span>{dt(r.name)}</span>
+                <small className="resource-id">{r.displayId}</small>
+              </Command.Item>
+            ))}
         </Command.Group>
         {[
           {
@@ -86,18 +88,18 @@ export function CommandPalette({
         ]
           .filter((group) => group.items.length)
           .map((g) => (
-          <Command.Group key={g.id} heading={t(`command.${g.id}`)}>
-            {g.items.map((item) => (
-              <Command.Item
-                value={item.label()}
-                key={item.path}
-                onSelect={() => select(() => navigate(item.path))}
-              >
-                {item.label()}
-              </Command.Item>
-            ))}
-          </Command.Group>
-        ))}
+            <Command.Group key={g.id} heading={t(`command.${g.id}`)}>
+              {g.items.map((item) => (
+                <Command.Item
+                  value={item.label()}
+                  key={item.path}
+                  onSelect={() => select(() => navigate(item.path))}
+                >
+                  {item.label()}
+                </Command.Item>
+              ))}
+            </Command.Group>
+          ))}
         <Command.Group heading={t("command.quick")}>
           <Command.Item onSelect={() => select(toggle)}>
             {t("header.theme")}

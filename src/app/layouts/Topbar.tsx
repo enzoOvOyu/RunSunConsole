@@ -16,7 +16,7 @@ import { ROLES, type Account, type Resource } from "../../types/domain";
 import { resourceLink } from "../../lib/ids";
 import { Button, Modal } from "../../components/ui";
 import { buildGroups } from "./navModel";
-import { t } from "../../i18n";
+import { setLocale as changeLocale, t } from "../../i18n";
 import { useData } from "../../features/shared/hooks";
 import { EP } from "../../lib/api-client";
 import styles from "./layout.module.css";
@@ -31,7 +31,7 @@ export function Topbar({
   const role = useAuth((state) => state.role);
   const setRole = useAuth((state) => state.setRole);
   const locale = useLocale((state) => state.locale);
-  const setLocale = useLocale((state) => state.setLocale);
+  const setLocale = (locale: "zh-CN" | "en-US") => void changeLocale(locale);
   const theme = useTheme((state) => state.theme);
   const toggle = useTheme((state) => state.toggle);
   const navigate = useNavigate();

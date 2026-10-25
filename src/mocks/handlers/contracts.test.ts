@@ -1,6 +1,6 @@
 import { beforeAll, afterAll, beforeEach, it, expect, vi } from "vitest";
 import { setupServer } from "msw/node";
-import { handlers } from "./index";
+import { handlers, setAllocationBaseline } from "./index";
 import { db, makeDatabase } from "../lib/database";
 import { RATES } from "../fixtures/pricing";
 import { defaultSpec, defaultScaling } from "../../lib/config";
@@ -982,4 +982,79 @@ it("keeps regional default projects aligned across overview and project lists", 
   expect((await request(`/projects/${created.data.id}`, "PATCH", { defaultRegion: "us" })).status).toBe(409);
   db.projects.find((project) => project.id === created.data.id)!.deletedAt = new Date().toISOString();
   expect((await request("/overview")).data.projects).toHaveLength(3);
+});
+
+it("prices estimates from catalog quantities and returns validation errors for unknown catalog references", async () => {
+  const spec = defaultSpec("gpu_baremetal", poolsFor("jp")[0]);
+  if (!("machineCount" in spec)) throw Error("fixture");
+  spec.machineCount = 2;
+  spec.gpuCount = 1;
+  const result = await request("/deployment-orders/estimate", "POST", {
+    kind: "gpu_baremetal",
+    region: "jp",
+    nodePool: "H100_SXM",
+    mode: "on_demand",
+    spec,
+  });
+  expect(result.status).toBe(200);
+  expect(result.data.lines.find((line: { key: string }) => line.key === "compute").quantity).toBe(2);
+  expect(result.data.lines.find((line: { key: string }) => line.key === "compute").unitPrice).toBe(
+    RATES.find((rate) => rate.kind === "gpu_baremetal" && rate.region === "jp" && rate.pool === "H100_SXM" && rate.unit === "per_machine_hour")!.unitPrice,
+  );
+  const vgpu = defaultSpec("vgpu", poolsFor("jp")[0]);
+  if (!("nodePools" in vgpu)) throw Error("fixture");
+  vgpu.nodePools[0].nodeCount = 2;
+  vgpu.nodePools[0].gpuPerNode = 1;
+  vgpu.gpuCount = 1;
+  const cluster = await request("/deployment-orders/estimate", "POST", {
+    kind: "vgpu",
+    region: "jp",
+    nodePool: "H100_SXM",
+    mode: "on_demand",
+    spec: vgpu,
+  });
+  expect(cluster.status).toBe(200);
+  expect(cluster.data.lines.find((line: { key: string }) => line.key === "compute:H100_SXM").quantity).toBe(16);
+  expect((await request("/deployment-orders/estimate", "POST", {
+    kind: "gpu_vm",
+    region: "jp",
+    nodePool: "H100_SXM",
+    mode: "on_demand",
+    spec: { ...defaultSpec("gpu_vm", poolsFor("jp")[0]), imageRef: "missing-image" },
+  })).status).toBe(422);
+  expect((await request("/deployment-orders/estimate", "POST", {
+    kind: "inference",
+    region: "jp",
+    nodePool: "H100_SXM",
+    mode: "on_demand",
+    spec: { ...defaultSpec("inference", poolsFor("jp")[0]), modelRef: "missing-model" },
+  })).status).toBe(422);
+});
+
+it("uses the database inventory baseline instead of regenerated seed allocations", async () => {
+  db.resources = [];
+  setAllocationBaseline({ "jp:H100_SXM": 123 });
+  try {
+    const result = await request("/node-pools?region=jp");
+    expect(result.data.find((pool: { code: string }) => pool.code === "H100_SXM").availableGpu).toBe(336 + 123);
+  } finally {
+    setAllocationBaseline(null);
+  }
+});
+
+it("returns storage quotes from the product catalog and rejects invalid quantities", async () => {
+  const selection = { key: "disk", kind: "block", tier: "essd_pl0", sizeGb: 100, count: 2 };
+  const quote = await request("/storage/estimate", "POST", { selections: [selection] });
+  expect(quote.status).toBe(200);
+  expect(quote.data[0].monthly).toBe(18);
+  expect(quote.data[0].lines[0].quantity).toBe(200);
+  for (const patch of [{ count: 0 }, { count: 1.5 }, { sizeGb: -100 }, { tier: "missing" }])
+    expect((await request("/storage/estimate", "POST", { selections: [{ ...selection, ...patch }] })).status).toBe(422);
+});
+
+it("rejects invalid estimate quantities before computing prices", async () => {
+  for (const quantity of [-1, 0, 1.5, 51]) {
+    const spec = { ...defaultSpec("gpu_vm", poolsFor("jp")[0]), quantity };
+    expect((await request("/deployment-orders/estimate", "POST", { kind: "gpu_vm", region: "jp", nodePool: "H100_SXM", mode: "on_demand", spec })).status).toBe(422);
+  }
 });

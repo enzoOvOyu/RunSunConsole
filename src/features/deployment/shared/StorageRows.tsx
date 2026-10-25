@@ -1,22 +1,20 @@
 import { Button, Field, Panel } from "../../../components/ui";
 import { Link } from "react-router-dom";
 import { t } from "../../../i18n";
-import { EP } from "../../../lib/api-client";
-import { useData } from "../../shared/hooks";
 import type {
-  StorageProduct,
   StorageRequest,
 } from "../../../types/storage";
 import { useSpec } from "./fields";
 import { clientUuid } from "../../../lib/uuid";
+import { useStorageEstimate } from "../../shared/useStorageEstimate";
+import { money } from "../../../lib/money";
+import { useStorageProducts } from "../../shared/useStorageProducts";
 
 export function StorageRows() {
   const { spec, update } = useSpec();
   const rows = spec.storageSelections || [];
-  const catalog = useData<StorageProduct[]>(
-    ["storage-products"],
-    EP.storageProducts,
-  );
+  const prices = useStorageEstimate(rows);
+  const catalog = useStorageProducts();
   const products = (catalog.data || []).filter((product) => product.kind === "block");
   const change = (key: string, patch: Partial<StorageRequest>) =>
     update({
@@ -150,7 +148,7 @@ export function StorageRows() {
                 </Field>
               </div>
               <small>
-                {`${t("storage.monthlyEstimate")}: $${(row.sizeGb * row.count * product.usdGbMonth).toFixed(2)}`}
+                {`${t("storage.monthlyEstimate")}: ${prices.data?.find((price) => price.key === row.key)?.monthly !== undefined ? money(prices.data.find((price) => price.key === row.key)!.monthly) : "—"}`}
               </small>
             </div>
           );

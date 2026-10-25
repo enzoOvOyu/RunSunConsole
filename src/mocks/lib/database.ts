@@ -522,8 +522,7 @@ export function restoreDatabase() {
       }
       data.network ??= makeNetwork(data.resources, data.projects);
       for (const project of data.projects.filter((item) => !item.deletedAt))
-        for (const region of ["jp", "sg", "us"] as const)
-          ensureScope(data.network, { projectId: project.id, region });
+        ensureScope(data.network, { projectId: project.id, region: project.defaultRegion });
       for (const resource of data.resources) {
         if (resource.deletedAt || resource.kind !== "gpu_baremetal") continue;
         const currentVpc = data.network.vpcs.find(

@@ -262,29 +262,26 @@ export async function saveState(client, before, after, version) {
     const newRows = new Map(
       get(after, config.path).map((row) => [String(row[config.id]), row]),
     );
-    for (const [id, row] of newRows) {
-      if (JSON.stringify(oldRows.get(id)) === JSON.stringify(row)) continue;
-      const fields = Object.keys(config.fields);
-      const columns = ["id", ...fields, "data"];
-      const values = [
-        id,
-        ...fields.map((field) => projection(row, config.fields[field])),
-        JSON.stringify(row),
-      ];
-      const placeholders = columns.map((_, index) => `$${index + 1}`);
-      const update = columns
-        .slice(1)
-        .map((column) => `${column} = EXCLUDED.${column}`)
-        .join(", ");
+    const changed = [...newRows].filter(([id, row]) => JSON.stringify(oldRows.get(id)) !== JSON.stringify(row));
+    const fields = Object.keys(config.fields);
+    const columns = ["id", ...fields, "data"];
+    const update = columns.slice(1).map((column) => `${column} = EXCLUDED.${column}`).join(", ");
+    for (let offset = 0; offset < changed.length; offset += 250) {
+      const values = [];
+      const placeholders = changed.slice(offset, offset + 250).map(([id, row]) => {
+        const start = values.length;
+        values.push(id, ...fields.map((field) => projection(row, config.fields[field])), JSON.stringify(row));
+        return `(${columns.map((_, index) => `$${start + index + 1}`).join(", ")})`;
+      });
       await client.query(
-        `INSERT INTO ${config.table} (${columns.join(", ")}) VALUES (${placeholders.join(", ")})
+        `INSERT INTO ${config.table} (${columns.join(", ")}) VALUES ${placeholders.join(", ")}
          ON CONFLICT (id) DO UPDATE SET ${update}`,
         values,
       );
     }
-    for (const id of oldRows.keys())
-      if (!newRows.has(id))
-        await client.query(`DELETE FROM ${config.table} WHERE id = $1`, [id]);
+    const removed = [...oldRows.keys()].filter((id) => !newRows.has(id));
+    if (removed.length)
+      await client.query(`DELETE FROM ${config.table} WHERE id = ANY($1::text[])`, [removed]);
   }
   await client.query(
     `INSERT INTO app_state(id, version, auxiliary) VALUES(1, $1, $2::jsonb)

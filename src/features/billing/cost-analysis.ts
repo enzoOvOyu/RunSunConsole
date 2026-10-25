@@ -81,9 +81,8 @@ export function analyzeCostUsage(
     date,
     amount: dailyAmounts[index],
   }));
-  const today =
-    trend.find((point) => point.date === new Date().toISOString().slice(0, 10))
-      ?.amount || 0;
+  const todayIndex = dates.indexOf(todayIso);
+  const today = todayIndex >= 0 ? trend[todayIndex].amount : 0;
   return {
     month: totalCents / 100,
     today,

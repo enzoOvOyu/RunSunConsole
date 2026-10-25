@@ -1,7 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { FileAccessConfig, StorageProduct, StorageVolume } from "../../types/storage";
+import type { FileAccessConfig, StorageVolume } from "../../types/storage";
 import { selectFileMounts, selectVolumeRows, type VolumeRow } from "../shared/storageView";
 import { VolumeTable } from "./VolumeTable";
 import type { DeploymentOptions, Project, Quota, Resource } from "../../types/domain";
@@ -12,6 +12,8 @@ import { useRegion } from "../../stores/region";
 import { useAuth } from "../../stores/auth";
 import { canWrite } from "../../lib/rbac";
 import { useAction, useData } from "../shared/hooks";
+import { useStorageEstimate } from "../shared/useStorageEstimate";
+import { useStorageProducts } from "../shared/useStorageProducts";
 import { useDrawer } from "../shared/useDrawer";
 import { RegionFilter } from "../shared/RegionFilter";
 import { confirmAction } from "../../components/ui/ConfirmAction";
@@ -67,10 +69,7 @@ export default function VolumePage() {
     `${EP.storageVolumes}/${id}`,
     { enabled: !!id },
   );
-  const products = useData<StorageProduct[]>(
-    ["storage-products"],
-    EP.storageProducts,
-  );
+  const products = useStorageProducts();
   const projects = useData<Project[]>(["projects", region], EP.projects + query({ region }));
   const availableProjects = (projects.data || []).filter((project) => !project.deletedAt);
   const selectedProjectId = availableProjects.some((project) => project.id === projectId)
@@ -115,6 +114,7 @@ export default function VolumePage() {
   );
   const selectedPlan =
     plans.find((product) => product.tier === tier) || plans[0];
+  const estimate = useStorageEstimate([{ key: "volume", kind, tier: selectedPlan?.tier || "", sizeGb, count: 1 }], newOpen && !!selectedPlan);
   const capacity = quotas.data
     ?.find((quota) => quota.metric === "storage")
     ?.storageBreakdown?.find((item) => item.kind === kind);
@@ -610,7 +610,7 @@ export default function VolumePage() {
               items={[
                 [
                   t("storage.monthlyEstimate"),
-                  selectedPlan ? money(sizeGb * selectedPlan.usdGbMonth) : "—",
+                  estimate.data?.[0] ? money(estimate.data[0].monthly) : "—",
                 ],
                 [
                   t("storage.availableCapacity"),

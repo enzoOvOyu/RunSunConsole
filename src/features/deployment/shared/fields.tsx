@@ -71,6 +71,8 @@ export interface FormContext {
   projects: Project[];
   images: Image[];
   models: Model[];
+  serverFlavors: DeploymentOptions["serverFlavors"];
+  gpuCounts: number[];
 }
 export function useSpec<S extends Resource["spec"]>() {
   const form = useFormContext<WizardValues>();

@@ -1,5 +1,5 @@
 import { useUrlState } from "../shared/useUrlState";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Star, Box } from "lucide-react";
 import {
@@ -8,10 +8,16 @@ import {
 } from "../../components/ModelPublisherLogo";
 import { poolDisplayName } from "../../lib/gpu-labels";
 import { compareFeaturedModels } from "../../lib/model-order";
-import { isWindowsImage, WINDOWS_LOGIN_USER, WINDOWS_MIN_SYSTEM_DISK_GB, WINDOWS_RDP_PORT } from "../../lib/windows-image";
+import {
+  isWindowsImage,
+  WINDOWS_LOGIN_USER,
+  WINDOWS_MIN_SYSTEM_DISK_GB,
+  WINDOWS_RDP_PORT,
+} from "../../lib/windows-image";
 import { supportsChatInference } from "../../lib/inference-precision";
 import type { Image, Model } from "../../types/domain";
 import { useAuth } from "../../stores/auth";
+import { useLocale } from "../../stores/locale";
 import { canWrite } from "../../lib/rbac";
 import { EP, patch } from "../../lib/api-client";
 import { useAction, useData } from "../shared/hooks";
@@ -57,6 +63,7 @@ function publisherName(model: Model) {
 
 export default function ImagesPage() {
   const location = useLocation();
+  const locale = useLocale((state) => state.locale);
   const showImages = location.pathname.endsWith("/os-images");
   const [search, setSearch] = useUrlState("q");
   const [modality, setModality] = useUrlState("modality");
@@ -71,50 +78,86 @@ export default function ImagesPage() {
   const [imageArchitecture, setImageArchitecture] = useState("");
   const models = useData<Model[]>(["models"], EP.models);
   const images = useData<Image[]>(["images"], EP.images);
-  const catalogImages = images.data || [];
   const { run, busy } = useAction();
   const role = useAuth((s) => s.role);
   const navigate = useNavigate();
   const model = models.data?.find((item) => item.id === modelId) || null;
-  const allModels = models.data || [];
-  const publishers = [...new Set(allModels.map(publisherName))].sort();
-  const filtered = allModels
-    .filter((item) => {
-      const needle = search.trim().toLowerCase();
-      return (
-        (!needle ||
-          `${item.name} ${item.modelRef || ""} ${publisherName(item)}`
-            .toLowerCase()
-            .includes(needle)) &&
-        (!modality ||
-          (modality === "unknown"
-            ? item.modality === "unknown"
-            : item.modality === modality)) &&
-        (!license ||
-          (license === "unknown" ? !item.license : item.license === license)) &&
-        (!paramsSize ||
-          (paramsSize === "small"
-            ? item.paramsB < 30
-            : paramsSize === "medium"
-              ? item.paramsB < 100 && item.paramsB >= 30
-              : item.paramsB >= 100)) &&
-        (!publisher || publisherName(item) === publisher) &&
-        (!favorite || item.favorite)
-      );
-    })
-    .sort((left, right) => {
-      if (sort === "params") return right.paramsB - left.paramsB;
-      if (sort === "name") return left.name.localeCompare(right.name);
-      if (sort === "publisher")
-        return publisherName(left).localeCompare(publisherName(right));
-      return compareFeaturedModels(left, right);
-    });
-  const readyCount = allModels.filter(supportsChatInference).length;
+  const allModels = useMemo(() => models.data || [], [models.data]);
+  const publishers = useMemo(
+    () => [...new Set(allModels.map(publisherName))].sort(),
+    [allModels, locale],
+  );
+  const filtered = useMemo(
+    () =>
+      allModels
+        .filter((item) => {
+          const needle = search.trim().toLowerCase();
+          return (
+            (!needle ||
+              `${item.name} ${item.modelRef || ""} ${publisherName(item)}`
+                .toLowerCase()
+                .includes(needle)) &&
+            (!modality ||
+              (modality === "unknown"
+                ? item.modality === "unknown"
+                : item.modality === modality)) &&
+            (!license ||
+              (license === "unknown"
+                ? !item.license
+                : item.license === license)) &&
+            (!paramsSize ||
+              (paramsSize === "small"
+                ? item.paramsB < 30
+                : paramsSize === "medium"
+                  ? item.paramsB < 100 && item.paramsB >= 30
+                  : item.paramsB >= 100)) &&
+            (!publisher || publisherName(item) === publisher) &&
+            (!favorite || item.favorite)
+          );
+        })
+        .sort((left, right) => {
+          if (sort === "params") return right.paramsB - left.paramsB;
+          if (sort === "name") return left.name.localeCompare(right.name);
+          if (sort === "publisher")
+            return publisherName(left).localeCompare(publisherName(right));
+          return compareFeaturedModels(left, right);
+        }),
+    [
+      allModels,
+      search,
+      modality,
+      license,
+      paramsSize,
+      publisher,
+      favorite,
+      sort,
+      locale,
+    ],
+  );
+  const catalogImages = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    const source = images.data || [];
+    return source.filter(
+      (item) =>
+        item.type === imageKind &&
+        (!imageArchitecture ||
+          item.architectures.includes(
+            imageArchitecture as "x86_64" | "aarch64",
+          )) &&
+        (!needle || item.name.toLowerCase().includes(needle)),
+    );
+  }, [images.data, imageKind, imageArchitecture, search]);
+  const readyCount = useMemo(
+    () => allModels.filter(supportsChatInference).length,
+    [allModels],
+  );
   return (
     <>
       <PageHeader
         title={t(showImages ? "nav.os-images" : "nav.models")}
-        subtitle={t(showImages ? "pageDescription.osImages" : "pageDescription.models")}
+        subtitle={t(
+          showImages ? "pageDescription.osImages" : "pageDescription.models",
+        )}
       />
       {!showImages && (
         <div className="model-catalog-summary">
@@ -132,7 +175,9 @@ export default function ImagesPage() {
         <input
           className="input search"
           aria-label={t("common.search")}
-          placeholder={t(showImages ? "common.search" : "images.searchPlaceholder")}
+          placeholder={t(
+            showImages ? "common.search" : "images.searchPlaceholder",
+          )}
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         />
@@ -367,80 +412,68 @@ export default function ImagesPage() {
               <option value="aarch64">aarch64</option>
             </select>
           </div>
-          {catalogImages.filter(
-            (item) =>
-              item.type === imageKind &&
-              (!imageArchitecture ||
-                item.architectures.includes(
-                  imageArchitecture as "x86_64" | "aarch64",
-                )) &&
-              item.name.toLowerCase().includes(search.toLowerCase()),
-          ).length ? (
+          {catalogImages.length ? (
             <div className="grid grid-3">
-              {catalogImages
-                .filter(
-                  (item) =>
-                    item.type === imageKind &&
-                    (!imageArchitecture ||
-                      item.architectures.includes(
-                        imageArchitecture as "x86_64" | "aarch64",
-                      )) &&
-                    item.name.toLowerCase().includes(search.toLowerCase()),
-                )
-                .map((item) => (
-                  <article className="catalog-card" key={item.id}>
-                    {item.type === "os" &&
-                    operatingSystemLogos[item.osFamily] ? (
-                      <img
-                        className="catalog-os-logo"
-                        src={operatingSystemLogos[item.osFamily]}
-                        alt={item.osFamily}
-                        width={26}
-                        height={26}
-                      />
-                    ) : (
-                      <Box size={26} color="var(--rs-brand)" />
-                    )}
-                    <strong>{item.name}</strong>
+              {catalogImages.map((item) => (
+                <article className="catalog-card" key={item.id}>
+                  {item.type === "os" && operatingSystemLogos[item.osFamily] ? (
+                    <img
+                      className="catalog-os-logo"
+                      src={operatingSystemLogos[item.osFamily]}
+                      alt={item.osFamily}
+                      width={26}
+                      height={26}
+                    />
+                  ) : (
+                    <Box size={26} color="var(--rs-brand)" />
+                  )}
+                  <strong>{item.name}</strong>
+                  <small>
+                    {item.architectures.join(" / ")} · {t("images.gpuDriver")}{" "}
+                    {item.driverVersion || t("images.hostDriver")}
+                  </small>
+                  <small>
+                    CUDA {item.cudaVersion} · {item.sizeGb} GB
+                  </small>
+                  <small>
+                    {t("images.frameworksIncluded")}:{" "}
+                    {item.frameworks.length
+                      ? item.frameworks.join(", ")
+                      : t("images.noneIncluded")}
+                  </small>
+                  {isWindowsImage(item) && (
                     <small>
-                      {item.architectures.join(" / ")} · {t("images.gpuDriver")}{" "}
-                      {item.driverVersion || t("images.hostDriver")}
+                      {t("images.windowsPasswordLogin", {
+                        user: WINDOWS_LOGIN_USER,
+                        port: WINDOWS_RDP_PORT,
+                      })}
                     </small>
-                    <small>
-                      CUDA {item.cudaVersion} · {item.sizeGb} GB
-                    </small>
-                    <small>
-                      {t("images.frameworksIncluded")}:{" "}
-                      {item.frameworks.length
-                        ? item.frameworks.join(", ")
-                        : t("images.noneIncluded")}
-                    </small>
-                    {isWindowsImage(item) && <small>{t("images.windowsPasswordLogin", { user: WINDOWS_LOGIN_USER, port: WINDOWS_RDP_PORT })}</small>}
-                    <div className="model-catalog-tags">
-                      {item.supportedGpuModels.map((gpu) => (
-                        <span className="chip" key={gpu}>
-                          {poolDisplayName(gpu)}
-                        </span>
-                      ))}
-                    </div>
-                    <span className="chip">{item.source}</span>
-                    <div className="between">
-                      <Button onClick={() => setImage(item)}>
-                        {t("common.details")}
-                      </Button>
-                      <Button
-                        disabled={!canWrite(role)}
-                        onClick={() =>
-                          navigate(
-                            `/deployment/server?${item.type === "os" ? "image" : "runtime"}=${item.id}`,
-                          )
-                        }
-                      >
-                        {t("images.deploy")}
-                      </Button>
-                    </div>
-                  </article>
-                ))}
+                  )}
+                  <div className="model-catalog-tags">
+                    {item.supportedGpuModels.map((gpu) => (
+                      <span className="chip" key={gpu}>
+                        {poolDisplayName(gpu)}
+                      </span>
+                    ))}
+                  </div>
+                  <span className="chip">{item.source}</span>
+                  <div className="between">
+                    <Button onClick={() => setImage(item)}>
+                      {t("common.details")}
+                    </Button>
+                    <Button
+                      disabled={!canWrite(role)}
+                      onClick={() =>
+                        navigate(
+                          `/deployment/server?${item.type === "os" ? "image" : "runtime"}=${item.id}`,
+                        )
+                      }
+                    >
+                      {t("images.deploy")}
+                    </Button>
+                  </div>
+                </article>
+              ))}
             </div>
           ) : (
             <Empty text={t("images.noMatches")} />
@@ -595,15 +628,31 @@ export default function ImagesPage() {
                   ],
                   [t("common.size"), image.sizeGb + " GB"],
                   [t("common.source"), image.source],
-                  [t("common.description"), isWindowsImage(image) ? t("images.windowsDescription") : image.description],
-                  ...(isWindowsImage(image) ? [
-                    [t("images.windowsEdition"), t("images.desktopExperience")],
-                    [t("images.loginUser"), WINDOWS_LOGIN_USER],
-                    [t("field.authMethod"), t("wizard.password")],
-                    [t("images.remoteProtocol"), `RDP · TCP ${WINDOWS_RDP_PORT}`],
-                    [t("images.deployScope"), t("images.windowsVmOnly")],
-                    [t("images.systemDiskMinimum"), `${WINDOWS_MIN_SYSTEM_DISK_GB} GB`],
-                  ] as [string, string][] : []),
+                  [
+                    t("common.description"),
+                    isWindowsImage(image)
+                      ? t("images.windowsDescription")
+                      : image.description,
+                  ],
+                  ...(isWindowsImage(image)
+                    ? ([
+                        [
+                          t("images.windowsEdition"),
+                          t("images.desktopExperience"),
+                        ],
+                        [t("images.loginUser"), WINDOWS_LOGIN_USER],
+                        [t("field.authMethod"), t("wizard.password")],
+                        [
+                          t("images.remoteProtocol"),
+                          `RDP · TCP ${WINDOWS_RDP_PORT}`,
+                        ],
+                        [t("images.deployScope"), t("images.windowsVmOnly")],
+                        [
+                          t("images.systemDiskMinimum"),
+                          `${WINDOWS_MIN_SYSTEM_DISK_GB} GB`,
+                        ],
+                      ] as [string, string][])
+                    : []),
                 ]}
               />
             </Panel>

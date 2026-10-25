@@ -69,7 +69,11 @@ export type ResourceIdType =
 
 function resourceIdBody(source: string): string {
   const compact = source.replaceAll("-", "").toLowerCase();
-  if (/^[a-f0-9]{16,}$/.test(compact)) return compact.slice(0, 16);
+  // Only reuse the raw hex body when it is exactly one identifier's worth of
+  // characters. UUIDs compact to 32 characters whose leading 16 are shared by
+  // this project's seeded identifiers, so slicing them made every resource of
+  // the same kind render the same display id. Hash those instead.
+  if (/^[a-f0-9]{16}$/.test(compact)) return compact;
 
   let first = 0x811c9dc5;
   let second = 0x9e3779b9;

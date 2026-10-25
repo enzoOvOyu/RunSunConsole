@@ -1,5 +1,5 @@
 import { NetworkQuotas } from "./NetworkQuotas";
-import { useState, Fragment } from "react";
+import { useMemo, useState, Fragment } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { Quota, Resource, Rate } from "../../types/domain";
 import { useRegion } from "../../stores/region";
@@ -19,6 +19,16 @@ import {
   Empty,
   Button,
 } from "../../components/ui";
+function poolGpu(resource: Resource, pool: string) {
+  return resource.kind === "vgpu"
+    ? resource.spec.nodePools
+        .filter((item) => item.poolCode === pool)
+        .reduce((sum, item) => sum + item.nodeCount * item.gpuPerNode, 0)
+    : resource.nodePool === pool
+      ? resource.spec.gpuCount
+      : 0;
+}
+
 export default function QuotasPage() {
   const region = useRegion((s) => s.region);
   const q = useData<Quota[]>(
@@ -36,24 +46,53 @@ export default function QuotasPage() {
   );
   const [expanded, setExpanded] = useState("");
   const navigate = useNavigate();
-  const resources = rs.data?.items || [];
-  const poolGpu = (resource: Resource, pool: string) =>
-    resource.kind === "vgpu"
-      ? resource.spec.nodePools
-          .filter((item) => item.poolCode === pool)
-          .reduce((sum, item) => sum + item.nodeCount * item.gpuPerNode, 0)
-      : resource.nodePool === pool
-        ? resource.spec.gpuCount
-        : 0;
-  const pools = [
-    ...new Set(
-      resources.flatMap((resource) =>
+  const resources = useMemo(() => rs.data?.items || [], [rs.data]);
+  const poolRows = useMemo(() => {
+    const grouped = new Map<string, Resource[]>();
+    for (const resource of resources) {
+      const codes =
         resource.kind === "vgpu"
           ? resource.spec.nodePools.map((item) => item.poolCode)
-          : [resource.nodePool],
-      ),
-    ),
-  ];
+          : [resource.nodePool];
+      for (const code of new Set(codes)) {
+        const list = grouped.get(code);
+        if (list) list.push(resource);
+        else grouped.set(code, [resource]);
+      }
+    }
+    const ratesByPool = new Map<string, number>();
+    for (const rate of rates.data || [])
+      if (
+        rate.unit === "per_gpu_hour" &&
+        rate.pool &&
+        !ratesByPool.has(rate.pool)
+      )
+        ratesByPool.set(rate.pool, rate.unitPrice);
+    return [...grouped]
+      .map(([pool, rows]) => {
+        let allocated = 0;
+        let running = 0;
+        for (const resource of rows) {
+          const gpu = poolGpu(resource, pool);
+          if (
+            resource.status === "running" ||
+            resource.status === "provisioning"
+          )
+            allocated += gpu;
+          if (resource.status === "running") running += gpu;
+        }
+        return {
+          pool,
+          rows,
+          allocated,
+          running,
+          price: ratesByPool.get(pool) || 0,
+        };
+      })
+      .filter((row) =>
+        row.rows.some((resource) => poolGpu(resource, row.pool) > 0),
+      );
+  }, [resources, rates.data]);
   return (
     <>
       <PageHeader
@@ -115,7 +154,7 @@ export default function QuotasPage() {
       <NetworkQuotas region={region} />
       <div className="section-gap">
         <Panel title={t("quota.allocated")}>
-          {pools.length ? (
+          {poolRows.length ? (
             <div className="table-wrap">
               <table>
                 <thead>
@@ -128,8 +167,7 @@ export default function QuotasPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {pools.map((pool) => {
-                    const rows = resources.filter((r) => poolGpu(r, pool) > 0);
+                  {poolRows.map(({ pool, rows, allocated, running, price }) => {
                     return (
                       <Fragment key={pool}>
                         <tr
@@ -145,30 +183,9 @@ export default function QuotasPage() {
                         >
                           <td>{pool}</td>
                           <td>{t("common." + region)}</td>
-                          <td>
-                            {rows
-                              .filter(
-                                (r) =>
-                                  r.status === "running" ||
-                                  r.status === "provisioning",
-                              )
-                              .reduce((a, r) => a + poolGpu(r, pool), 0)}
-                          </td>
-                          <td>
-                            {number(
-                              rows
-                                .filter((r) => r.status === "running")
-                                .reduce((n, r) => n + poolGpu(r, pool), 0),
-                            )}
-                          </td>
-                          <td>
-                            {money(
-                              rates.data?.find(
-                                (r) =>
-                                  r.pool === pool && r.unit === "per_gpu_hour",
-                              )?.unitPrice || 0,
-                            )}
-                          </td>
+                          <td>{allocated}</td>
+                          <td>{number(running)}</td>
+                          <td>{money(price)}</td>
                         </tr>
                         {expanded === pool && (
                           <tr>

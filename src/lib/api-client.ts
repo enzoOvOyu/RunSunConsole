@@ -35,6 +35,7 @@ export const EP = {
   datasets: "/api/datasets",
   buckets: "/api/buckets",
   storageProducts: "/api/storage/products",
+  storageEstimate: "/api/storage/estimate",
   storageVolumes: "/api/storage/volumes",
   pipelines: "/api/pipelines",
   pipelineRuns: "/api/pipeline-runs",

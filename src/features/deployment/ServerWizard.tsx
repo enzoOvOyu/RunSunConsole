@@ -35,26 +35,15 @@ import {
 function validate(
   v: WizardValues,
   step: number,
-  lookups?: { images: FormContext["images"] },
+  lookups?: { images: FormContext["images"]; serverFlavors?: FormContext["serverFlavors"]; gpuCounts?: number[] },
 ) {
   const s = v.spec as ServerSpec;
   const windows = isWindowsImage(
     lookups?.images.find((image) => image.id === s.imageRef),
   );
   if (step === 1)
-    return z
-      .object({
-        gpuPerInstance: z.union([
-          z.literal(1),
-          z.literal(2),
-          z.literal(4),
-          z.literal(8),
-        ]),
-        vcpu: z.number().int().min(8).max(96).multipleOf(8),
-        memoryGb: z.number().int(),
-      })
-      .refine((value) => value.memoryGb === value.vcpu * 2)
-      .safeParse(s).success;
+    return !!lookups?.gpuCounts?.includes(s.gpuPerInstance) &&
+      !!lookups.serverFlavors?.some((flavor) => flavor.vcpu === s.vcpu && flavor.memoryGb === s.memoryGb);
   if (step === 2)
     return (
       z
@@ -85,13 +74,19 @@ function validate(
     );
   return serverSchema.safeParse(s).success;
 }
-function ServerForm({ step, pools, images }: FormContext) {
+function ServerForm({ step, pools, images, serverFlavors, gpuCounts }: FormContext) {
   const { spec, update, form } = useSpec<ServerSpec>();
   const selected = form.watch("nodePool");
   const selectedPool = pools.find((pool) => pool.code === selected);
   const password = form.watch("password") || "";
   const baseImage = images.find((image) => image.id === spec.imageRef);
   const windows = isWindowsImage(baseImage);
+  useEffect(() => {
+    if (!serverFlavors.length) return;
+    const flavor = serverFlavors.reduce((best, item) => Math.abs(item.vcpu - spec.vcpu) < Math.abs(best.vcpu - spec.vcpu) ? item : best);
+    if (spec.vcpu !== flavor.vcpu || spec.memoryGb !== flavor.memoryGb)
+      update({ vcpu: flavor.vcpu, memoryGb: flavor.memoryGb });
+  }, [serverFlavors, spec.vcpu, spec.memoryGb, update]);
   useEffect(() => {
     if (!images.length || !selectedPool) return;
     const current = images.find((image) => image.id === spec.imageRef);
@@ -172,7 +167,7 @@ function ServerForm({ step, pools, images }: FormContext) {
               });
             }}
           >
-            {[1, 2, 4, 8].map((n) => (
+            {gpuCounts.filter((count) => count <= (selectedPool?.gpusPerNode || 0)).map((n) => (
               <option key={n} value={n}>
                 {n} GPU
               </option>
@@ -184,11 +179,12 @@ function ServerForm({ step, pools, images }: FormContext) {
             value={spec.vcpu}
             onChange={(event) => {
               const vcpu = Number(event.target.value);
-              update({ vcpu, memoryGb: vcpu * 2 });
+              const flavor = serverFlavors.find((flavor) => flavor.vcpu === vcpu);
+              if (flavor) update(flavor);
             }}
           >
-            {Array.from({ length: 12 }, (_, index) => (index + 1) * 8).map(
-              (vcpu) => (
+            {serverFlavors.map(
+              ({ vcpu }) => (
                 <option key={vcpu} value={vcpu}>
                   {vcpu} vCPU
                 </option>
@@ -200,7 +196,7 @@ function ServerForm({ step, pools, images }: FormContext) {
           <input
             className="input"
             type="number"
-            value={spec.vcpu * 2}
+            value={spec.memoryGb}
             readOnly
             aria-readonly="true"
           />

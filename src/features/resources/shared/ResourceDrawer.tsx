@@ -23,10 +23,12 @@ import { BaremetalDetail } from "../baremetal/BaremetalDetail";
 import { VgpuDetail } from "../vgpu/VgpuDetail";
 import { InferenceDetail } from "../inference/InferenceDetail";
 import { Provisioning } from "./common";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { invalidateData } from "../../../lib/query-cache";
 import { fetchHistoricalResource } from "./api";
 export function ResourceDrawer() {
   const [params, setParams] = useSearchParams();
+  const client = useQueryClient();
   const id = params.get("drawer");
   const q = useQuery({
     queryKey: ["resource", id],
@@ -86,6 +88,7 @@ export function ResourceDrawer() {
         `${EP.resources}/${r.resourceUuid}` + query({ confirm }),
       );
       useResourceTransition.getState().mark(deleted);
+      invalidateData(client, { delay: 0 });
       toast(t("resource.deleted"));
       setDeleting(false);
       await q.refetch();

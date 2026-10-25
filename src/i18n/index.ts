@@ -2,21 +2,23 @@ import zh from "./locales/zh-CN";
 import en from "./locales/en-US";
 import { useLocale } from "../stores/locale";
 export const dictionaries = { "zh-CN": zh, "en-US": en };
+export async function setLocale(locale: "zh-CN" | "en-US") {
+  useLocale.getState().setLocale(locale);
+}
 export function t(key: string, values: Record<string, string | number> = {}) {
-  const dict: Record<string, string> =
-    useLocale.getState().locale === "en-US" ? en : zh;
+  const dict: Record<string, string> = useLocale.getState().locale === "en-US" ? en : zh;
   const source: Record<string, string> = zh;
   let text = dict[key] || source[key] || key;
-  for (const [k, v] of Object.entries(values))
-    text = text.replaceAll(`{${k}}`, String(v));
+  for (const [k, v] of Object.entries(values)) text = text.replaceAll(`{${k}}`, String(v));
   return text;
 }
+const dataEntries = Object.entries(zh)
+  .filter(([key]) => key.startsWith("data."))
+  .sort((a, b) => b[1].length - a[1].length);
+
 export function dt(value: string) {
   if (useLocale.getState().locale === "zh-CN") return value;
-  const entries = Object.entries(zh)
-    .filter(([key]) => key.startsWith("data."))
-    .sort((a, b) => b[1].length - a[1].length);
-  for (const [key, source] of entries) {
+  for (const [key, source] of dataEntries) {
     if (value.includes(source)) return value.replace(source, t(key));
   }
   return value;

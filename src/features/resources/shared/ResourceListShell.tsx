@@ -76,7 +76,9 @@ export function ResourceListShell<K extends Kind>({
     ["projects", region],
     EP.projects + query({ region }),
   );
-  const project = projects.data?.some((item) => item.id === urlProject && !item.deletedAt)
+  const project = projects.data?.some(
+    (item) => item.id === urlProject && !item.deletedAt,
+  )
     ? urlProject || ""
     : "";
   useEffect(() => {
@@ -84,11 +86,14 @@ export function ResourceListShell<K extends Kind>({
   }, [project, setProject]);
   useEffect(() => {
     if (!projects.data || !urlProject || project) return;
-    setParams((current) => {
-      const next = new URLSearchParams(current);
-      next.delete("project_id");
-      return next;
-    }, { replace: true });
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        next.delete("project_id");
+        return next;
+      },
+      { replace: true },
+    );
   }, [projects.data, urlProject, project, setParams]);
   const [released, setReleased] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
@@ -102,10 +107,7 @@ export function ResourceListShell<K extends Kind>({
   const action = useAction();
   const client = useQueryClient();
   const status = params.get("status") || "";
-  const selectedIds = useMemo(
-    () => new Set<string>(selected),
-    [selected],
-  );
+  const selectedIds = useMemo(() => new Set<string>(selected), [selected]);
   const resources = useData<{
     items: Extract<Resource, { kind: K }>[];
     total: number;
@@ -135,16 +137,38 @@ export function ResourceListShell<K extends Kind>({
   const transition = useResourceTransition((s) => s.items);
   const items = useMemo(() => {
     const fetched = resources.data?.items || [];
-    const fetchedIds = new Set(fetched.map((resource) => resource.resourceUuid));
-    const pending = transition.filter((resource) =>
-      resource.kind === kind && resource.region === region && (!project || resource.projectId === project) && !fetchedIds.has(resource.resourceUuid)
+    const fetchedIds = new Set(
+      fetched.map((resource) => resource.resourceUuid),
+    );
+    const pending = transition.filter(
+      (resource) =>
+        resource.kind === kind &&
+        resource.region === region &&
+        (!project || resource.projectId === project) &&
+        !fetchedIds.has(resource.resourceUuid),
     ) as Extract<Resource, { kind: K }>[];
     return [...fetched, ...pending];
   }, [resources.data?.items, transition, kind, region, project]);
-  const shown = useMemo(() => items.filter((resource) =>
-    facets.every((facet) => !facetValues[facet.id] || facet.value(resource) === facetValues[facet.id])
-  ), [items, facets, facetValues]);
+  const shown = useMemo(() => {
+    const active = facets
+      .filter((facet) => facetValues[facet.id])
+      .map((facet) => ({ facet, value: facetValues[facet.id] }));
+    if (!active.length) return items;
+    return items.filter((resource) =>
+      active.every(({ facet, value }) => facet.value(resource) === value),
+    );
+  }, [items, facets, facetValues]);
   const hasFacetFilter = Object.values(facetValues).some(Boolean);
+  const facetOptions = useMemo(
+    () =>
+      new Map(
+        facets.map((facet) => [
+          facet.id,
+          [...new Set(items.map(facet.value))].sort(),
+        ]),
+      ),
+    [facets, items],
+  );
   const pageCount =
     pageSize === 0 ? 1 : Math.max(1, Math.ceil(shown.length / pageSize));
   const activePage = Math.min(page, pageCount - 1);
@@ -160,7 +184,10 @@ export function ResourceListShell<K extends Kind>({
     [pageResources],
   );
   const chosen = useMemo(
-    () => shown.filter((r) => selectedIds.has(r.resourceUuid)),
+    () =>
+      selectedIds.size
+        ? shown.filter((r) => selectedIds.has(r.resourceUuid))
+        : [],
     [shown, selectedIds],
   );
   const toggle = useCallback(
@@ -174,30 +201,44 @@ export function ResourceListShell<K extends Kind>({
   const pageAllSelected =
     pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
   const pageSomeSelected = pageIds.some((id) => selectedIds.has(id));
-  const checkbox = useMemo<ColumnDef<Extract<Resource, { kind: K }>>>(() => ({
-    id: "select",
-    enableSorting: false,
-    header: () => (
-      <Checkbox
-        aria-label={t("resource.selectPage")}
-        checked={pageAllSelected ? true : pageSomeSelected ? "indeterminate" : false}
-        onCheckedChange={(checked) =>
-          setSelected((current) => {
-            const withoutPage = current.filter((id) => !pageIdSet.has(id));
-            return checked === true ? [...withoutPage, ...pageIds] : withoutPage;
-          })
-        }
-      />
-    ),
-    cell: ({ row }) => (
-      <Checkbox
-        aria-label={row.original.displayId}
-        checked={selectedIds.has(row.original.resourceUuid)}
-        onClick={(event) => event.stopPropagation()}
-        onCheckedChange={() => toggle(row.original.resourceUuid)}
-      />
-    ),
-  }), [pageAllSelected, pageSomeSelected, pageIdSet, pageIds, selectedIds, toggle]);
+  const checkbox = useMemo<ColumnDef<Extract<Resource, { kind: K }>>>(
+    () => ({
+      id: "select",
+      enableSorting: false,
+      header: () => (
+        <Checkbox
+          aria-label={t("resource.selectPage")}
+          checked={
+            pageAllSelected ? true : pageSomeSelected ? "indeterminate" : false
+          }
+          onCheckedChange={(checked) =>
+            setSelected((current) => {
+              const withoutPage = current.filter((id) => !pageIdSet.has(id));
+              return checked === true
+                ? [...withoutPage, ...pageIds]
+                : withoutPage;
+            })
+          }
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          aria-label={row.original.displayId}
+          checked={selectedIds.has(row.original.resourceUuid)}
+          onClick={(event) => event.stopPropagation()}
+          onCheckedChange={() => toggle(row.original.resourceUuid)}
+        />
+      ),
+    }),
+    [
+      pageAllSelected,
+      pageSomeSelected,
+      pageIdSet,
+      pageIds,
+      selectedIds,
+      toggle,
+    ],
+  );
   const visibleCols = useMemo(
     () => columns.filter((_, i) => !hidden.includes(String(i))),
     [columns, hidden],
@@ -290,11 +331,13 @@ export function ResourceListShell<K extends Kind>({
           }}
         >
           <option value="">{t("common.allProjects")}</option>
-          {projects.data?.filter((p) => !p.deletedAt).map((p) => (
-            <option key={p.id} value={p.id}>
-              {dt(p.name)} · {formatResourceId("prj", p.id)}
-            </option>
-          ))}
+          {projects.data
+            ?.filter((p) => !p.deletedAt)
+            .map((p) => (
+              <option key={p.id} value={p.id}>
+                {dt(p.name)} · {formatResourceId("prj", p.id)}
+              </option>
+            ))}
         </select>
         <select
           aria-label={t("common.status")}
@@ -332,7 +375,7 @@ export function ResourceListShell<K extends Kind>({
             <option value="">
               {facet.label} · {t("common.all")}
             </option>
-            {[...new Set(items.map(facet.value))].sort().map((value) => (
+            {(facetOptions.get(facet.id) || []).map((value) => (
               <option key={value} value={value}>
                 {facet.format ? facet.format(value) : value}
               </option>

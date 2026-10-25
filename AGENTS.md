@@ -92,7 +92,7 @@
 GPU 公有云（RunSun）的 **Web 控制台前端**。把「部署中心（创建）+ 资源（四类展示）+ 项目与支持 / 工作台 / 网络管理 / 存储 / 费用中心」整合为一体。
 
 - **当前状态**：以 `PRD.md` v0.11 为产品基线；架构、UI、Mock 与伸缩参考文档已对齐可确认的需求。工作区已建立前端源码、Mock、回归测试与浏览器测试，当前实现和验收记录见 README；旧代码快照保存在 `archive/current-gdashboard/`。未经用户指令，不从归档代码继续开发。
-- **范围边界**：默认 5173 仍使用 MSW；新增可选的内部 PostgreSQL API 服务（`server/`），`VITE_ENABLE_MOCK=false` 时前端通过 Vite 代理访问。四类资源、项目、配额、存储、网络和费用以数据库记录及 SQL 视图为准；GPU 利用率、温度、QPS 等高频监控维持既有 Mock 方案。API 尚无真实租户认证，仅限内部开发网络，不得直接对公网开放。
+- **范围边界**：5173 使用内部 PostgreSQL API 服务（`server/`），`VITE_ENABLE_MOCK=false` 时前端通过 Vite 代理访问。四类资源、项目、配额、存储、网络和费用以数据库记录及 SQL 视图为准；GPU 利用率、温度、QPS 等高频监控维持既有 Mock 方案。API 尚无真实租户认证，仅限内部开发网络，不得直接对公网开放。
 - **技术栈**：React 19 + TypeScript 5（strict）+ Vite 6 + pnpm 9 + Zustand + TanStack Query + MSW 2 + Recharts + cmdk + 自研轻量 i18n。
 - 源码仓库：`https://github.com/enzoOvOyu/RunSunConsole`（main 分支，SSH 部署密钥推送）。
 
@@ -207,7 +207,7 @@ src/
 | **命令面板** | `components/command/` | ⌘K/Ctrl+K；四组 = 资源搜索 / 新建 / 导航 / 快捷操作 |
 | **指标时序** | `mocks/metrics.ts` | 独立 `/api/metrics/*`，不落 PG |
 
-**环境变量默认**：`VITE_ENABLE_MOCK=true`、`VITE_API_BASE_URL=`（同源）、`VITE_DEFAULT_REGION=jp`、`VITE_POLL_INTERVAL_MS=3000`、`VITE_THEME_DEFAULT=light`、`VITE_I18N_DEFAULT_LOCALE=zh-CN`、`VITE_LOW_BALANCE_THRESHOLD_USD=50`。完整表见 ARCH §12.7。
+**环境变量默认**：`VITE_ENABLE_MOCK=false`、`VITE_API_BASE_URL=`（同源）、`VITE_DEFAULT_REGION=jp`、`VITE_POLL_INTERVAL_MS=10000`、`VITE_THEME_DEFAULT=light`、`VITE_I18N_DEFAULT_LOCALE=zh-CN`、`VITE_LOW_BALANCE_THRESHOLD_USD=50`。完整表见 ARCH §12.7。
 
 ---
 

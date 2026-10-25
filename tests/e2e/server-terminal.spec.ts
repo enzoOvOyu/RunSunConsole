@@ -49,7 +49,7 @@ test("GPU VM server command line, safe commands, fullscreen and lifecycle", asyn
   await page.getByRole("textbox", { name: "密码" }).fill(password);
   await page.getByRole("button", { name: "登录", exact: true }).click();
   await expect(
-    page.getByText(/已连接|Connected/, { exact: true }),
+    page.locator(".terminal-state-connected"),
   ).toBeVisible();
   const terminal = page.getByRole("textbox", {
     name: /服务器命令输入|Server command input/,

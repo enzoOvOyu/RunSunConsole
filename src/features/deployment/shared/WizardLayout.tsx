@@ -1,5 +1,4 @@
 import { useEffect, useState, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { FormProvider, useForm } from "react-hook-form";
 import { useNavigate, useSearchParams, useBlocker } from "react-router-dom";
 import { z } from "zod";
@@ -11,7 +10,6 @@ import {
   type Image,
   type Model,
   type Resource,
-  type PriceEstimate,
   type SliceCatalogItem,
   type DeploymentOptions,
 } from "../../../types/domain";
@@ -38,18 +36,16 @@ import {
   KeyValues,
 } from "../../../components/ui";
 import { useAction, useData } from "../../shared/hooks";
+import { useDeploymentEstimate } from "../../shared/useDeploymentEstimate";
+import { useStorageProducts } from "../../shared/useStorageProducts";
 import { ProjectSelect, type WizardValues, type FormContext } from "./fields";
-function normalizeServerCompute(spec: Resource["spec"]): Resource["spec"] {
-  if (!("gpuPerInstance" in spec)) return spec;
-  const rawVcpu = Number(spec.vcpu) || 16;
-  const vcpu = Math.max(8, Math.min(96, Math.round(rawVcpu / 8) * 8));
-  return { ...spec, vcpu, memoryGb: vcpu * 2 };
-}
 interface ClusterLookups {
   slices?: SliceCatalogItem[];
   network?: DeploymentOptions;
   pools: Pool[];
   images: Image[];
+  serverFlavors?: DeploymentOptions["serverFlavors"];
+  gpuCounts?: number[];
 }
 interface Props {
   kind: Kind;
@@ -156,6 +152,8 @@ export function WizardLayout({
   const projects = useData<Project[]>(["projects"], EP.projects);
   const images = useData<Image[]>(["images"], EP.images);
   const models = useData<Model[]>(["models"], EP.models);
+  const configuration = useData<DeploymentOptions>(["deployment-options", region], EP.options + query({ region }));
+  const storageProducts = useStorageProducts();
   const clone = useData<Resource>(
     ["clone", params.get("clone")],
     `${EP.resources}/${params.get("clone")}`,
@@ -166,13 +164,15 @@ export function WizardLayout({
     projects.isPending ||
     images.isPending ||
     models.isPending ||
+    configuration.isPending ||
+    storageProducts.isPending ||
     (params.get("clone") && clone.isPending)
   )
     return <Loading />;
-  if (pools.error || projects.error || images.error || models.error)
+  if (pools.error || projects.error || images.error || models.error || configuration.error || storageProducts.error)
     return (
       <ErrorState
-        error={pools.error || projects.error || images.error || models.error}
+        error={pools.error || projects.error || images.error || models.error || configuration.error || storageProducts.error}
       />
     );
   return (
@@ -194,6 +194,8 @@ export function WizardLayout({
         projects: projects.data!,
         images: images.data!,
         models: models.data!,
+        serverFlavors: configuration.data!.serverFlavors,
+        gpuCounts: configuration.data!.gpuCounts,
       }}
       region={region}
       setRegion={setRegion}
@@ -284,7 +286,6 @@ function WizardForm({
       const stored = sessionStorage.getItem(`wizard:${kind}`);
       if (stored && !clone && !source.model && !source.image && !source.runtime) {
         const draft = JSON.parse(stored) as WizardValues;
-        if (kind === "gpu_vm") draft.spec = normalizeServerCompute(draft.spec);
         if (kind === "vgpu" && "nodePools" in draft.spec && draft.spec.deploymentMode === "slice") draft.mode = "on_demand";
         if (!availableProjects.some((item) => item.id === draft.projectId && item.defaultRegion === draft.region))
           draft.projectId = availableProjects.find((item) => item.isDefault && item.defaultRegion === draft.region)?.id ||
@@ -303,9 +304,7 @@ function WizardForm({
         nodePool: clone.nodePool,
         mode: clone.mode,
         spec:
-          kind === "gpu_vm"
-            ? normalizeServerCompute(structuredClone(clone.spec))
-            : kind === "vgpu" && clone.kind === "vgpu"
+          kind === "vgpu" && clone.kind === "vgpu"
               ? { ...structuredClone(clone.spec), volumeBindings: [] }
               : structuredClone(clone.spec),
       };
@@ -344,6 +343,7 @@ function WizardForm({
     slices: sliceCatalog.data,
     network: clusterNetwork.data,
     pools: context.pools, images: context.images,
+    serverFlavors: context.serverFlavors, gpuCounts: context.gpuCounts,
   };
   useEffect(() => {
     if (step > furthest) setFurthest(step);
@@ -373,26 +373,7 @@ function WizardForm({
     window.addEventListener("beforeunload", listener);
     return () => window.removeEventListener("beforeunload", listener);
   }, [form.formState.isDirty, submitted]);
-  const price = useQuery({
-    queryKey: [
-      "estimate",
-      kind,
-      values.region,
-      values.nodePool,
-      values.mode,
-      JSON.stringify(values.spec),
-    ],
-    queryFn: () =>
-      post<PriceEstimate>(EP.orders + "/estimate", {
-        kind,
-        region: values.region,
-        nodePool: values.nodePool,
-        mode: values.mode,
-        spec: values.spec,
-      }),
-    retry: false,
-    enabled: !(kind === "vgpu" && "nodePools" in values.spec && values.spec.deploymentMode === "slice" && !values.spec.slice?.skuId),
-  });
+  const price = useDeploymentEstimate({ kind, region: values.region, nodePool: values.nodePool, mode: values.mode, spec: values.spec });
   const firstValid = z
     .object({
       projectId: z.string().min(1),
@@ -615,7 +596,7 @@ function WizardForm({
                     !writable ||
                     !values.agree ||
                     !valid ||
-                    price.isError
+                    price.isError || price.isPending || price.isFetching
                   }
                 >
                   {t("common.create")}

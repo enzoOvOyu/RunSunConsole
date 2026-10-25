@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { catalogSeed, loadCatalog } from "./catalog.mjs";
+import { catalogSeed, loadCatalog, saveCatalogEntity } from "./catalog.mjs";
 
 const sample = {
   rates: [{ kind: "gpu_vm", pool: "H100_SXM", region: "jp", unit: "per_gpu_hour", unitPrice: 3.9 }],
@@ -22,6 +22,8 @@ const sample = {
     workload: "dev", k8sVersion: "1.31", gpuOperator: "24.9.1", driverBranch: "R550",
   }],
   sliceInventory: [{ id: "jp-1", region: "jp", skuId: "mig-h100-1g-10gb", layoutId: "H100_SXM-7x-1g.10gb", physicalGpuId: "gpu1", state: "free", resourceUuid: null }],
+  images: [{ id: "ubuntu-22.04", name: "Ubuntu 22.04 LTS", type: "os", architectures: ["x86_64"], supportedGpuModels: ["H100_SXM"] }],
+  models: [{ id: "llama8", name: "Llama 3.1 8B", paramsB: 8, quantizations: ["bf16"], context: 8192 }],
 };
 
 test("catalogSeed maps fixture shapes to SQL columns", () => {
@@ -32,6 +34,8 @@ test("catalogSeed maps fixture shapes to SQL columns", () => {
   assert.equal(seed.storageProducts[0].usd_gb_month, 0.14);
   assert.equal(seed.sliceSkus[0].layout_id, "H100_SXM-7x-1g.10gb");
   assert.equal(seed.sliceInventory[0].resource_id, null);
+  assert.equal(seed.images[0].id, "ubuntu-22.04");
+  assert.equal(seed.models[0].id, "llama8");
 });
 
 test("loadCatalog restores camelCase fixtures and regional supply", async () => {
@@ -52,6 +56,8 @@ test("loadCatalog restores camelCase fixtures and regional supply", async () => 
       workload: "dev", k8s_version: "1.31", gpu_operator: "24.9.1", driver_branch: "R550",
     }],
     slice_inventory: [{ id: "jp-1", region: "jp", sku_id: "mig-h100-1g-10gb", layout_id: "H100_SXM-7x-1g.10gb", physical_gpu_id: "gpu1", state: "free", resource_id: null }],
+    images: [{ data: { id: "ubuntu-22.04", name: "Ubuntu 22.04 LTS", type: "os", architectures: ["x86_64"], supportedGpuModels: ["H100_SXM"] } }],
+    models: [{ data: { id: "llama8", name: "Llama 3.1 8B", paramsB: 8, quantizations: ["bf16"], context: 8192 } }],
   };
   const client = { query: async (sql) => ({ rows: rows[Object.keys(rows).find((table) => sql.includes(`FROM ${table}`))] || [] }) };
   const catalog = await loadCatalog(client);
@@ -61,4 +67,27 @@ test("loadCatalog restores camelCase fixtures and regional supply", async () => 
   assert.equal(catalog.storageProducts[0].usdGbMonth, 0.14);
   assert.equal(catalog.sliceSkus[0].poolCode, "H100_SXM");
   assert.equal(catalog.sliceInventory[0].resourceUuid, null);
+  assert.equal(catalog.images[0].id, "ubuntu-22.04");
+  assert.equal(catalog.models[0].id, "llama8");
+});
+
+test("catalog writes reuse an acquired transaction without reconnecting or committing it", async () => {
+  const statements = [];
+  const client = {
+    connect: () => { throw new Error("Already connected"); },
+    release() {},
+    query: async (sql, values) => { statements.push({ sql, values }); },
+  };
+  await saveCatalogEntity(client, "images", { id: "custom", name: "Custom" });
+  assert.equal(statements.length, 1);
+  assert.match(statements[0].sql, /INSERT INTO images/);
+  assert.equal(statements[0].values[0], "custom");
+});
+
+test("empty persisted catalogs stay empty", async () => {
+  const catalog = await loadCatalog({ query: async () => ({ rows: [] }) });
+  assert.deepEqual(catalog.images, []);
+  assert.deepEqual(catalog.models, []);
+  assert.deepEqual(catalog.configuration.serverFlavors, []);
+  assert.deepEqual(catalog.rates, []);
 });

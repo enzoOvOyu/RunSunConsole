@@ -24,10 +24,23 @@ function allowUuidOnHttp() {
   });
 }
 export async function initialize() {
+  allowUuidOnHttp();
   if (import.meta.env.VITE_ENABLE_MOCK !== "false") {
-    allowUuidOnHttp();
     const { startMock } = await import("../mocks/browser");
     await startMock();
+  } else if ("serviceWorker" in navigator) {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    const mockRegistrations = registrations.filter((registration) =>
+      [registration.active, registration.waiting, registration.installing].some(
+        (worker) => worker && new URL(worker.scriptURL).pathname === "/mockServiceWorker.js",
+      ),
+    );
+    await Promise.all(mockRegistrations.map((registration) => registration.unregister()));
+    if (mockRegistrations.length && navigator.serviceWorker.controller &&
+      new URL(navigator.serviceWorker.controller.scriptURL).pathname === "/mockServiceWorker.js") {
+      window.location.reload();
+      await new Promise<void>(() => {});
+    }
   }
 }
 export function Providers({ children }: { children: ReactNode }) {

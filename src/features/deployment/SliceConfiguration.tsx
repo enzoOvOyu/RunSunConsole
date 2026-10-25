@@ -9,6 +9,7 @@ import { t } from "../../i18n";
 import { ErrorState, Field, KeyValues, Loading, Panel } from "../../components/ui";
 import { useData } from "../shared/hooks";
 import { useSpec } from "./shared/fields";
+import { useDeploymentEstimate } from "../shared/useDeploymentEstimate";
 
 export function ClusterModeSelector() {
   const { spec, form } = useSpec<VgpuSpec>();
@@ -53,6 +54,7 @@ export function ClusterModeSelector() {
 export function SliceConfiguration() {
   const { spec, update, form } = useSpec<VgpuSpec>();
   const region = form.watch("region"), projectId = form.watch("projectId");
+  const price = useDeploymentEstimate({ kind: "vgpu", region, nodePool: form.watch("nodePool"), mode: form.watch("mode"), spec });
   const catalog = useData<SliceCatalogItem[]>(["slice-catalog", region, projectId],
     EP.slices + query({ region, project_id: projectId }), { enabled: !!projectId, poll: true, pollMs: 5000 });
   const [model, setModel] = useState(""), [profile, setProfile] = useState(""), [memory, setMemory] = useState(""), [availableOnly, setAvailableOnly] = useState(false);
@@ -105,7 +107,7 @@ export function SliceConfiguration() {
       <KeyValues items={[[t("slice.free"), selected.free], [t("slice.reserved"), selected.reserved],
         [t("slice.projectQuota"), `${selected.projectUsed} / ${selected.projectLimit}`],
         [t("slice.maxRequest"), available],
-        [t("slice.hourly"), selected.hourlyUsd === null ? t("slice.noQuote") : money(selected.hourlyUsd * (spec.slice?.count || 0))]]} />
+        [t("slice.hourly"), selected.hourlyUsd === null ? t("slice.noQuote") : price.data ? money(price.data.lines.filter((line) => line.key.startsWith("slice:")).reduce((sum, line) => sum + line.hourly, 0)) : "—"]]} />
     </Panel>}
   </div>;
 }

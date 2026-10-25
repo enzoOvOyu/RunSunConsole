@@ -9,6 +9,12 @@ describe("resource identifiers", () => {
         new RegExp(`^${KIND_META[kind].prefix}[a-f0-9]{16}$`),
       );
   });
+  it("derives distinct bodies for UUIDs sharing a prefix", () => {
+    const first = "8a9d0026-1017-4000-8000-000000000001";
+    const second = "8a9d0026-1017-4000-8000-000000000002";
+    expect(formatResourceId("gvm", first)).not.toBe(formatResourceId("gvm", second));
+    expect(formatResourceId("gvm", first)).toMatch(/^gvm-[a-f0-9]{16}$/);
+  });
   it("keeps every visible identifier stable with a 16-character body", () => {
     const source = "8a9d0026-1017-4000-8000-000000000012";
     for (const type of ["prj", "tkt", "log", "inv", "txn"] as const)

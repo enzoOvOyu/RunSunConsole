@@ -562,7 +562,7 @@ export default {
   "wizard.vcpuHint": "Choose 8–96 vCPU in increments of 8 per instance.",
   "wizard.memoryForCpu": "Memory · GB",
   "wizard.memoryRatio":
-    "Automatically set to vCPU × 2 GB; cannot be edited separately.",
+    "Automatically matched to the selected CPU configuration; cannot be edited separately.",
   "wizard.passwordRule":
     "Use 12–128 characters and at least three of uppercase, lowercase, digits, and symbols.",
   "wizard.passwordRequired": "Enter a password: 12–128 characters and at least three of uppercase, lowercase, digits, and symbols.",

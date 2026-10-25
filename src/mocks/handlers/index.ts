@@ -42,6 +42,7 @@ import { seedResources } from "../fixtures/resources";
 import { http, HttpResponse, delay } from "msw";
 import {
   KINDS,
+  POOLS,
   QUOTA_METRICS,
   REGIONS,
   ROLES,
@@ -62,11 +63,13 @@ import {
   type Ticket,
   type TicketAttachment,
   type TicketCategory,
+  type Image,
+  type Model,
 } from "../../types/domain";
 import { db, persist, addEvent } from "../lib/database";
 import { consolePasswordFingerprint } from "../lib/console-auth";
 import { RATES } from "../fixtures/pricing";
-import { IMAGES, PIPELINES } from "../fixtures/content";
+import { IMAGES as SEED_IMAGES, PIPELINES } from "../fixtures/content";
 import { SLICE_SKUS, sliceSku } from "../fixtures/slices";
 import { poolsFor, GPU_SPECS } from "../fixtures/gpu-specs";
 import {
@@ -79,6 +82,7 @@ import {
 } from "../lib/derive";
 import {
   orderSchema,
+  storageSelectionsSchema,
   scalingSchema,
   isCidr,
   inferenceGovernanceSchema,
@@ -95,6 +99,67 @@ import { z } from "zod";
 import { putObject, getObject, deleteObject } from "../lib/object-store";
 import { faultFor } from "../lib/fault-injector";
 import { normalizeSpec } from "../../lib/config";
+const seedImages: Image[] = SEED_IMAGES;
+const seedModels: Model[] = db.models;
+let catalogImages: Image[] = seedImages;
+let catalogModels: Model[] = seedModels;
+let catalogWriter:
+  | ((table: "images" | "models", row: Image | Model) => void)
+  | null = null;
+
+/** Replace the image catalog with rows loaded from PostgreSQL. */
+export function setImageCatalog(next: Image[]) {
+  catalogImages = next;
+}
+/** Replace the model catalog with rows loaded from PostgreSQL. */
+export function setModelCatalog(next: Model[]) {
+  catalogModels = next;
+}
+let allocationBaseline: Record<string, number> | null = null;
+export function setAllocationBaseline(next: Record<string, number> | null) {
+  allocationBaseline = next;
+}
+/** Register the API's catalog persistence callback. */
+export function setCatalogWriter(
+  writer: ((table: "images" | "models", row: Image | Model) => void) | null,
+) {
+  catalogWriter = writer;
+}
+const catalogImagesFor = () => catalogImages;
+// In the browser the in-memory database is authoritative. In the API server the
+// catalog array is loaded from PostgreSQL and set via setModelCatalog.
+const catalogModelsFor = () =>
+  catalogModels === seedModels ? db.models : catalogModels;
+function persistCatalogEntity(table: "images" | "models", row: Image | Model) {
+  catalogWriter?.(table, row);
+  persist();
+}
+
+let appCatalog = [
+      {
+        id: "chat",
+        name: "Chat API",
+        description: "OpenAI-compatible API · vLLM · Llama 3.1",
+        modelRef: "llama8",
+        kind: "inference",
+      },
+      {
+        id: "training",
+        name: "LoRA Studio",
+        description: "PyTorch · JupyterLab · PEFT",
+        imageRef: "pytorch-cu130",
+        kind: "gpu_vm",
+      },
+    ];
+export function setAppCatalog(next: typeof appCatalog) { appCatalog = next; }
+export function appCatalogSnapshot() { return structuredClone(appCatalog); }
+let deploymentConfiguration = {
+  serverFlavors: Array.from({ length: 12 }, (_, index) => ({ vcpu: (index + 1) * 8, memoryGb: (index + 1) * 16 })),
+  gpuCounts: [1, 2, 4, 8],
+  k8sVersions: ["1.31", "1.32", "1.33", "1.34", "1.35", "1.36", "1.37"],
+};
+export function setDeploymentConfiguration(next: typeof deploymentConfiguration) { deploymentConfiguration = next; }
+
 class Failure extends Error {
   constructor(
     public status: number,
@@ -170,6 +235,11 @@ export function setRegionQuotaLimits(
     limitValue: number;
   }[],
 ) {
+  for (const region of REGIONS) {
+    for (const metric of Object.keys(limits[region]) as Quota["metric"][]) limits[region][metric] = 0;
+    for (const kind of ["block", "file", "object"] as const) storageLimits[region][kind] = 0;
+    for (const metric of Object.keys(networkLimits[region]) as NetworkMetric[]) networkLimits[region][metric] = 0;
+  }
   for (const row of rows) {
     if (!REGIONS.includes(row.region)) continue;
     if (row.metric === "storage") {
@@ -182,6 +252,8 @@ export function setRegionQuotaLimits(
     else if (QUOTA_METRICS.includes(row.metric as Quota["metric"]))
       limits[row.region][row.metric as Quota["metric"]] = row.limitValue;
   }
+  for (const region of REGIONS)
+    limits[region].storage = Object.values(storageLimits[region]).reduce((sum, value) => sum + value, 0);
 }
 const initialAllocations = seedResources();
 function storageQuotaBreakdown(region: Region, exclude?: string) {
@@ -309,7 +381,7 @@ function assigned(r: Resource, pool: string) {
 }
 function catalogFor(region: Region, exclude?: string) {
   return poolsFor(region).map((pool) => {
-    const baseline = initialAllocations
+    const baseline = allocationBaseline ? allocationBaseline[`${region}:${pool.code}`] || 0 : initialAllocations
       .filter((r) => r.region === region)
       .reduce((n, r) => n + assigned(r, pool.code), 0);
     const allocated = live()
@@ -318,10 +390,38 @@ function catalogFor(region: Region, exclude?: string) {
     const available = Math.max(0, pool.availableGpu + baseline - allocated);
     return {
       ...pool,
+      available: available > 0,
       availableGpu: available,
       licenseAvailable: available * 7,
     };
   });
+}
+function resolveCatalogSpec(kind: Resource["kind"], nodePool: Resource["nodePool"], input: Resource["spec"]) {
+  const spec = normalizeSpec(input);
+  const pool = GPU_SPECS[nodePool];
+  if (!pool) fail(422, "VALIDATION_ERROR");
+  if (kind === "gpu_vm" && "gpuPerInstance" in spec) {
+    if (!deploymentConfiguration.gpuCounts.includes(spec.gpuPerInstance)) fail(422, "VALIDATION_ERROR");
+    spec.gpuCount = spec.gpuDisabled ? 0 : spec.quantity * spec.gpuPerInstance;
+    spec.gpuModel = pool.gpuModel;
+  }
+  if (kind === "gpu_baremetal" && "machineCount" in spec) {
+    spec.gpuCount = spec.machineCount * pool.gpusPerNode;
+    spec.machineType = nodePool;
+    spec.gpuModel = pool.gpuModel;
+    spec.cpuModel = pool.cpu;
+    spec.memoryGb = pool.memorySystemGb;
+    spec.localNvmeGb = pool.localNvmeGb;
+  }
+  if (kind === "vgpu" && "nodePools" in spec && spec.deploymentMode !== "slice") {
+    spec.nodePools = spec.nodePools.map((nodePool) => {
+      const hardware = GPU_SPECS[nodePool.poolCode];
+      if (!hardware) fail(422, "VALIDATION_ERROR");
+      return { ...nodePool, gpuPerNode: hardware.gpusPerNode };
+    });
+    spec.gpuCount = spec.nodePools.reduce((sum, pool) => sum + pool.nodeCount * pool.gpuPerNode, 0);
+  }
+  return spec;
 }
 function precheck(r: Resource, exclude?: string) {
   const spec = r.spec;
@@ -460,7 +560,7 @@ function precheck(r: Resource, exclude?: string) {
   }
   if (r.kind === "inference") {
     const model =
-      db.models.find((m) => m.id === r.spec.modelRef) ||
+      catalogModelsFor().find((m) => m.id === r.spec.modelRef) ||
       fail(422, "VALIDATION_ERROR");
     if (!supportsChatInference(model)) fail(422, "MODEL_MODALITY_UNSUPPORTED");
     if (r.spec.maxModelLen > model.context) fail(422, "VALIDATION_ERROR");
@@ -477,10 +577,10 @@ function precheck(r: Resource, exclude?: string) {
       fail(422, "MODEL_MEMORY_EXCEEDED");
   }
   if (r.kind === "gpu_vm" || r.kind === "gpu_baremetal") {
-    const image = IMAGES.find((i) => i.id === r.spec.imageRef);
+    const image = catalogImagesFor().find((i) => i.id === r.spec.imageRef);
     const runtimeImage =
       r.kind === "gpu_vm" && r.spec.runtimeImageRef
-        ? IMAGES.find((i) => i.id === r.spec.runtimeImageRef)
+        ? catalogImagesFor().find((i) => i.id === r.spec.runtimeImageRef)
         : undefined;
     const poolSpec = GPU_SPECS[r.nodePool];
     if (isWindowsImage(image) && (r.kind !== "gpu_vm" || r.spec.authMethod !== "password" ||
@@ -818,7 +918,7 @@ function tick(settleBilling = true) {
       const age =
         (Date.now() - new Date(r.provisioningSince || r.createdAt).getTime()) /
         1000;
-      const duration = provisioningSeconds(r, db.models);
+      const duration = provisioningSeconds(r, catalogModelsFor());
       if (age >= duration) {
         if (r.kind === "vgpu" && r.spec.deploymentMode === "slice")
           for (const item of db.sliceInventory)
@@ -1084,6 +1184,7 @@ async function dispatchNetwork(
       ...e,
       displayId: formatResourceId("eip", e.id),
       hourly: e.releasedAt ? 0 : ipHourly(e.region),
+      monthly: e.releasedAt ? 0 : round(ipHourly(e.region) * 730, 6),
       boundName: boundResource?.name ||
         (e.tunnelId ? n.tunnels.find((t) => t.id === e.tunnelId)?.name : null) || null,
       boundHref: boundResource
@@ -1774,7 +1875,7 @@ async function dispatch(request: Request, settleBilling = true) {
     const target = resource(consoleLoginMatch[1]);
     if (target.kind !== "gpu_vm") fail(404, "NOT_FOUND");
     if (target.status !== "running") fail(409, "INVALID_STATE");
-    if (isWindowsImage(IMAGES.find((image) => image.id === target.spec.imageRef)))
+    if (isWindowsImage(catalogImagesFor().find((image) => image.id === target.spec.imageRef)))
       fail(409, "WINDOWS_CONSOLE_UNAVAILABLE");
     if (target.spec.authMethod !== "password")
       fail(409, "PASSWORD_AUTH_NOT_CONFIGURED");
@@ -1830,10 +1931,61 @@ async function dispatch(request: Request, settleBilling = true) {
             !e.tunnelId,
         )
         .map((e) => ({ ...e, displayId: formatResourceId("eip", e.id) })),
-      k8sVersions: ["1.31", "1.32", "1.33", "1.34", "1.35", "1.36", "1.37"],
+      ...deploymentConfiguration,
     });
   }
   if (path === "/api/storage/products") return json(STORAGE_PRODUCTS);
+  function storagePrice(volume: { kind: "block" | "file" | "object"; tier: string; sizeGb: number }) {
+    const product = STORAGE_PRODUCTS.find(
+      (item) => item.kind === volume.kind && item.tier === volume.tier,
+    );
+    if (!product) return null;
+    const unitPrice = product.usdGbMonth / 730;
+    const hourly = round(unitPrice * volume.sizeGb, 6);
+    return {
+      lines: [
+        {
+          key: `storage:${volume.kind}`,
+          unit: "per_gb_hour" as const,
+          unitPrice,
+          quantity: volume.sizeGb,
+          hourly,
+          scales: false,
+        },
+      ],
+      hourly,
+      monthly: round(hourly * 730),
+      floorMonthly: round(hourly * 730),
+      peakMonthly: round(hourly * 730),
+    };
+  }
+  function volumeView(volume: StorageVolume) {
+    const attached = db.resources.find(
+      (r) => r.resourceUuid === volume.resourceUuid,
+    );
+    return {
+      ...volume,
+      resourceName: attached?.name || "",
+      resourceKind: attached?.kind || null,
+      accessClients: fileAccessClients(volume),
+      price_snapshot: storagePrice(volume),
+    };
+  }
+  if (path === "/api/storage/estimate" && method === "POST") {
+    const selections = z.array(z.object({
+      key: z.string(), kind: z.enum(["block", "file", "object"]),
+      tier: z.string(), sizeGb: z.number().int().positive(),
+      count: z.number().int().min(1).max(8),
+    })).max(8).parse(body.selections);
+    const prices = selections.map((selection) => {
+      const product = STORAGE_PRODUCTS.find((item) => item.kind === selection.kind && item.tier === selection.tier);
+      if (!product || selection.sizeGb < product.minGb || selection.sizeGb > product.maxGb ||
+        (selection.sizeGb - product.minGb) % product.stepGb !== 0)
+        fail(422, "INVALID_STORAGE_SPEC");
+      return { key: selection.key, ...storagePrice({ ...selection, sizeGb: selection.sizeGb * selection.count })! };
+    });
+    return json(prices);
+  }
   function fileAccessClients(volume: StorageVolume) {
     const access = volume.fileAccess;
     if (volume.kind !== "file" || !access) return [];
@@ -1860,17 +2012,7 @@ async function dispatch(request: Request, settleBilling = true) {
               (!qs.get("project_id") ||
                 volume.projectId === qs.get("project_id")),
           )
-          .map((volume) => {
-            const attached = db.resources.find(
-              (r) => r.resourceUuid === volume.resourceUuid,
-            );
-            return {
-              ...volume,
-              resourceName: attached?.name || "",
-              resourceKind: attached?.kind || null,
-              accessClients: fileAccessClients(volume),
-            };
-          }),
+          .map(volumeView),
       );
     if (method === "POST") {
       const kind = z.enum(["block", "file"]).parse(body.kind);
@@ -1934,7 +2076,7 @@ async function dispatch(request: Request, settleBilling = true) {
       db.volumes.push(volume);
       db.billingCursors[volume.id] = Date.parse(volume.createdAt);
       persist();
-      return json(volume, 201);
+      return json(volumeView(volume), 201);
     }
   }
   function parseFileAccess(input: unknown, projectId: string, code: Region) {
@@ -2070,17 +2212,7 @@ async function dispatch(request: Request, settleBilling = true) {
       volume.deletedAt = new Date().toISOString();
       return done();
     }
-    if (method === "GET") {
-      const attached = db.resources.find(
-        (r) => r.resourceUuid === volume.resourceUuid,
-      );
-      return json({
-        ...volume,
-        resourceName: attached?.name || "",
-        resourceKind: attached?.kind || null,
-        accessClients: fileAccessClients(volume),
-      });
-    }
+    if (method === "GET") return json(volumeView(volume));
   }
   if (path === "/api/account") {
     if (method === "PATCH") {
@@ -2197,7 +2329,7 @@ async function dispatch(request: Request, settleBilling = true) {
             : "succeeded";
       const expectedReadyAt = new Date(
         new Date(r.createdAt).getTime() +
-          provisioningSeconds(r, db.models) * 1000,
+          provisioningSeconds(r, catalogModelsFor()) * 1000,
       ).toISOString();
       const createCompletedAt =
         createStatus === "processing"
@@ -2474,7 +2606,7 @@ async function dispatch(request: Request, settleBilling = true) {
       }
       if (action === "governance") {
         if (r.kind !== "inference") fail(404, "NOT_FOUND");
-        const model = db.models.find((m) => m.id === r.spec.modelRef);
+        const model = catalogModelsFor().find((m) => m.id === r.spec.modelRef);
         const policy = db.policies.find(
           (p) => p.resourceUuid === r.resourceUuid,
         );
@@ -2561,7 +2693,7 @@ async function dispatch(request: Request, settleBilling = true) {
               : r.kind === "inference"
                 ? ["allocation", "network", "image", "weights", "ready"]
                 : ["allocation", "network", "image", "driver", "ready"];
-        const duration = provisioningSeconds(r, db.models);
+        const duration = provisioningSeconds(r, catalogModelsFor());
         const progress =
           r.status === "running"
             ? 1
@@ -2954,8 +3086,8 @@ async function dispatch(request: Request, settleBilling = true) {
     const parsed = orderSchema.parse(body);
     if (!projectInRegion(parsed.projectId, parsed.region))
       fail(422, "VALIDATION_ERROR");
-    const spec = normalizeSpec(parsed.spec);
-    const windowsOrder = "imageRef" in spec && isWindowsImage(IMAGES.find((image) => image.id === spec.imageRef));
+    const spec = resolveCatalogSpec(parsed.kind, parsed.nodePool, parsed.spec);
+    const windowsOrder = "imageRef" in spec && isWindowsImage(catalogImagesFor().find((image) => image.id === spec.imageRef));
     if (windowsOrder && parsed.kind === "gpu_vm") {
       if (!("authMethod" in spec) || spec.authMethod !== "password" ||
         !validResourcePassword(String(body.authPassword || "")))
@@ -3013,7 +3145,7 @@ async function dispatch(request: Request, settleBilling = true) {
         nodePool.nodeCount <= (nodePool.maxNodes ?? 64)))
         fail(422, "INVALID_NODE_POOL_RANGE");
       if (spec.deploymentMode !== "slice" && !spec.nodePools.every((nodePool) => {
-        const image = IMAGES.find((item) => item.id === (nodePool.imageRef || "ubuntu-22.04"));
+        const image = catalogImagesFor().find((item) => item.id === (nodePool.imageRef || "ubuntu-22.04"));
         const hardware = GPU_SPECS[nodePool.poolCode];
         return image?.type === "os" && image.osFamily !== "Windows Server" &&
           image.architectures.includes(hardware.cpuArchitecture) &&
@@ -3194,18 +3326,57 @@ async function dispatch(request: Request, settleBilling = true) {
   }
   if (path === "/api/deployment-orders/estimate" && method === "POST") {
     const input = body as unknown as Parameters<typeof estimate>[0];
-    const spec = normalizeSpec(input.spec);
-    if ("nodePools" in spec && spec.deploymentMode !== "slice") {
-      spec.nodePools = spec.nodePools.map((pool) => ({
-        ...pool,
-        gpuPerNode: GPU_SPECS[pool.poolCode].gpusPerNode,
-      }));
-      spec.gpuCount = spec.nodePools.reduce(
-        (n, p) => n + p.nodeCount * p.gpuPerNode,
-        0,
-      );
+    z.enum(KINDS).parse(input.kind);
+    z.enum(REGIONS).parse(input.region);
+    z.enum(["on_demand", "spot", "reserved"]).parse(input.mode);
+    z.object({ storageGb: z.number().min(0), baseStorageGb: z.number().min(0).optional(), scaling: scalingSchema.nullable().optional() }).passthrough().parse(input.spec);
+    storageSelectionsSchema.parse(input.spec.storageSelections || []);
+    if (input.kind === "gpu_vm")
+      z.object({ quantity: z.number().int().min(1).max(50), gpuPerInstance: z.union([z.literal(1), z.literal(2), z.literal(4), z.literal(8)]),
+        systemDiskGb: z.number().min(40).max(2048), dataDiskGb: z.number().min(0).max(32768) }).parse(input.spec);
+    if (input.kind === "gpu_baremetal")
+      z.object({ machineCount: z.number().int().min(1).max(32) }).parse(input.spec);
+    if (input.kind === "inference")
+      z.object({ replicas: z.number().int().min(1).max(32), gpuPerReplica: z.union([z.literal(1), z.literal(2), z.literal(4), z.literal(8)]) }).parse(input.spec);
+    if (input.kind === "vgpu")
+      z.object({ nodePools: z.array(z.object({ poolCode: z.enum(POOLS), nodeCount: z.number().int().min(1).max(64) })).max(64),
+        defaultPvcGb: z.number().min(0), slice: z.object({ skuId: z.string(), count: z.number().int().min(1).max(64) }).optional() }).parse(input.spec);
+    const spec = resolveCatalogSpec(input.kind, input.nodePool, input.spec);
+    const pool = GPU_SPECS[input.nodePool];
+    if (!pool) fail(422, "VALIDATION_ERROR");
+    if ("imageRef" in spec && !catalogImagesFor().some((image) => image.id === spec.imageRef))
+      fail(422, "VALIDATION_ERROR");
+    if ("runtimeImageRef" in spec && spec.runtimeImageRef && !catalogImagesFor().some((image) => image.id === spec.runtimeImageRef))
+      fail(422, "VALIDATION_ERROR");
+    if ("modelRef" in spec && !catalogModelsFor().some((model) => model.id === spec.modelRef))
+      fail(422, "VALIDATION_ERROR");
+    if ("gpuPerInstance" in spec)
+      spec.gpuCount = spec.gpuDisabled ? 0 : spec.quantity * spec.gpuPerInstance;
+    if ("machineCount" in spec) spec.gpuCount = spec.machineCount * pool.gpusPerNode;
+    if ("nodePools" in spec) {
+      if (spec.deploymentMode === "slice") {
+        const sku = sliceSku(spec.slice?.skuId || "");
+        if (!sku || sku.poolCode !== input.nodePool) fail(422, "VALIDATION_ERROR");
+      } else {
+        if (spec.nodePools.some((nodePool) => !GPU_SPECS[nodePool.poolCode]))
+          fail(422, "VALIDATION_ERROR");
+        spec.nodePools = spec.nodePools.map((nodePool) => ({
+          ...nodePool,
+          gpuPerNode: GPU_SPECS[nodePool.poolCode].gpusPerNode,
+        }));
+        spec.gpuCount = spec.nodePools.reduce(
+          (n, p) => n + p.nodeCount * p.gpuPerNode,
+          0,
+        );
+      }
     }
-    return json(estimate({ ...input, spec }, RATES));
+    try {
+      return json({ ...estimate({ ...input, spec }, RATES), spec });
+    } catch (error) {
+      if (error instanceof Error && error.message === "RATE_NOT_FOUND")
+        fail(422, "VALIDATION_ERROR");
+      throw error;
+    }
   }
   if (path.startsWith("/api/metrics/")) {
     const parts = path.split("/");
@@ -3427,11 +3598,34 @@ async function dispatch(request: Request, settleBilling = true) {
       return json(p);
     }
   }
-  if (path === "/api/images") return json(IMAGES);
-  if (path === "/api/models") return json(db.models);
+  if (path === "/api/images" && method === "GET") return json(catalogImagesFor());
+  if (path === "/api/images" && method === "POST") {
+    const row = body as unknown as Image;
+    if (!row?.id) fail(422, "VALIDATION_ERROR");
+    catalogImages = [...catalogImages.filter((item) => item.id !== row.id), row];
+    persistCatalogEntity("images", row);
+    return json(row, 201);
+  }
+  const imageMatch = path.match(/^\/api\/images\/([^/]+)$/);
+  if (imageMatch && method === "PATCH") {
+    const current = catalogImagesFor().find((item) => item.id === imageMatch[1]);
+    if (!current) fail(404, "NOT_FOUND");
+    const next = { ...current, ...body, id: current.id } as Image;
+    catalogImages = catalogImages.map((item) => (item.id === next.id ? next : item));
+    persistCatalogEntity("images", next);
+    return json(next);
+  }
+  if (path === "/api/models" && method === "GET") return json(catalogModelsFor());
+  if (path === "/api/models" && method === "POST") {
+    const row = body as unknown as Model;
+    if (!row?.id) fail(422, "VALIDATION_ERROR");
+    catalogModels = [...catalogModels.filter((item) => item.id !== row.id), row];
+    persistCatalogEntity("models", row);
+    return json(row, 201);
+  }
   if (path === "/api/models/memory" && method === "POST") {
     const model =
-      db.models.find((m) => m.id === body.modelRef) ||
+      catalogModelsFor().find((m) => m.id === body.modelRef) ||
       fail(422, "VALIDATION_ERROR");
     const precision = String(body.quantization || "bf16");
     if (!model.quantizations.includes(precision))
@@ -3442,28 +3636,16 @@ async function dispatch(request: Request, settleBilling = true) {
   const modelMatch = path.match(/^\/api\/models\/([^/]+)$/);
   if (modelMatch && method === "PATCH") {
     const m =
-      db.models.find((m) => m.id === modelMatch[1]) || fail(404, "NOT_FOUND");
+      catalogModelsFor().find((m) => m.id === modelMatch[1]) ||
+      fail(404, "NOT_FOUND");
     m.favorite = !!body.favorite;
-    persist();
+    catalogModels = catalogModels.map((item) =>
+      item.id === m.id ? { ...item, favorite: m.favorite } : item,
+    );
+    persistCatalogEntity("models", catalogModels.find((item) => item.id === m.id)!);
     return json(m);
   }
-  if (path === "/api/apps")
-    return json([
-      {
-        id: "chat",
-        name: "Chat API",
-        description: "OpenAI-compatible API · vLLM · Llama 3.1",
-        modelRef: "llama8",
-        kind: "inference",
-      },
-      {
-        id: "training",
-        name: "LoRA Studio",
-        description: "PyTorch · JupyterLab · PEFT",
-        imageRef: "pytorch-cu130",
-        kind: "gpu_vm",
-      },
-    ]);
+  if (path === "/api/apps") return json(appCatalog);
   if (path === "/api/workbench/notebooks") {
     if (method === "GET")
       return json(
@@ -4416,6 +4598,8 @@ export async function handleMockRequest(
         { code: "VALIDATION_ERROR", issues: error.issues },
         { status: 422 },
       );
+    if (error instanceof Error && error.message === "RATE_NOT_FOUND")
+      return HttpResponse.json({ code: "VALIDATION_ERROR" }, { status: 422 });
     if (import.meta.env.DEV || import.meta.env.MODE === "test")
       console.error(error);
     return HttpResponse.json({ code: "INTERNAL" }, { status: 500 });

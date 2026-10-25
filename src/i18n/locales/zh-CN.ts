@@ -545,7 +545,7 @@ export default {
   "wizard.labels": "标签 · 以逗号分隔",
   "wizard.vcpuHint": "每台 8–96 vCPU，按 8 的倍数选择。",
   "wizard.memoryForCpu": "内存 · GB",
-  "wizard.memoryRatio": "按 vCPU × 2 GB 自动匹配，不能单独修改。",
+  "wizard.memoryRatio": "按所选 CPU 规格自动匹配，不能单独修改。",
   "wizard.passwordRule": "密码需 12–128 位，至少包含大写字母、小写字母、数字、符号四类中的三类。",
   "wizard.passwordRequired": "请输入密码：12–128 位，且至少包含大写字母、小写字母、数字、符号四类中的三类。",
   "wizard.sshKeyRequired": "请选择或导入有效的 SSH 公钥。",

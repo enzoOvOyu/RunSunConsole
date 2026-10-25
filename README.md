@@ -9,7 +9,7 @@
 
 RunSunConsole brings GPU cloud operations into one workspace. The stable v1.0 interface covers four resource types, guided deployment, a searchable model catalog, regional networking and storage, project quotas, cost analysis, bills and support tickets.
 
-The browser preview uses typed MSW data by default. An optional internal API persists selected business records in PostgreSQL. High-frequency GPU utilization, temperature and QPS remain simulated; physical provisioning and live model serving are outside this console baseline.
+The default 5173 workspace uses the internal PostgreSQL API for business data, creation configuration and quotes. MSW remains available for isolated preview tests. High-frequency GPU utilization, temperature and QPS remain simulated; physical provisioning and live model serving are outside this console baseline.
 
 Product behavior follows [`PRD.md`](./PRD.md), UI rules follow [`DESIGN-SYSTEM.md`](./DESIGN-SYSTEM.md), and API/data contracts follow [`ARCHITECTURE.md`](./ARCHITECTURE.md) and [`MOCK-DATA.md`](./MOCK-DATA.md).
 
@@ -39,8 +39,8 @@ The animations show the current preview UI and representative interactions. They
 
 ## Preview modes
 
-- **MSW preview (default):** typed browser Mock handlers and local preview state for product walkthroughs.
-- **Internal API (optional):** PostgreSQL-backed domain records and derived resource, quota, storage, network and billing summaries. This is a development mode; the role header is not tenant authentication.
+- **MSW preview (isolated tests):** typed browser Mock handlers and local preview state for product walkthroughs.
+- **Internal API (default):** PostgreSQL-backed domain records and derived resource, quota, storage, network and billing summaries. This is a development mode; the role header is not tenant authentication.
 
 ## Table of Contents
 
@@ -115,7 +115,7 @@ role header is a development contract, not tenant authentication.
 
 ## PostgreSQL API development mode
 
-The `api` Compose service is reachable only on `runsun-network`. It applies `server/migrations/*.sql` on startup and seeds the PostgreSQL tables once if empty. Start it with `docker compose up -d db api`. To inspect the database-backed UI inside the development network, run a second Vite instance in the `dev` container with `VITE_ENABLE_MOCK=false` and `--port 5174`; do not change the existing public 5173 preview. The Vite proxy sends `/api` requests to `http://api:8080`. `GET /api/events/stream` invalidates open browsers after committed changes, with periodic refetch as fallback.
+The `api` Compose service is reachable only on `runsun-network`. It applies `server/migrations/*.sql` on startup and bootstraps catalog tables once, preserving existing rows. Start it with `docker compose up -d db api`. The default 5173 environment uses `VITE_ENABLE_MOCK=false`; the Vite proxy sends `/api` requests to `http://api:8080`. For an isolated MSW browser test, start another Vite process with `VITE_ENABLE_MOCK=true --port 5174` inside the development network. `GET /api/events/stream` invalidates open browsers after committed changes, with periodic refetch as fallback.
 
 The API reuses the existing request contract and business handlers, persists their domain records in PostgreSQL, and calculates key current allocations from SQL views. Its `X-Role` header is not an authentication mechanism, so this mode is for internal development until a server-side tenant session is implemented.
 
@@ -321,8 +321,9 @@ and `git diff --check` pass. The entry JavaScript remains below the 250 kB budge
 
 ## Testing
 
-In the default preview, MSW serves business data and mutations. In the internal API mode, PostgreSQL
-persists domain records and object content; both modes keep the same frontend request contracts.
+In the default environment, PostgreSQL persists business data and object content. Isolated MSW
+previews keep the same frontend request contracts. Database integration tests create and drop their
+own temporary database: `docker compose exec -T -e RUN_DATABASE_TESTS=1 api node --test server/database.integration.test.mjs`.
 
 **Unit tests**
 

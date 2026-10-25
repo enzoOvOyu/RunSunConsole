@@ -673,4 +673,6 @@ export interface Account {
 }
 export interface DeploymentOptions extends DeploymentNetworkOptions {
   k8sVersions: string[];
+  serverFlavors: { vcpu: number; memoryGb: number }[];
+  gpuCounts: number[];
 }

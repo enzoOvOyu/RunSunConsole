@@ -190,13 +190,16 @@ function buildOverviewMetrics(data: Overview) {
     }
   }
   const gpuRegionTotals = Object.fromEntries(
-    REGIONS.map((region) => [
-      region,
-      data.distribution
-        .filter((item) => item.region === region)
-        .reduce((total, item) => total + item.gpuCount, 0),
-    ]),
+    REGIONS.map((region) => [region, 0]),
   ) as Record<Region, number>;
+  const distributionByRegionKind = new Map<
+    string,
+    Overview["distribution"][number]
+  >();
+  for (const item of data.distribution) {
+    gpuRegionTotals[item.region as Region] += item.gpuCount;
+    distributionByRegionKind.set(`${item.region}:${item.kind}`, item);
+  }
   const gpuRegionTotal = REGIONS.reduce(
     (total, region) => total + gpuRegionTotals[region],
     0,
@@ -238,16 +241,11 @@ function buildOverviewMetrics(data: Overview) {
   }
   const health = KINDS.map((kind) => {
     const resources = resourcesByKind.get(kind) || [];
-    return {
-      kind,
-      total: resources.length,
-      counts: Object.fromEntries(
-        resourceStatuses.map((status) => [
-          status,
-          resources.filter((resource) => resource.status === status).length,
-        ]),
-      ) as Record<(typeof resourceStatuses)[number], number>,
-    };
+    const counts = Object.fromEntries(
+      resourceStatuses.map((status) => [status, 0]),
+    ) as Record<(typeof resourceStatuses)[number], number>;
+    for (const resource of resources) counts[resource.status] += 1;
+    return { kind, total: resources.length, counts };
   });
   const spendMix = ([...KINDS, "eip", "storage"] as const)
     .map((kind) => ({
@@ -264,16 +262,34 @@ function buildOverviewMetrics(data: Overview) {
     .slice()
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, 5);
+  const projectsById = new Map(
+    data.projects.map((project) => [project.id, project]),
+  );
   const quotaWarnings = data.quotas.filter(
     (quota) => quota.usedValue / quota.limitValue >= 0.8,
   );
-  return { gpuRegionTotals, gpuRegionTotal, gpuModels,
-    largestGpuModel, projects, health, spendMix, spendTotal, recentResources, quotaWarnings };
+  return {
+    gpuRegionTotals,
+    distributionByRegionKind,
+    projectsById,
+    gpuRegionTotal,
+    gpuModels,
+    largestGpuModel,
+    projects,
+    health,
+    spendMix,
+    spendTotal,
+    recentResources,
+    quotaWarnings,
+  };
 }
 
 export default function OverviewPage() {
   const q = useData<Overview>(["overview"], EP.overview, { poll: true });
-  const metrics = useMemo(() => q.data ? buildOverviewMetrics(q.data) : null, [q.data]);
+  const metrics = useMemo(
+    () => (q.data ? buildOverviewMetrics(q.data) : null),
+    [q.data],
+  );
   const [hidden, setHidden] = useState<string[]>(initialHidden);
   const [custom, setCustom] = useState(false);
   const [grouping, setGrouping] = useState("total");
@@ -289,8 +305,20 @@ export default function OverviewPage() {
     return <ErrorState error={q.error} retry={() => void q.refetch()} />;
   const data = q.data;
   const show = (id: string) => !hidden.includes(id);
-  const { gpuRegionTotals, gpuRegionTotal, gpuModels,
-    largestGpuModel, projects, health, spendMix, spendTotal, recentResources, quotaWarnings } = metrics!;
+  const {
+    gpuRegionTotals,
+    distributionByRegionKind,
+    projectsById,
+    gpuRegionTotal,
+    gpuModels,
+    largestGpuModel,
+    projects,
+    health,
+    spendMix,
+    spendTotal,
+    recentResources,
+    quotaWarnings,
+  } = metrics!;
   const gpuRegionChartData = REGIONS.map((region) => ({
     region,
     name: t(`common.${region}`),
@@ -617,6 +645,7 @@ export default function OverviewPage() {
                       fill="var(--rs-brand)"
                       radius={[0, 5, 5, 0]}
                       maxBarSize={20}
+                      minPointSize={1}
                       isAnimationActive={false}
                     >
                       <LabelList
@@ -655,7 +684,8 @@ export default function OverviewPage() {
                       to={`/ops/projects/${project.id}`}
                     >
                       <span className="overview-project-name">
-                        {dt(project.name)} · {t("common." + project.defaultRegion)}
+                        {dt(project.name)} ·{" "}
+                        {t("common." + project.defaultRegion)}
                       </span>
                       <span className="muted">
                         {t("overview.projectResources", {
@@ -819,7 +849,9 @@ export default function OverviewPage() {
                                 fill={
                                   item.kind === "eip"
                                     ? "var(--rs-info)"
-                                    : item.kind === "storage" ? "var(--rs-warning)" : KIND_META[item.kind].color
+                                    : item.kind === "storage"
+                                      ? "var(--rs-warning)"
+                                      : KIND_META[item.kind].color
                                 }
                               />
                             ))}
@@ -853,7 +885,9 @@ export default function OverviewPage() {
                                 background:
                                   item.kind === "eip"
                                     ? "var(--rs-info)"
-                                    : item.kind === "storage" ? "var(--rs-warning)" : KIND_META[item.kind].color,
+                                    : item.kind === "storage"
+                                      ? "var(--rs-warning)"
+                                      : KIND_META[item.kind].color,
                               }}
                             />
                             {t("common." + item.kind)}
@@ -911,8 +945,8 @@ export default function OverviewPage() {
                   </CardHeader>
                   <CardContent>
                     {KINDS.map((kind) => {
-                      const cell = data.distribution.find(
-                        (item) => item.kind === kind && item.region === region,
+                      const cell = distributionByRegionKind.get(
+                        `${region}:${kind}`,
                       );
                       const Icon = KIND_META[kind].icon;
                       return (
@@ -1062,7 +1096,10 @@ export default function OverviewPage() {
                       : ["amount"]
                 }
                 labels={Object.fromEntries(
-                  (data.projects || []).map((p) => [p.id, `${dt(p.name)} · ${t("common." + p.defaultRegion)}`]),
+                  (data.projects || []).map((p) => [
+                    p.id,
+                    `${dt(p.name)} · ${t("common." + p.defaultRegion)}`,
+                  ]),
                 )}
               />
             </Suspense>
@@ -1102,9 +1139,8 @@ export default function OverviewPage() {
                         <td>{t("common." + resource.kind)}</td>
                         <td>
                           {dt(
-                            data.projects.find(
-                              (project) => project.id === resource.projectId,
-                            )?.name || formatResourceId("prj", resource.projectId),
+                            projectsById.get(resource.projectId)?.name ||
+                              formatResourceId("prj", resource.projectId),
                           )}
                         </td>
                         <td>{t("common." + resource.region)}</td>

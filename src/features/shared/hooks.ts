@@ -13,10 +13,10 @@ export function useData<T>(
   path: string,
   options: { enabled?: boolean; poll?: boolean; pollMs?: number } = {},
 ) {
-  const mode = useConnection((s) => s.mode);
+  const mode = useConnection((s) => options.poll ? s.mode : null);
   return useQuery<T>({
     queryKey: key,
-    queryFn: () => api<T>(path),
+    queryFn: ({ signal }) => api<T>(path, { signal }),
     enabled: options.enabled,
     refetchInterval:
       options.poll && mode !== "websocket" && mode !== "stream"

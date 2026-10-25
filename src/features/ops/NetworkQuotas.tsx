@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import type { Project, Region } from "../../types/domain";
 import type { NetworkQuota, SubnetView, EipView } from "../../types/network";
@@ -30,7 +31,21 @@ export function NetworkQuotas({ region }: { region: Region }) {
     `${EP.network}/eips` + query({ region }),
     { poll: true },
   );
-  const projects = useData<Project[]>(["projects", region], EP.projects + query({ region }));
+  const projects = useData<Project[]>(
+    ["projects", region],
+    EP.projects + query({ region }),
+  );
+  const eipBreakdown = useMemo(() => {
+    let idle = 0;
+    let vm = 0;
+    let tunnel = 0;
+    for (const item of eips.data || []) {
+      if (!item.interfaceId && !item.tunnelId) idle++;
+      if (item.interfaceId) vm++;
+      if (item.tunnelId) tunnel++;
+    }
+    return { idle, vm, tunnel };
+  }, [eips.data]);
   return (
     <div className="stack section-gap">
       <Panel
@@ -114,18 +129,17 @@ export function NetworkQuotas({ region }: { region: Region }) {
           <Loading />
         ) : (
           <div className="notice" style={{ marginTop: 16 }}>
-            {t("quota.eipBreakdown", {
-              idle: eips.data.filter((e) => !e.interfaceId && !e.tunnelId)
-                .length,
-              vm: eips.data.filter((e) => !!e.interfaceId).length,
-              tunnel: eips.data.filter((e) => !!e.tunnelId).length,
-            })}{" "}
-            {t("network.eipRetention")}
+            {t("quota.eipBreakdown", eipBreakdown)} {t("network.eipRetention")}
           </div>
         )}
       </Panel>
-      <Panel title={t("quota.privateAddresses")} hint={t("network.subnetHint", { count: SUBNET_RESERVED_IPS })}>
-        <p className="muted">{t("quota.addressHint", { count: SUBNET_RESERVED_IPS })}</p>
+      <Panel
+        title={t("quota.privateAddresses")}
+        hint={t("network.subnetHint", { count: SUBNET_RESERVED_IPS })}
+      >
+        <p className="muted">
+          {t("quota.addressHint", { count: SUBNET_RESERVED_IPS })}
+        </p>
         {subnets.isPending ? (
           <Loading />
         ) : subnets.error ? (
@@ -142,7 +156,10 @@ export function NetworkQuotas({ region }: { region: Region }) {
                     to={`/network/vpcs?region=${region}&drawer=${row.original.vpcId}`}
                   >
                     {dt(row.original.name)}
-                    <small className="resource-id"> · {formatResourceId("sub", row.original.id)}</small>
+                    <small className="resource-id">
+                      {" "}
+                      · {formatResourceId("sub", row.original.id)}
+                    </small>
                   </Link>
                 ),
               },

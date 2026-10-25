@@ -13,8 +13,20 @@ import type {
 } from "../../types/domain";
 import { round } from "../../lib/money";
 import { storageExtraGb, storageProduct } from "../../lib/storage";
-export const discount = (mode: BillingMode) =>
-  mode === "spot" ? 0.55 : mode === "reserved" ? 0.7 : 1;
+function pricedStorageProduct(kind: string, tier: string) {
+  const product = storageProduct(kind, tier);
+  if (!product) throw new Error("RATE_NOT_FOUND");
+  return product;
+}
+let billingDiscounts: Partial<Record<BillingMode, number>> = { on_demand: 1, spot: 0.55, reserved: 0.7 };
+export function setBillingDiscounts(next: Partial<Record<BillingMode, number>>) {
+  billingDiscounts = next;
+}
+export const discount = (mode: BillingMode) => {
+  const multiplier = billingDiscounts[mode];
+  if (multiplier === undefined) throw new Error("RATE_NOT_FOUND");
+  return multiplier;
+};
 export function estimate(
   input: {
     kind: Kind;
@@ -93,24 +105,24 @@ export function estimate(
     );
   if (kind === "gpu_vm" && "systemDiskGb" in spec) {
     const quantity = spec.quantity;
-    add("storage:system", "per_gb_hour", storageProduct("block", spec.systemDiskType === "nvme_ssd" ? "essd_pl1" : "essd_pl0")!.usdGbMonth / 730, spec.systemDiskGb * quantity, false);
+    add("storage:system", "per_gb_hour", pricedStorageProduct("block", spec.systemDiskType === "nvme_ssd" ? "essd_pl1" : "essd_pl0").usdGbMonth / 730, spec.systemDiskGb * quantity, false);
     if (spec.dataDiskGb > 0)
-      add("storage:data", "per_gb_hour", storageProduct("block", spec.dataDiskType === "nvme_ssd" ? "essd_pl1" : "essd_pl0")!.usdGbMonth / 730, spec.dataDiskGb * quantity, false);
+      add("storage:data", "per_gb_hour", pricedStorageProduct("block", spec.dataDiskType === "nvme_ssd" ? "essd_pl1" : "essd_pl0").usdGbMonth / 730, spec.dataDiskGb * quantity, false);
   } else {
     const baseStorage = Math.max(0, spec.storageGb - storageExtraGb(spec.storageSelections));
     if (baseStorage > 0) {
       const tier = kind === "vgpu" && "nodePools" in spec && spec.storageMode === "shared_file"
-        ? storageProduct("file", "nas_capacity")!
+        ? pricedStorageProduct("file", "nas_capacity")
         : kind === "vgpu" && "nodePools" in spec && spec.storageClass === "nvme"
-          ? storageProduct("block", "essd_pl2")!
-          : storageProduct("block", "essd_pl0")!;
+          ? pricedStorageProduct("block", "essd_pl2")
+          : pricedStorageProduct("block", "essd_pl0");
       add("storage", "per_gb_hour", tier.usdGbMonth / 730, baseStorage,
         kind !== "vgpu" || ("nodePools" in spec && spec.storageMode !== "shared_file" && spec.storageMode !== "local_nvme"));
     }
   }
   for (const row of spec.storageSelections || []) {
     if (row.kind === "object") continue;
-    const product = storageProduct(row.kind, row.tier);
+    const product = pricedStorageProduct(row.kind, row.tier);
     if (product)
       add(
         `storage:${row.key}`,
