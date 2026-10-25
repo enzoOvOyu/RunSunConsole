@@ -104,3 +104,33 @@
   background: color-mix(in srgb, var(--rs-warning) 10%, var(--rs-bg));
   border-color: color-mix(in srgb, var(--rs-warning) 25%, var(--rs-border));
 }
+
+/* Ticket labels retain their text alongside the color distinction. */
+.badge.ticket-open,
+.badge.ticket-priority-normal {
+  color: var(--rs-info);
+  background: color-mix(in srgb, var(--rs-info) 10%, transparent);
+}
+
+.badge.ticket-pending,
+.badge.ticket-priority-high {
+  color: var(--rs-warning);
+  background: color-mix(in srgb, var(--rs-warning) 10%, transparent);
+}
+
+.badge.ticket-resolved {
+  color: var(--rs-success);
+  background: color-mix(in srgb, var(--rs-success) 10%, transparent);
+}
+
+.badge.ticket-closed,
+.badge.ticket-priority-low {
+  color: var(--rs-text-secondary);
+  background: var(--rs-surface-2);
+}
+
+.badge.ticket-priority-urgent {
+  color: var(--rs-danger);
+  background: color-mix(in srgb, var(--rs-danger) 10%, transparent);
+  border-color: color-mix(in srgb, var(--rs-danger) 25%, var(--rs-border));
+}

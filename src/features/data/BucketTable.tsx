@@ -22,6 +22,7 @@ export function BucketTable({
 }: Props) {
   return (
     <DataTable
+      pageSizeOptions
       data={buckets}
       onRow={onDetails}
       columns={[

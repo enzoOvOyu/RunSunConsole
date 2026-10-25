@@ -208,11 +208,10 @@ function AttachmentLinks({ ticket, attachments }: { ticket: Ticket; attachments:
 }
 function statusBadge(status: TicketStatus) {
   const label = t(`tickets.status.${status}`);
-  const visual = status === "closed" || status === "resolved" ? "success" : status;
-  return <Badge status={visual} label={label} />;
+  return <Badge status={`ticket-${status}`} label={label} />;
 }
 function priorityBadge(priority: TicketPriority) {
-  return <Badge status={priority} label={t(`tickets.priority.${priority}`)} />;
+  return <Badge status={`ticket-priority-${priority}`} label={t(`tickets.priority.${priority}`)} />;
 }
 function resourceLabel(ticket: Ticket, resources: Resource[]) {
   const resource = resources.find((item) => item.resourceUuid === ticket.resourceUuid);

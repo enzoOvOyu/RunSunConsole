@@ -15,6 +15,7 @@ type Props = {
 export function VolumeTable({ rows, kind, projectName, onDetails }: Props) {
   return (
     <DataTable
+      pageSizeOptions
       data={rows}
       onRow={(row) => onDetails(row.id)}
       columns={[

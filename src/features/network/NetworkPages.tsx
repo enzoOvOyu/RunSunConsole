@@ -225,6 +225,7 @@ function NetworkPage({ kind }: { kind: NetworkKind }) {
           </div>
           <Panel>
             <DataTable
+              pageSizeOptions
               data={items}
               onRow={(r) => update("drawer", r.id)}
               columns={[

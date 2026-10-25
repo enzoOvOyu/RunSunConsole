@@ -2566,3 +2566,12 @@ a:focus-visible {
 }
 
 .storage-regional-quota { margin-bottom: var(--rs-s4); }
+
+.list-pagination {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.list-page-size select {
+  min-width: 84px;
+}

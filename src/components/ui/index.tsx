@@ -457,15 +457,18 @@ export function DataTable<T>({
   onRow,
   empty,
   paginate = true,
+  pageSizeOptions = false,
 }: {
   data: T[];
   columns: ColumnDef<T>[];
   onRow?: (row: T) => void;
   empty?: string;
   paginate?: boolean;
+  pageSizeOptions?: boolean;
 }) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(pageSizeOptions ? 10 : 12);
   const table = useReactTable({
     data,
     columns,
@@ -475,12 +478,10 @@ export function DataTable<T>({
     getSortedRowModel: getSortedRowModel(),
   });
   const rows = table.getRowModel().rows;
-  const activePage = Math.min(
-    page,
-    Math.max(0, Math.ceil(rows.length / 12) - 1),
-  );
-  const display = paginate
-    ? rows.slice(activePage * 12, (activePage + 1) * 12)
+  const pageCount = pageSize === 0 ? 1 : Math.max(1, Math.ceil(rows.length / pageSize));
+  const activePage = Math.min(page, pageCount - 1);
+  const display = paginate && pageSize !== 0
+    ? rows.slice(activePage * pageSize, (activePage + 1) * pageSize)
     : rows;
   if (!data.length) return <Empty text={empty || t("common.noResults")} />;
   return (
@@ -554,23 +555,41 @@ export function DataTable<T>({
         </Table>
       </div>
       {paginate && (
-        <footer className="table-footer">
-          <span>{t("common.rows", { count: data.length })}</span>
+        <footer className={`table-footer${pageSizeOptions ? " list-pagination" : ""}`}>
+          <div className="row">
+            <span>{t("common.rows", { count: data.length })}</span>
+            {pageSizeOptions && (
+              <label className="row list-page-size">
+                <span>{t("resource.pageSize")}</span>
+                <select
+                  aria-label={t("resource.pageSize")}
+                  value={pageSize}
+                  onChange={(event) => {
+                    setPageSize(Number(event.target.value));
+                    setPage(0);
+                  }}
+                >
+                  {[10, 25, 50].map((size) => <option key={size} value={size}>{size}</option>)}
+                  <option value={0}>{t("common.all")}</option>
+                </select>
+              </label>
+            )}
+          </div>
           <div className="row">
             <Button
-              aria-label={t("common.previous")}
+              aria-label={t(pageSizeOptions ? "resource.previousPage" : "common.previous")}
               disabled={activePage === 0}
               onClick={() => setPage(activePage - 1)}
             >
-              <ChevronLeft size={14} />
+              {pageSizeOptions ? t("resource.previousPage") : <ChevronLeft size={14} />}
             </Button>
-            {t("common.page", { page: activePage + 1 })}
+            <span>{t("common.page", { page: activePage + 1 })}{pageSizeOptions && ` / ${pageCount}`}</span>
             <Button
-              aria-label={t("common.next")}
-              disabled={(activePage + 1) * 12 >= rows.length}
+              aria-label={t(pageSizeOptions ? "resource.nextPage" : "common.next")}
+              disabled={activePage + 1 >= pageCount}
               onClick={() => setPage(activePage + 1)}
             >
-              <ChevronRight size={14} />
+              {pageSizeOptions ? t("resource.nextPage") : <ChevronRight size={14} />}
             </Button>
           </div>
         </footer>
