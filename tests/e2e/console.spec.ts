@@ -102,6 +102,24 @@ test("overview groups allocated GPU models across every region", async ({
   ).toBe(await expectOverviewAllocation(page));
   await expect(page.getByText("近 7 日费用变化")).toHaveCount(0);
 });
+test("ring hover keeps GPU allocation bars mounted", async ({ page }) => {
+  await page.goto("/overview");
+  const chart = page.locator(".overview-gpu-chart");
+  await chart.scrollIntoViewIfNeeded();
+  await expect(chart).toHaveAttribute("data-entrance-complete", "true");
+  const bar = await chart.locator(".recharts-bar-rectangle").first().elementHandle();
+  expect(bar).not.toBeNull();
+  const ring = page.locator(".overview-total-chart");
+  for (const [index, region] of ["日本", "新加坡", "美国"].entries()) {
+    const sector = ring.locator(".recharts-pie-sector").nth(index);
+    await sector.dispatchEvent("mouseover");
+    await expect(ring.locator(".overview-total-chart-center")).toContainText(region);
+    expect(await bar!.evaluate((element) => element.isConnected)).toBe(true);
+    await sector.dispatchEvent("mouseout");
+  }
+  expect(await chart.evaluate((element) => element.getAnimations({ subtree: true })
+    .filter((animation) => animation.playState === "running").length)).toBe(0);
+});
 test("submenu pages describe their own resource and billing functions", async ({
   page,
 }) => {

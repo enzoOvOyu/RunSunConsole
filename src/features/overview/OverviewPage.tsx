@@ -1,14 +1,19 @@
 import "./overview.css";
+import { GpuAllocationChart } from "./GpuAllocationChart";
+import { QuickDeploy } from "./QuickDeploy";
+import {
+  OverviewReveal,
+  OverviewSkeleton,
+  OverviewValue,
+} from "./OverviewMotion";
 import { poolDisplayName } from "../../lib/gpu-labels";
 import { lazy, Suspense, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  Cpu,
   Layers3,
   Wallet,
   TrendingUp,
   Settings2,
-  Plus,
   ArrowUpRight,
   Activity,
   BarChart3,
@@ -33,8 +38,6 @@ import {
 } from "../../types/domain";
 import { formatResourceId, KIND_META, resourceLink } from "../../lib/ids";
 import { date } from "../../lib/date";
-import { useAuth } from "../../stores/auth";
-import { canWrite } from "../../lib/rbac";
 import { EP } from "../../lib/api-client";
 import { useData } from "../shared/hooks";
 import { t, dt } from "../../i18n";
@@ -51,19 +54,7 @@ import {
   EventTimeline,
   Badge,
 } from "../../components/ui";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  LabelList,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import {
   Card,
   CardAction,
@@ -73,11 +64,6 @@ import {
   CardTitle,
 } from "../../components/ui/card";
 import { Button as UiButton } from "../../components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "../../components/ui/popover";
 const TrendChart = lazy(() => import("../../components/charts/TrendChart"));
 interface Overview {
   running: number;
@@ -208,7 +194,6 @@ function buildOverviewMetrics(data: Overview) {
     regions: gpuByModel[code],
     total: REGIONS.reduce((sum, region) => sum + gpuByModel[code][region], 0),
   })).sort((left, right) => right.total - left.total);
-  const largestGpuModel = Math.max(1, ...gpuModels.map((model) => model.total));
   const resourcesByProject = new Map<string, Resource[]>();
   for (const resource of data.resources) {
     const list = resourcesByProject.get(resource.projectId);
@@ -272,7 +257,6 @@ function buildOverviewMetrics(data: Overview) {
     projectsById,
     gpuRegionTotal,
     gpuModels,
-    largestGpuModel,
     projects,
     health,
     spendMix,
@@ -296,9 +280,8 @@ export default function OverviewPage() {
   const [hoveredSpendKind, setHoveredSpendKind] = useState<
     (typeof KINDS)[number] | "eip" | "storage" | null
   >(null);
-  const role = useAuth((s) => s.role);
   const navigate = useNavigate();
-  if (q.isPending) return <Loading />;
+  if (q.isPending) return <OverviewSkeleton />;
   if (q.error)
     return <ErrorState error={q.error} retry={() => void q.refetch()} />;
   const data = q.data;
@@ -309,7 +292,6 @@ export default function OverviewPage() {
     projectsById,
     gpuRegionTotal,
     gpuModels,
-    largestGpuModel,
     projects,
     health,
     spendMix,
@@ -371,15 +353,12 @@ export default function OverviewPage() {
       />
       <div className="overview-stats overview-summary-layout">
         <Card className="overview-stat-card overview-stat-primary overview-gpu-overview-card">
-          <CardHeader>
-            <CardDescription>{t("overview.allocated")}</CardDescription>
-            <CardAction className="overview-stat-icon">
-              <Cpu size={18} strokeWidth={2} aria-hidden="true" />
-            </CardAction>
+          <CardHeader className="overview-summary-heading">
+            <CardTitle>{t("overview.allocated")}</CardTitle>
           </CardHeader>
           <CardContent className="overview-gpu-overview-content">
-            <div
-              className="overview-total-chart"
+            <OverviewReveal
+              className="overview-total-chart overview-ring-reveal"
               role="img"
               aria-label={t("overview.gpuBarLabel", {
                 model: t("overview.allocated"),
@@ -399,9 +378,12 @@ export default function OverviewPage() {
                     }
                     dataKey="cards"
                     nameKey="name"
-                    innerRadius="72%"
-                    outerRadius="94%"
-                    paddingAngle={gpuRegionTotal ? 3 : 0}
+                    innerRadius="64%"
+                    outerRadius="92%"
+                    startAngle={90}
+                    endAngle={-270}
+                    cornerRadius={12}
+                    paddingAngle={gpuRegionTotal ? 5 : 0}
                     stroke="none"
                     isAnimationActive={false}
                     onMouseEnter={(_, index) =>
@@ -424,17 +406,21 @@ export default function OverviewPage() {
               </ResponsiveContainer>
               <div className="overview-total-chart-center" aria-hidden="true">
                 <strong>
-                  {number(
-                    hoveredGpuRegion
-                      ? gpuRegionTotals[hoveredGpuRegion]
-                      : data.allocated,
-                  )}
+                  <OverviewValue
+                    value={
+                      hoveredGpuRegion
+                        ? gpuRegionTotals[hoveredGpuRegion]
+                        : data.allocated
+                    }
+                  />
                 </strong>
                 <span>
-                  {hoveredGpuRegion ? t(`common.${hoveredGpuRegion}`) : "GPU"}
+                  {hoveredGpuRegion
+                    ? t(`common.${hoveredGpuRegion}`)
+                    : t("common.total")}
                 </span>
               </div>
-            </div>
+            </OverviewReveal>
             <div className="overview-region-breakdown">
               {REGIONS.map((region) => (
                 <div
@@ -448,15 +434,6 @@ export default function OverviewPage() {
                   </span>
                   <span className="overview-region-amount">
                     <strong>{number(gpuRegionTotals[region])}</strong>
-                    <small>
-                      {number(
-                        gpuRegionTotal
-                          ? (gpuRegionTotals[region] / gpuRegionTotal) * 100
-                          : 0,
-                        1,
-                      )}
-                      %
-                    </small>
                   </span>
                 </div>
               ))}
@@ -467,25 +444,25 @@ export default function OverviewPage() {
           className="overview-finance-stack"
           aria-label={t("overview.financialOverview")}
         >
-          <h2 className="overview-finance-heading">
-            {t("overview.financialOverview")}
-          </h2>
+          <CardHeader className="overview-summary-heading">
+            <CardTitle>{t("overview.financialOverview")}</CardTitle>
+          </CardHeader>
           {[
             {
               label: t("common.mtd"),
-              value: money(data.month),
+              value: data.month,
               note: t("common.scope"),
               icon: TrendingUp,
             },
             {
               label: t("common.today"),
-              value: money(data.today),
+              value: data.today,
               note: `${new Date().toISOString().slice(0, 10)} · ${t("billing.todayBasis")}`,
               icon: TrendingUp,
             },
             {
               label: t("common.balance"),
-              value: money(data.balance),
+              value: data.balance,
               note:
                 t("common.runtime") +
                 " " +
@@ -509,251 +486,50 @@ export default function OverviewPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <strong className="overview-stat-value">{item.value}</strong>
+                <strong className="overview-stat-value">
+                  <OverviewValue value={item.value} currency animateUpdates />
+                </strong>
               </CardContent>
             </Card>
           ))}
         </section>
-        <section
-          className="overview-action-bar"
-          aria-label={t("overview.quickDeploy")}
-        >
-          <div className="overview-deploy-mark" aria-hidden="true">
-            <Layers3 size={25} />
-          </div>
-          <div className="overview-action-copy">
-            <strong>{t("overview.quickDeploy")}</strong>
-            <span>{t("overview.quickDeployHint")}</span>
-          </div>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                className="overview-deploy-trigger"
-                disabled={!canWrite(role)}
-              >
-                <LayoutGrid size={16} />
-                {t("overview.chooseResource")}
-                <Plus size={16} className="overview-deploy-plus" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent
-              className="overview-deploy-popover"
-              align="end"
-              sideOffset={10}
-              aria-label={t("overview.quickDeploy")}
-            >
-              <h2 className="overview-deploy-menu-heading">
-                {t("overview.chooseResource")}
-              </h2>
-              <div className="overview-deploy-options">
-                {KINDS.map((kind) => {
-                  const Icon = KIND_META[kind].icon;
-                  return (
-                    <Button
-                      key={kind}
-                      disabled={!canWrite(role)}
-                      onClick={() =>
-                        navigate(`/deployment/${KIND_META[kind].deployKey}`)
-                      }
-                    >
-                      <span
-                        className="overview-deploy-option-icon"
-                        style={{ color: KIND_META[kind].color }}
-                      >
-                        <Icon size={18} />
-                      </span>
-                      {t(`common.${kind}`)}
-                      <ArrowUpRight
-                        size={15}
-                        className="overview-deploy-arrow"
-                      />
-                    </Button>
-                  );
-                })}
-              </div>
-            </PopoverContent>
-          </Popover>
-        </section>
+        <QuickDeploy />
       </div>
       <div className="stack section-gap">
-        {show("alerts") && (
-          <OverviewPanel
-            title={t("overview.alerts")}
-            icon={Bell}
-            className="overview-alert-panel"
-            action={
-              attentionItems.length > 2 ? (
-                <Button onClick={() => setExpandedAlerts((value) => !value)}>
-                  {expandedAlerts
-                    ? t("overview.alertLess")
-                    : t("overview.alertMore", {
-                        count: attentionItems.length - 2,
-                      })}
-                </Button>
-              ) : undefined
-            }
-          >
-            {attentionItems.length ? (
-              <div className="overview-alert-grid">
-                {(expandedAlerts
-                  ? attentionItems
-                  : attentionItems.slice(0, 2)
-                ).map((item) => item)}
-              </div>
-            ) : (
-              <p className="overview-no-alerts">
-                {t("header.noNotifications")}
-              </p>
-            )}
-          </OverviewPanel>
-        )}
-        {show("insights") && (
-          <div className="grid grid-2 overview-insights">
-            <OverviewPanel
-              title={t("overview.gpuModels")}
-              icon={Layers3}
-              className="overview-gpu-panel"
-              hint={t("overview.gpuModelsScope")}
-              action={
-                <Link to="/deployment/server">
-                  {t("overview.viewGpuSpecs")}
-                </Link>
-              }
-            >
-              <div className="overview-gpu-summary">
-                <strong>
-                  {t("overview.gpuModelCount", { count: gpuModels.length })}
-                </strong>
-                <span className="muted">
-                  {t("overview.gpuRegionCount", { count: REGIONS.length })}
-                </span>
-              </div>
-              <div
-                className="overview-gpu-chart"
-                role="img"
-                aria-label={t("overview.gpuModels")}
-                style={{
-                  height: `${Math.max(186, gpuModels.length * 36 + 28)}px`,
-                }}
-              >
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={gpuModels}
-                    layout="vertical"
-                    margin={{ top: 4, right: 36, bottom: 4, left: 4 }}
-                    barCategoryGap="24%"
-                  >
-                    <CartesianGrid
-                      horizontal={false}
-                      stroke="var(--rs-border)"
-                      strokeDasharray="3 3"
-                    />
-                    <XAxis
-                      type="number"
-                      domain={[0, Math.max(1, largestGpuModel)]}
-                      tickLine={false}
-                      axisLine={false}
-                      tickFormatter={(value) => number(Number(value))}
-                      stroke="var(--rs-text-secondary)"
-                      fontSize={11}
-                    />
-                    <YAxis
-                      type="category"
-                      dataKey="name"
-                      width={104}
-                      tickLine={false}
-                      axisLine={false}
-                      stroke="var(--rs-text-secondary)"
-                      fontSize={11}
-                    />
-                    <Tooltip
-                      cursor={{ fill: "var(--rs-surface-2)" }}
-                      contentStyle={{
-                        background: "var(--rs-bg)",
-                        border: "1px solid var(--rs-border)",
-                        borderRadius: 8,
-                      }}
-                      formatter={(value) => [
-                        t("overview.gpuCards", {
-                          count: number(Number(value)),
-                        }),
-                        t("overview.allocated"),
-                      ]}
-                    />
-                    <Bar
-                      dataKey="total"
-                      fill="var(--rs-brand)"
-                      radius={[0, 5, 5, 0]}
-                      maxBarSize={20}
-                      minPointSize={1}
-                      isAnimationActive={false}
-                    >
-                      <LabelList
-                        dataKey="total"
-                        position="right"
-                        formatter={(value) => number(Number(value))}
-                        className="overview-gpu-total-label"
-                      />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-              {gpuModels.some((model) => model.total === 0) && (
-                <small className="muted">{t("overview.gpuZeroNote")}</small>
-              )}
-            </OverviewPanel>
-            <OverviewPanel
-              title={t("overview.projectLoad")}
-              icon={FolderKanban}
-              hint={t("overview.projectLoadScope")}
-              action={
-                <Link to="/ops/projects">{t("overview.viewProjects")}</Link>
-              }
-            >
-              {projects.length ? (
-                <div className="overview-project-list">
-                  <div className="overview-project-heading">
-                    <span>{t("common.project")}</span>
-                    <span>{t("overview.currentAllocation")}</span>
-                    <span>{t("overview.spend30d")}</span>
-                  </div>
-                  {projects.slice(0, 4).map((project) => (
-                    <Link
-                      className="overview-project-row"
-                      key={project.id}
-                      to={`/ops/projects/${project.id}`}
-                    >
-                      <span className="overview-project-name">
-                        {dt(project.name)} ·{" "}
-                        {t("common." + project.defaultRegion)}
-                      </span>
-                      <span className="muted">
-                        {t("overview.projectResources", {
-                          count: number(project.resourceCount),
-                        })}
-                        {" · "}
-                        {number(project.gpuCount)} GPU
-                      </span>
-                      <strong className="mono">
-                        {money(project.spend30d)}
-                      </strong>
-                    </Link>
-                  ))}
-                </div>
-              ) : (
-                <Empty text={t("overview.noProjects")} />
-              )}
-            </OverviewPanel>
-          </div>
-        )}
-        {(show("health") || show("spendMix")) && (
+        {(show("insights") || show("health")) && (
           <div
             className={
-              show("health") && show("spendMix")
-                ? "grid grid-2 overview-operations"
-                : "grid overview-operations"
+              show("insights") && show("health")
+                ? "grid grid-2 overview-insights"
+                : "grid overview-insights"
             }
           >
+            {show("insights") && (
+              <OverviewPanel
+                title={t("overview.gpuModels")}
+                icon={Layers3}
+                className="overview-gpu-panel"
+                hint={t("overview.gpuModelsScope")}
+                action={
+                  <Link to="/deployment/server">
+                    {t("overview.viewGpuSpecs")}
+                  </Link>
+                }
+              >
+                <div className="overview-gpu-summary">
+                  <strong>
+                    {t("overview.gpuModelCount", { count: gpuModels.length })}
+                  </strong>
+                  <span className="muted">
+                    {t("overview.gpuRegionCount", { count: REGIONS.length })}
+                  </span>
+                </div>
+                <GpuAllocationChart models={gpuModels} />
+                {gpuModels.some((model) => model.total === 0) && (
+                  <small className="muted">{t("overview.gpuZeroNote")}</small>
+                )}
+              </OverviewPanel>
+            )}
             {show("health") && (
               <OverviewPanel
                 title={t("overview.health")}
@@ -800,7 +576,7 @@ export default function OverviewPage() {
                             </span>
                           )}
                         </div>
-                        <div
+                        <OverviewReveal
                           className="overview-health-track"
                           aria-hidden="true"
                         >
@@ -815,7 +591,7 @@ export default function OverviewPage() {
                               />
                             ) : null,
                           )}
-                        </div>
+                        </OverviewReveal>
                         {resourceStatuses.some(
                           (status) =>
                             status !== "running" &&
@@ -847,6 +623,60 @@ export default function OverviewPage() {
                 </div>
               </OverviewPanel>
             )}
+          </div>
+        )}
+        {(show("insights") || show("spendMix")) && (
+          <div
+            className={
+              show("insights") && show("spendMix")
+                ? "grid grid-2 overview-operations"
+                : "grid overview-operations"
+            }
+          >
+            {show("insights") && (
+              <OverviewPanel
+                title={t("overview.projectLoad")}
+                icon={FolderKanban}
+                hint={t("overview.projectLoadScope")}
+                action={
+                  <Link to="/ops/projects">{t("overview.viewProjects")}</Link>
+                }
+              >
+                {projects.length ? (
+                  <div className="overview-project-list">
+                    <div className="overview-project-heading">
+                      <span>{t("common.project")}</span>
+                      <span>{t("overview.currentAllocation")}</span>
+                      <span>{t("overview.spend30d")}</span>
+                    </div>
+                    {projects.slice(0, 4).map((project) => (
+                      <Link
+                        className="overview-project-row"
+                        key={project.id}
+                        to={`/ops/projects/${project.id}`}
+                      >
+                        <span className="overview-project-name">
+                          {dt(project.name)} ·{" "}
+                          {t("common." + project.defaultRegion)}
+                        </span>
+                        <span className="muted">
+                          {t("overview.projectResources", {
+                            count: number(project.resourceCount),
+                          })}
+                          {" · "}
+                          {number(project.gpuCount)} GPU
+                        </span>
+                        <strong className="mono">
+                          {money(project.spend30d)}
+                        </strong>
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  <Empty text={t("overview.noProjects")} />
+                )}
+              </OverviewPanel>
+            )}
             {show("spendMix") && (
               <OverviewPanel
                 title={t("overview.spendMix")}
@@ -858,8 +688,8 @@ export default function OverviewPage() {
               >
                 {spendTotal > 0 ? (
                   <div className="overview-spend-layout">
-                    <div
-                      className="overview-spend-donut"
+                    <OverviewReveal
+                      className="overview-spend-donut overview-ring-reveal"
                       role="img"
                       aria-label={
                         t("overview.spendMix") + " " + money(spendTotal)
@@ -908,10 +738,13 @@ export default function OverviewPage() {
                             : t("common.total")}
                         </span>
                         <strong>
-                          {money(hoveredSpend?.amount ?? spendTotal)}
+                          <OverviewValue
+                            value={hoveredSpend?.amount ?? spendTotal}
+                            currency
+                          />
                         </strong>
                       </div>
-                    </div>
+                    </OverviewReveal>
                     <div className="overview-spend-list">
                       {spendMix.map((item) => (
                         <div
@@ -946,6 +779,37 @@ export default function OverviewPage() {
               </OverviewPanel>
             )}
           </div>
+        )}
+        {show("alerts") && (
+          <OverviewPanel
+            title={t("overview.alerts")}
+            icon={Bell}
+            className="overview-alert-panel"
+            action={
+              attentionItems.length > 2 ? (
+                <Button onClick={() => setExpandedAlerts((value) => !value)}>
+                  {expandedAlerts
+                    ? t("overview.alertLess")
+                    : t("overview.alertMore", {
+                        count: attentionItems.length - 2,
+                      })}
+                </Button>
+              ) : undefined
+            }
+          >
+            {attentionItems.length ? (
+              <div className="overview-alert-grid">
+                {(expandedAlerts
+                  ? attentionItems
+                  : attentionItems.slice(0, 2)
+                ).map((item) => item)}
+              </div>
+            ) : (
+              <p className="overview-no-alerts">
+                {t("header.noNotifications")}
+              </p>
+            )}
+          </OverviewPanel>
         )}
         {show("matrix") && (
           <OverviewPanel
@@ -1046,7 +910,7 @@ export default function OverviewPage() {
           >
             <div className="grid grid-3 overview-quota-regions">
               {REGIONS.map((region) => (
-                <div className="overview-quota-region" key={region}>
+                <OverviewReveal className="overview-quota-region" key={region}>
                   <h3>
                     {t(`common.${region}`)}
                     <span className="muted">{region.toUpperCase()}</span>
@@ -1095,7 +959,7 @@ export default function OverviewPage() {
                             ],
                       )}
                   </div>
-                </div>
+                </OverviewReveal>
               ))}
             </div>
           </OverviewPanel>
