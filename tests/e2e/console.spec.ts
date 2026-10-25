@@ -342,6 +342,7 @@ test("resource deletion requires typed confirmation and keeps read-only history"
   ).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.locator("tbody")).not.toContainText(displayId);
+  await page.getByRole("button", { name: "更多筛选" }).click();
   await page.getByLabel("显示已释放").check();
   await page.getByText(displayId, { exact: true }).click();
   await expect(page.getByRole("dialog")).toContainText("已释放资源 · 只读历史");
@@ -755,6 +756,7 @@ test("network console allocates and releases EIPs without a VM", async ({
   await modal.getByRole("textbox").fill(displayId);
   await modal.getByRole("button", { name: "释放公网 IP", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByRole("button", { name: "更多筛选" }).click();
   await page.getByLabel("包含已释放地址").check();
   await page.getByRole("button", { name: "e2e-idle-ip", exact: true }).click();
   await expect(page.getByRole("dialog")).toContainText("已释放");
@@ -974,6 +976,7 @@ test("expanded resource specifications can be filtered in every resource list", 
     await expect(rows.first()).toBeVisible();
     const before = await rows.count();
     expect(before).toBeGreaterThanOrEqual(2);
+    await page.getByRole("button", { name: "更多筛选" }).click();
     const filter = page.getByRole("combobox", { name: label, exact: true });
     const values = await filter
       .locator("option")

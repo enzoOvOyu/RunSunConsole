@@ -1,3 +1,4 @@
+import { ListFilters } from "../shared/ListFilters";
 import { Link, useLocation } from "react-router-dom";
 import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -246,16 +247,10 @@ export default function VolumePage() {
           )}
         </Panel>
       </div>
-      <div className="toolbar storage-volume-filters">
-        <RegionFilter />
-        <input className="input search" aria-label={t("common.search")}
-          placeholder={t("storage.searchVolumes")} value={search}
-          onChange={(event) => setSearch(event.target.value)} />
-        <select aria-label={t("common.project")} value={selectedProjectFilter}
-          onChange={(event) => setProjectFilter(event.target.value)}>
-          <option value="">{t("common.allProjects")}</option>
-          {availableProjects.map((project) => <option key={project.id} value={project.id}>{dt(project.name)} · {formatResourceId("prj", project.id)}</option>)}
-        </select>
+      <ListFilters
+        activeCount={[selectedProjectFilter, search.trim(), tierFilter, statusFilter, zoneFilter].filter(Boolean).length}
+        onReset={() => { setSearch(""); setProjectFilter(""); setTierFilter(""); setStatusFilter(""); setZoneFilter(""); }}
+        advanced={<>
         <select aria-label={t("storage.tier")} value={tierFilter}
           onChange={(event) => setTierFilter(event.target.value)}>
           <option value="">{t("storage.allTiers")}</option>
@@ -272,8 +267,18 @@ export default function VolumePage() {
           <option value="">{t("storage.allZones")}</option>
           {["a", "b"].map((suffix) => <option key={suffix} value={`${region}-${suffix}`}>{region.toUpperCase()}-{suffix.toUpperCase()}</option>)}
         </select>}
-        {filterActive && <Button onClick={() => { setSearch(""); setProjectFilter(""); setTierFilter(""); setStatusFilter(""); setZoneFilter(""); }}>{t("common.reset")}</Button>}
-      </div>
+        </>}
+      >
+        <RegionFilter />
+        <select aria-label={t("common.project")} value={selectedProjectFilter}
+          onChange={(event) => setProjectFilter(event.target.value)}>
+          <option value="">{t("common.allProjects")}</option>
+          {availableProjects.map((project) => <option key={project.id} value={project.id}>{dt(project.name)} · {formatResourceId("prj", project.id)}</option>)}
+        </select>
+        <input className="input search" aria-label={t("common.search")}
+          placeholder={t("storage.searchVolumes")} value={search}
+          onChange={(event) => setSearch(event.target.value)} />
+      </ListFilters>
       {kind === "file" && <div className="storage-file-intro">
         <div><strong>{t("storage.fileSharingTitle")}</strong><p>{t("storage.fileSharingIntro")}</p></div>
         <div className="storage-file-flow" aria-label={t("storage.fileSharingFlow")}>

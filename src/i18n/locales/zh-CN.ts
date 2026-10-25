@@ -1,4 +1,9 @@
 export default {
+  "nav.collapseSidebar": "收起导航",
+  "nav.expandSidebar": "展开导航",
+  "common.moreFilters": "更多筛选",
+  "common.activeFilters": "已选 {count} 项",
+
   "common.websocket": "实时通道已连接",
   "data.event.requested": "下单已受理，正在分配区域内 GPU 与网络资源",
   "error.INSUFFICIENT_BALANCE": "余额不足，暂无法创建资源，请充值后重试",
@@ -280,6 +285,8 @@ export default {
   "overview.title": "总览",
   "overview.subtitle": "您的算力、用量与费用，一目了然",
   "overview.customize": "自定义模块",
+  "overview.financialOverview": "费用与余额",
+  "overview.chooseResource": "选择资源",
   "overview.quickDeploy": "快速部署",
   "overview.quickDeployHint": "从四类资源中选择，直接进入创建流程",
   "overview.insights": "费用与项目",

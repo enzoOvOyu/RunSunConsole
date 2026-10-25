@@ -6,11 +6,13 @@ import { StatusBar } from "./StatusBar";
 import { CommandPalette } from "../../components/command/CommandPalette";
 import { Toasts } from "../../components/ui";
 import { useLocale } from "../../stores/locale";
+import { useNav } from "../../stores/nav";
 import { useTheme } from "../../stores/theme";
 import { useAuth } from "../../stores/auth";
 import { canSeePath } from "../../lib/rbac";
 import styles from "./layout.module.css";
 export default function ConsoleLayout() {
+  const compact = useNav((s) => s.compact);
   const [menu, setMenu] = useState(false);
   const [command, setCommand] = useState(false);
   const closeMenu = useCallback(() => setMenu(false), []);
@@ -27,7 +29,7 @@ export default function ConsoleLayout() {
       document.documentElement.dataset.theme = theme;
   }, [theme]);
   return (
-    <div className={styles.shell}>
+    <div className={`${styles.shell} ${compact ? styles.compact : ""}`}>
       <Sidebar open={menu} onClose={closeMenu} />
       <div className={styles.main}>
         <Topbar

@@ -15,6 +15,7 @@ type Props = {
 export function VolumeTable({ rows, kind, projectName, onDetails }: Props) {
   return (
     <DataTable
+      stickyColumns
       pageSizeOptions
       data={rows}
       onRow={(row) => onDetails(row.id)}
@@ -24,7 +25,7 @@ export function VolumeTable({ rows, kind, projectName, onDetails }: Props) {
           header: t(kind === "file" ? "storage.fileSystem" : "common.name"),
           cell: ({ row }) => (
             <div className="storage-resource-cell">
-              <strong>{row.original.name}</strong>
+              <strong title={row.original.name}>{row.original.name}</strong>
               <small className="resource-id">
                 {formatResourceId(
                   kind === "block" ? "blk" : "fil",

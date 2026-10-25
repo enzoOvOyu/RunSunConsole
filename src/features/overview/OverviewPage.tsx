@@ -74,12 +74,10 @@ import {
 } from "../../components/ui/card";
 import { Button as UiButton } from "../../components/ui/button";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../../components/ui/select";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "../../components/ui/popover";
 const TrendChart = lazy(() => import("../../components/charts/TrendChart"));
 interface Overview {
   running: number;
@@ -465,7 +463,13 @@ export default function OverviewPage() {
             </div>
           </CardContent>
         </Card>
-        <div className="overview-finance-stack">
+        <section
+          className="overview-finance-stack"
+          aria-label={t("overview.financialOverview")}
+        >
+          <h2 className="overview-finance-heading">
+            {t("overview.financialOverview")}
+          </h2>
           {[
             {
               label: t("common.mtd"),
@@ -509,31 +513,67 @@ export default function OverviewPage() {
               </CardContent>
             </Card>
           ))}
-        </div>
-      </div>
-      <div className="overview-action-bar">
-        <div className="overview-action-copy">
-          <strong>{t("overview.quickDeploy")}</strong>
-          <span>{t("overview.quickDeployHint")}</span>
-        </div>
-        <div className="overview-action-buttons">
-          {KINDS.map((kind) => {
-            const Icon = KIND_META[kind].icon;
-            return (
+        </section>
+        <section
+          className="overview-action-bar"
+          aria-label={t("overview.quickDeploy")}
+        >
+          <div className="overview-deploy-mark" aria-hidden="true">
+            <Layers3 size={25} />
+          </div>
+          <div className="overview-action-copy">
+            <strong>{t("overview.quickDeploy")}</strong>
+            <span>{t("overview.quickDeployHint")}</span>
+          </div>
+          <Popover>
+            <PopoverTrigger asChild>
               <Button
-                key={kind}
+                className="overview-deploy-trigger"
                 disabled={!canWrite(role)}
-                onClick={() =>
-                  navigate(`/deployment/${KIND_META[kind].deployKey}`)
-                }
               >
-                <Icon size={15} style={{ color: KIND_META[kind].color }} />
-                <Plus size={12} />
-                {t(`common.${kind}`)}
+                <LayoutGrid size={16} />
+                {t("overview.chooseResource")}
+                <Plus size={16} className="overview-deploy-plus" />
               </Button>
-            );
-          })}
-        </div>
+            </PopoverTrigger>
+            <PopoverContent
+              className="overview-deploy-popover"
+              align="end"
+              sideOffset={10}
+              aria-label={t("overview.quickDeploy")}
+            >
+              <h2 className="overview-deploy-menu-heading">
+                {t("overview.chooseResource")}
+              </h2>
+              <div className="overview-deploy-options">
+                {KINDS.map((kind) => {
+                  const Icon = KIND_META[kind].icon;
+                  return (
+                    <Button
+                      key={kind}
+                      disabled={!canWrite(role)}
+                      onClick={() =>
+                        navigate(`/deployment/${KIND_META[kind].deployKey}`)
+                      }
+                    >
+                      <span
+                        className="overview-deploy-option-icon"
+                        style={{ color: KIND_META[kind].color }}
+                      >
+                        <Icon size={18} />
+                      </span>
+                      {t(`common.${kind}`)}
+                      <ArrowUpRight
+                        size={15}
+                        className="overview-deploy-arrow"
+                      />
+                    </Button>
+                  );
+                })}
+              </div>
+            </PopoverContent>
+          </Popover>
+        </section>
       </div>
       <div className="stack section-gap">
         {show("alerts") && (
@@ -1066,21 +1106,32 @@ export default function OverviewPage() {
             icon={TrendingUp}
             hint={t("overview.trendScope")}
             action={
-              <Select value={grouping} onValueChange={setGrouping}>
-                <SelectTrigger
-                  aria-label={t("billing.dimensions")}
-                  className="overview-trend-select"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="total">{t("common.total")}</SelectItem>
-                  <SelectItem value="kind">{t("overview.byType")}</SelectItem>
-                  <SelectItem value="project">
-                    {t("overview.byProject")}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+              <div
+                className="overview-trend-segments"
+                role="group"
+                aria-label={t("billing.dimensions")}
+              >
+                <span
+                  className="overview-trend-lens"
+                  aria-hidden="true"
+                  style={{
+                    transform: `translateX(${["total", "kind", "project"].indexOf(grouping) * 100}%)`,
+                  }}
+                />
+                {[
+                  { value: "total", label: t("common.total") },
+                  { value: "kind", label: t("overview.byType") },
+                  { value: "project", label: t("overview.byProject") },
+                ].map(({ value, label }) => (
+                  <Button
+                    key={value}
+                    aria-pressed={grouping === value}
+                    onClick={() => setGrouping(value)}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
             }
           >
             <Suspense fallback={<Loading />}>

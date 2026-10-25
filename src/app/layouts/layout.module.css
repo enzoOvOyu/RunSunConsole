@@ -6,7 +6,7 @@
 .sidebar {
   position: fixed;
   inset: 0 auto 0 0;
-  width: 296px;
+  width: 256px;
   background: var(--rs-bg);
   border-right: 1px solid var(--rs-border);
   z-index: 50;
@@ -148,7 +148,7 @@
 }
 
 .main {
-  margin-left: 296px;
+  margin-left: 256px;
   min-width: 0;
   flex: 1;
   background: var(--rs-surface);
@@ -259,7 +259,7 @@
   display: none;
 }
 
-@media (width <= 1280px) {
+@media (width <= 960px) {
   .sidebar {
     display: none;
   }
@@ -338,4 +338,30 @@
 .subItems .navLink > svg {
   flex-shrink: 0;
   opacity: 0.9;
+}
+
+.sidebarToggle {
+  flex-shrink: 0;
+  justify-content: flex-start;
+  gap: 10px;
+  margin: 4px 12px 12px;
+}
+
+@media (width > 960px) {
+  .compact .sidebar { width: 72px; }
+  .compact .main { margin-left: 72px; }
+  .compact .brand { justify-content: center; padding: 0; }
+  .compact .brandText,
+  .compact .navLabel,
+  .compact .groupChevron,
+  .compact .sideFoot { display: none; }
+  .compact .nav { padding: 12px 8px; }
+  .compact .subItems { padding: 2px 0; }
+  .compact .navLink,
+  .compact .groupButton { justify-content: center; padding: 10px; }
+  .compact .sidebarToggle { justify-content: center; margin: 4px 8px 12px; }
+}
+
+@media (width <= 960px) {
+  .sidebarToggle { display: none; }
 }

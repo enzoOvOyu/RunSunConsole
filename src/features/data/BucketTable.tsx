@@ -22,6 +22,7 @@ export function BucketTable({
 }: Props) {
   return (
     <DataTable
+      stickyColumns
       pageSizeOptions
       data={buckets}
       onRow={onDetails}
@@ -31,7 +32,7 @@ export function BucketTable({
           header: t("common.name"),
           cell: ({ row }) => (
             <div className="storage-resource-cell">
-              <strong>{row.original.name}</strong>
+              <strong title={row.original.name}>{row.original.name}</strong>
               <small className="resource-id">
                 {formatResourceId("obj", row.original.id)}
               </small>

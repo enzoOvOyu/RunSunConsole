@@ -1,3 +1,4 @@
+import { ListFilters } from "../shared/ListFilters";
 import { useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Plus, Network, Globe2, ShieldCheck, Cable } from "lucide-react";
@@ -142,29 +143,23 @@ function NetworkPage({ kind }: { kind: NetworkKind }) {
         <span>{t("network.scopeHint")}</span>
         <Link to="/deployment/server">{t("nav.deployment")}</Link>
       </div>
-      <div className="toolbar">
-        <RegionFilter />
-        <select
-          aria-label={t("common.project")}
-          value={selectedProjectId}
-          onChange={(e) => update("project_id", e.target.value)}
-        >
-          <option value="">{t("common.allProjects")}</option>
-          {projects.data
-            ?.filter((p) => !p.deletedAt)
-            .map((p) => (
-              <option key={p.id} value={p.id}>
-                {dt(p.name)} · {formatResourceId("prj", p.id)}
-              </option>
-            ))}
-        </select>
-        <input
-          className="input search"
-          aria-label={t("common.search")}
-          placeholder={t("common.search")}
-          value={search}
-          onChange={(e) => update("q", e.target.value)}
-        />
+      <ListFilters
+        activeCount={[selectedProjectId, search.trim(), bindingFilter !== "all", includeReleased].filter(Boolean).length}
+        onReset={() => {
+          setIncludeReleased(false);
+          setParams((current) => {
+            const next = new URLSearchParams(current);
+            for (const key of ["q", "project_id", "binding", "includeReleased", "drawer"]) next.delete(key);
+            return next;
+          }, { replace: true });
+        }}
+        actions={<>
+        {role !== "billing" && (
+          <Link to={`/ops/quotas?region=${region}`}>{t("nav.quotas")}</Link>
+        )}
+        <Button onClick={() => void q.refetch()}>{t("common.refresh")}</Button>
+        </>}
+        advanced={kind === "eips" ? <>
         {kind === "eips" && (
           <select
             aria-label={t("network.bindingFilter")}
@@ -200,11 +195,31 @@ function NetworkPage({ kind }: { kind: NetworkKind }) {
             {t("network.includeReleased")}
           </label>
         )}
-        {role !== "billing" && (
-          <Link to={`/ops/quotas?region=${region}`}>{t("nav.quotas")}</Link>
-        )}
-        <Button onClick={() => void q.refetch()}>{t("common.refresh")}</Button>
-      </div>
+        </> : undefined}
+      >
+        <RegionFilter />
+        <select
+          aria-label={t("common.project")}
+          value={selectedProjectId}
+          onChange={(e) => update("project_id", e.target.value)}
+        >
+          <option value="">{t("common.allProjects")}</option>
+          {projects.data
+            ?.filter((p) => !p.deletedAt)
+            .map((p) => (
+              <option key={p.id} value={p.id}>
+                {dt(p.name)} · {formatResourceId("prj", p.id)}
+              </option>
+            ))}
+        </select>
+        <input
+          className="input search"
+          aria-label={t("common.search")}
+          placeholder={t("common.search")}
+          value={search}
+          onChange={(e) => update("q", e.target.value)}
+        />
+      </ListFilters>
       {q.isPending ? (
         <Loading />
       ) : q.error ? (
@@ -225,6 +240,7 @@ function NetworkPage({ kind }: { kind: NetworkKind }) {
           </div>
           <Panel>
             <DataTable
+              stickyColumns
               pageSizeOptions
               data={items}
               onRow={(r) => update("drawer", r.id)}

@@ -458,6 +458,7 @@ export function DataTable<T>({
   empty,
   paginate = true,
   pageSizeOptions = false,
+  stickyColumns = false,
 }: {
   data: T[];
   columns: ColumnDef<T>[];
@@ -465,6 +466,7 @@ export function DataTable<T>({
   empty?: string;
   paginate?: boolean;
   pageSizeOptions?: boolean;
+  stickyColumns?: boolean;
 }) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [page, setPage] = useState(0);
@@ -486,13 +488,13 @@ export function DataTable<T>({
   if (!data.length) return <Empty text={empty || t("common.noResults")} />;
   return (
     <>
-      <div className="table-wrap">
+      <div className={`table-wrap${stickyColumns ? " table-pinned" : ""}`}>
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((g) => (
               <TableRow key={g.id}>
                 {g.headers.map((h) => (
-                  <TableHead key={h.id}>
+                  <TableHead key={h.id} data-column={h.column.id}>
                     {h.column.getCanSort() ? (
                       <button onClick={h.column.getToggleSortingHandler()}>
                         {flexRender(h.column.columnDef.header, h.getContext())}
@@ -545,7 +547,7 @@ export function DataTable<T>({
                 }}
               >
                 {row.getVisibleCells().map((cell) => (
-                  <TableCell key={cell.id}>
+                  <TableCell key={cell.id} data-column={cell.column.id}>
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </TableCell>
                 ))}

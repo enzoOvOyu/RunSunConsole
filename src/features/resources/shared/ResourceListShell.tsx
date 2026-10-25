@@ -1,3 +1,4 @@
+import { ListFilters } from "../../shared/ListFilters";
 import { useUrlState } from "../../shared/useUrlState";
 import { useResourceTransition } from "../../../stores/resourceTransition";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -38,7 +39,7 @@ import { ResourceDrawer } from "./ResourceDrawer";
 export function ResourceName({ resource: r }: { resource: Resource }) {
   return (
     <div>
-      <strong style={{ fontWeight: 500 }}>{dt(r.name)}</strong>
+      <strong title={dt(r.name)} style={{ fontWeight: 500 }}>{dt(r.name)}</strong>
       <div>
         <small className="resource-id">{r.displayId}</small>
       </div>
@@ -102,7 +103,10 @@ export function ResourceListShell<K extends Kind>({
   const [deleteMany, setDeleteMany] = useState(false);
   const [confirm, setConfirm] = useState("");
   const [showColumns, setShowColumns] = useState(false);
-  const [hidden, setHidden] = useState<string[]>([]);
+  const [hidden, setHidden] = useState<string[]>(() => columns.flatMap((column, index) => {
+    const id = column.id || ("accessorKey" in column ? String(column.accessorKey) : "");
+    return ["region", "family", "image"].includes(id) ? [String(index)] : [];
+  }));
   const [facetValues, setFacetValues] = useState<Record<string, string>>({});
   const action = useAction();
   const client = useQueryClient();
@@ -291,7 +295,77 @@ export function ResourceListShell<K extends Kind>({
           </Button>
         }
       />
-      <div className="toolbar">
+      <ListFilters
+        activeCount={[project, search.trim(), status, released, ...Object.values(facetValues)].filter(Boolean).length}
+        onReset={() => {
+          setSearch("");
+          setFacetValues({});
+          setReleased(false);
+          setSelected([]);
+          setPage(0);
+          setParams((current) => {
+            const next = new URLSearchParams(current);
+            for (const key of ["q", "status", "project_id"]) next.delete(key);
+            return next;
+          }, { replace: true });
+        }}
+        actions={<>
+        <Button onClick={() => setShowColumns(true)}>
+          <Columns3 size={14} />
+          {t("resource.columns")}
+        </Button>
+        </>}
+        advanced={<>
+        <select
+          aria-label={t("common.status")}
+          value={status}
+          onChange={(e) => {
+            const p = new URLSearchParams(params);
+            if (e.target.value) p.set("status", e.target.value);
+            else p.delete("status");
+            setParams(p);
+          }}
+        >
+          <option value="">{t("common.all")}</option>
+          {(["running", "stopped", "provisioning", "error"] as Status[]).map(
+            (s) => (
+              <option key={s} value={s}>
+                {t(`common.${s}`)}
+              </option>
+            ),
+          )}
+        </select>
+        {facets.map((facet) => (
+          <select
+            key={facet.id}
+            aria-label={facet.label}
+            value={facetValues[facet.id] || ""}
+            onChange={(event) => {
+              setSelected([]);
+              setPage(0);
+              setFacetValues((current) => ({
+                ...current,
+                [facet.id]: event.target.value,
+              }));
+            }}
+          >
+            <option value="">
+              {facet.label} · {t("common.all")}
+            </option>
+            {(facetOptions.get(facet.id) || []).map((value) => (
+              <option key={value} value={value}>
+                {facet.format ? facet.format(value) : value}
+              </option>
+            ))}
+          </select>
+        ))}
+        <Check
+          label={t("resource.released")}
+          checked={released}
+          onChange={setReleased}
+        />
+        </>}
+      >
         <select
           aria-label={t("common.region")}
           value={region}
@@ -339,65 +413,13 @@ export function ResourceListShell<K extends Kind>({
               </option>
             ))}
         </select>
-        <select
-          aria-label={t("common.status")}
-          value={status}
-          onChange={(e) => {
-            const p = new URLSearchParams(params);
-            if (e.target.value) p.set("status", e.target.value);
-            else p.delete("status");
-            setParams(p);
-          }}
-        >
-          <option value="">{t("common.all")}</option>
-          {(["running", "stopped", "provisioning", "error"] as Status[]).map(
-            (s) => (
-              <option key={s} value={s}>
-                {t(`common.${s}`)}
-              </option>
-            ),
-          )}
-        </select>
-        {facets.map((facet) => (
-          <select
-            key={facet.id}
-            aria-label={facet.label}
-            value={facetValues[facet.id] || ""}
-            onChange={(event) => {
-              setSelected([]);
-              setPage(0);
-              setFacetValues((current) => ({
-                ...current,
-                [facet.id]: event.target.value,
-              }));
-            }}
-          >
-            <option value="">
-              {facet.label} · {t("common.all")}
-            </option>
-            {(facetOptions.get(facet.id) || []).map((value) => (
-              <option key={value} value={value}>
-                {facet.format ? facet.format(value) : value}
-              </option>
-            ))}
-          </select>
-        ))}
         <input
           className="input search"
           placeholder={t("common.search")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <Button onClick={() => setShowColumns(true)}>
-          <Columns3 size={14} />
-          {t("resource.columns")}
-        </Button>
-        <Check
-          label={t("resource.released")}
-          checked={released}
-          onChange={setReleased}
-        />
-      </div>
+      </ListFilters>
       {selected.length > 0 && (
         <div className="notice row" style={{ marginBottom: 16 }}>
           {t("common.selected", { count: selected.length })}
@@ -448,6 +470,7 @@ export function ResourceListShell<K extends Kind>({
         ) : (
           <>
             <DataTable
+              stickyColumns
               data={pageResources}
               columns={[checkbox, ...visibleCols]}
               onRow={(r) => navigate(resourceLink(r))}

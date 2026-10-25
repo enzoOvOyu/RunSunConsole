@@ -1,6 +1,6 @@
 import { NavLink, useLocation } from "react-router-dom";
 import { memo, useMemo, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { useAuth } from "../../stores/auth";
 import { useNav } from "../../stores/nav";
@@ -15,6 +15,8 @@ export const Sidebar = memo(function Sidebar({
   open: boolean;
   onClose: () => void;
 }) {
+  const compact = useNav((state) => state.compact);
+  const toggleCompact = useNav((state) => state.toggleCompact);
   const role = useAuth((s) => s.role);
   const location = useLocation();
   const [closedActiveGroup, setClosedActiveGroup] = useState<{
@@ -34,7 +36,7 @@ export const Sidebar = memo(function Sidebar({
       >
         <NavLink className={styles.brand} to="/overview" onClick={onClose}>
           <img src="/favicon.ico" alt="" />
-          <div>
+          <div className={styles.brandText}>
             <strong>RunSun</strong>
             <div>
               <small>GPU CLOUD</small>
@@ -61,19 +63,23 @@ export const Sidebar = memo(function Sidebar({
                 {group.direct ? (
                   <NavLink
                     to={group.items[0].path}
+                    aria-label={group.label()}
+                    title={group.label()}
                     className={({ isActive, isPending }) =>
                       `${styles.navLink} ${isActive ? styles.active : isPending ? styles.pending : ""}`
                     }
                     onClick={onClose}
                   >
                     <Icon size={17} />
-                    {group.label()}
+                    <span className={styles.navLabel}>{group.label()}</span>
                   </NavLink>
                 ) : (
                   <>
                     <Button
                       variant="ghost"
                       className={styles.groupButton}
+                      aria-label={group.label()}
+                      title={group.label()}
                       aria-expanded={expanded}
                       onClick={() => {
                         if (!activeGroup) {
@@ -96,8 +102,9 @@ export const Sidebar = memo(function Sidebar({
                       }}
                     >
                       <Icon size={16} />
-                      {group.label()}
+                      <span className={styles.navLabel}>{group.label()}</span>
                       <ChevronDown
+                        className={styles.groupChevron}
                         size={13}
                         style={{
                           transform: expanded ? "rotate(180deg)" : undefined,
@@ -112,6 +119,8 @@ export const Sidebar = memo(function Sidebar({
                             <NavLink
                               key={item.path}
                               to={item.path}
+                              aria-label={item.label()}
+                              title={item.label()}
                               onClick={onClose}
                               className={({ isActive, isPending }) =>
                                 `${styles.navLink} ${isActive ? styles.active : isPending ? styles.pending : ""}`
@@ -123,7 +132,7 @@ export const Sidebar = memo(function Sidebar({
                                 aria-hidden="true"
                                 style={{ color: item.color }}
                               />
-                              {item.label()}
+                              <span className={styles.navLabel}>{item.label()}</span>
                             </NavLink>
                           );
                         })}
@@ -135,6 +144,16 @@ export const Sidebar = memo(function Sidebar({
             );
           })}
         </nav>
+        <Button
+          variant="ghost"
+          className={styles.sidebarToggle}
+          onClick={toggleCompact}
+          aria-label={t(compact ? "nav.expandSidebar" : "nav.collapseSidebar")}
+          title={t(compact ? "nav.expandSidebar" : "nav.collapseSidebar")}
+        >
+          {compact ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
+          <span className={styles.navLabel}>{t("nav.collapseSidebar")}</span>
+        </Button>
         <div className={styles.sideFoot}>
           <div className="row">
             <span className="status-dot" />

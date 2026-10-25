@@ -1,4 +1,9 @@
 export default {
+  "nav.collapseSidebar": "Collapse navigation",
+  "nav.expandSidebar": "Expand navigation",
+  "common.moreFilters": "More filters",
+  "common.activeFilters": "{count} active",
+
   "common.websocket": "Live channel connected",
   "data.event.requested":
     "Order accepted; allocating GPU and network resources in the selected region",
@@ -282,6 +287,8 @@ export default {
   "overview.title": "Overview",
   "overview.subtitle": "Your compute, usage and spend at a glance",
   "overview.customize": "Customize modules",
+  "overview.financialOverview": "Spending & balance",
+  "overview.chooseResource": "Choose a resource",
   "overview.quickDeploy": "Quick deploy",
   "overview.quickDeployHint": "Choose a resource type to start a deployment",
   "overview.insights": "Cost and projects",

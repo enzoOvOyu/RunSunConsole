@@ -1,3 +1,4 @@
+import { ListFilters } from "../shared/ListFilters";
 import { formatResourceId } from "../../lib/ids";
 import { Link } from "react-router-dom";
 import { useUrlState } from "../shared/useUrlState";
@@ -302,7 +303,7 @@ export default function StoragePage() {
       </div>
       <Panel
         title={t("storage.regionalObjectQuota")}
-        className="storage-regional-quota"
+        className="storage-regional-quota storage-object-quota"
       >
         {objectQuota ? (
           <>
@@ -332,29 +333,12 @@ export default function StoragePage() {
         )}
         <small>{t("storage.regionQuotaUsesActual")}</small>
       </Panel>
-      <div className="toolbar storage-volume-filters">
-        <RegionFilter />
-        <input
-          className="input search"
-          aria-label={t("common.search")}
-          placeholder={t("common.search")}
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
-        <select
-          aria-label={t("common.project")}
-          value={selectedProjectFilter}
-          onChange={(event) => setProjectFilter(event.target.value)}
-        >
-          <option value="">{t("common.allProjects")}</option>
-          {projects.data
-            ?.filter((project) => !project.deletedAt)
-            .map((project) => (
-              <option key={project.id} value={project.id}>
-                {dt(project.name)} · {formatResourceId("prj", project.id)}
-              </option>
-            ))}
-        </select>
+      <ListFilters
+        activeCount={[selectedProjectFilter, search.trim(), classFilter, statusFilter, fileFilter].filter(Boolean).length}
+        onReset={() => {
+          setSearch(""); setProjectFilter(""); setClassFilter(""); setStatusFilter(""); setFileFilter("");
+        }}
+        advanced={<>
         <select
           aria-label={t("storage.tier")}
           value={classFilter}
@@ -382,20 +366,31 @@ export default function StoragePage() {
           <option value="configured">{t("storage.s3FilesPreviewOnly")}</option>
           <option value="unconfigured">{t("storage.s3FilesUnconfigured")}</option>
         </select>
-        {filterActive && (
-          <Button
-            onClick={() => {
-              setSearch("");
-              setProjectFilter("");
-              setClassFilter("");
-              setStatusFilter("");
-              setFileFilter("");
-            }}
-          >
-            {t("common.reset")}
-          </Button>
-        )}
-      </div>
+        </>}
+      >
+        <RegionFilter />
+        <select
+          aria-label={t("common.project")}
+          value={selectedProjectFilter}
+          onChange={(event) => setProjectFilter(event.target.value)}
+        >
+          <option value="">{t("common.allProjects")}</option>
+          {projects.data
+            ?.filter((project) => !project.deletedAt)
+            .map((project) => (
+              <option key={project.id} value={project.id}>
+                {dt(project.name)} · {formatResourceId("prj", project.id)}
+              </option>
+            ))}
+        </select>
+        <input
+          className="input search"
+          aria-label={t("common.search")}
+          placeholder={t("common.search")}
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+      </ListFilters>
       <div className="panel">
         {q.isPending ? (
           <Loading />
